@@ -10,11 +10,12 @@ import 'package:fvp/fvp.dart' as fvp;
 import 'dart:io';
 
 void main() async {
+  
   WidgetsFlutterBinding.ensureInitialized();
-  await ServerManager().init();
   
+  ServerManager().init();
   fvp.registerWith();
-  
+    
   runApp(const MyApp());
 }
 

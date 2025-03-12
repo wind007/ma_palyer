@@ -152,23 +152,25 @@ class EmbyApiService {
       throw Exception('没有可用的播放源');
     }
     
-    // 获取第一个媒体源
     final mediaSource = mediaSources[0];
-    String? directStreamUrl = mediaSource['Path'];
+    final sourceId = mediaSource['Id'];
+    final container = mediaSource['Container'];
     
-    // 如果有直接播放地址，使用直接播放地址
-    if (directStreamUrl != null && directStreamUrl.isNotEmpty) {
-      if (!directStreamUrl.startsWith('http')) {
-        directStreamUrl = '$baseUrl$directStreamUrl';
-      }
-      if (accessToken != null) {
-        directStreamUrl += '?api_key=$accessToken';
-      }
-      return directStreamUrl;
-    }
+    // 构建直接流URL
+    final streamUrl = '$baseUrl/Videos/$itemId/stream';
+    final params = {
+      'api_key': accessToken,
+      'Static': 'true',
+      'MediaSourceId': sourceId,
+      'Container': container,
+      'AudioCodec': 'aac,mp3,ac3',
+      'VideoCodec': 'h264,hevc,h265',
+      'SubtitleMethod': 'Embed',
+    };
     
-    // 否则使用转码地址
-    return '$baseUrl/Videos/$itemId/stream.mp4?api_key=$accessToken';
+    final uri = Uri.parse(streamUrl).replace(queryParameters: params);
+    print('最终播放URL: ${uri.toString()}');
+    return uri.toString();
   }
 
   // 获取播放进度
