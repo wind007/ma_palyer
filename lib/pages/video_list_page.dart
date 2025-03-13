@@ -4,6 +4,7 @@ import '../services/server_manager.dart';
 import '../services/api_service_manager.dart';
 import './video_detail_page.dart';
 import '../utils/error_dialog.dart';
+import '../utils/logger.dart';
 import './video_list_more_page.dart';
 
 class VideoListPage extends StatefulWidget {
@@ -16,6 +17,7 @@ class VideoListPage extends StatefulWidget {
 }
 
 class _VideoListPageState extends State<VideoListPage> {
+  static const String _tag = "VideoList";
   late final EmbyApiService _api;
   final ScrollController _scrollController = ScrollController();
   
@@ -33,14 +35,24 @@ class _VideoListPageState extends State<VideoListPage> {
   @override
   void initState() {
     super.initState();
+    Logger.i("初始化视频列表页面: ${widget.server.name}", _tag);
     _initializeApi();
+  }
+
+  @override
+  void dispose() {
+    Logger.d("释放视频列表页面资源", _tag);
+    _scrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _initializeApi() async {
     try {
+      Logger.d("初始化 API 服务", _tag);
       _api = await ApiServiceManager().initializeEmbyApi(widget.server);
       _loadAllSections();
     } catch (e) {
+      Logger.e("API 初始化失败", _tag, e);
       setState(() {
         _error = '初始化失败: $e';
         _isLoading = false;
@@ -49,22 +61,30 @@ class _VideoListPageState extends State<VideoListPage> {
   }
 
   Future<void> _loadAllSections() async {
+    Logger.i("开始加载所有分区数据", _tag);
     setState(() => _isLoading = true);
 
     try {
       // 先加载媒体库视图
+      Logger.d("加载媒体库视图", _tag);
       await _loadViews();
 
       // 并行加载其他分区数据
+      Logger.d("并行加载其他分区数据", _tag);
       await Future.wait([
         _loadLatestItems(),
         _loadContinueWatching(),
         _loadFavorites(),
       ]);
 
+      Logger.i("所有分区数据加载完成", _tag);
       setState(() => _isLoading = false);
     } catch (e) {
-      if (!mounted) return;
+      Logger.e("加载分区数据失败", _tag, e);
+      if (!mounted) {
+        Logger.w("页面已卸载，取消错误处理", _tag);
+        return;
+      }
       
       final retry = await ErrorDialog.show(
         context: context,
@@ -73,27 +93,33 @@ class _VideoListPageState extends State<VideoListPage> {
       );
 
       if (retry && mounted) {
+        Logger.i("重试加载分区数据", _tag);
         _loadAllSections();
+      } else {
+        Logger.d("取消重试加载", _tag);
       }
     }
   }
 
   Future<void> _loadViews() async {
     try {
+      Logger.d("获取用户媒体库视图", _tag);
       final response = await _api.getUserViews(widget.server);
       final views = (response as List).where((view) {
         final type = view['CollectionType']?.toString().toLowerCase();
         return type != null;
       }).toList();
       
+      Logger.d("找到 ${views.length} 个媒体库视图", _tag);
       setState(() => _videoSections['views'] = views);
       
       // 加载每个视图的内容
+      Logger.d("开始加载各视图内容", _tag);
       for (var view in views) {
         await _loadViewContent(view);
       }
     } catch (e) {
-      print('加载媒体库视图失败: $e');
+      Logger.e("加载媒体库视图失败", _tag, e);
       setState(() => _videoSections['views'] = []);
     }
   }
@@ -101,6 +127,7 @@ class _VideoListPageState extends State<VideoListPage> {
   Future<void> _loadViewContent(Map<String, dynamic> view) async {
     try {
       final viewId = view['Id'];
+      Logger.d("加载视图内容: ${view['Name']}", _tag);
       final response = await _api.getVideos(
         parentId: viewId,
         startIndex: 0,
@@ -110,12 +137,13 @@ class _VideoListPageState extends State<VideoListPage> {
       );
       
       if (mounted) {
+        Logger.d("视图 ${view['Name']} 加载完成，获取到 ${(response['Items'] as List).length} 个项目", _tag);
         setState(() {
           _videoSections[viewId] = response['Items'] as List;
         });
       }
     } catch (e) {
-      print('加载视图内容失败: $e');
+      Logger.e("加载视图内容失败: ${view['Name']}", _tag, e);
       if (mounted) {
         setState(() {
           _videoSections[view['Id']] = [];
@@ -125,23 +153,32 @@ class _VideoListPageState extends State<VideoListPage> {
   }
 
   Future<void> _loadLatestItems() async {
-    final items = await _api.getLatestItems();
-    setState(() => _videoSections['latest'] = items);
+    try {
+      Logger.d("加载最新添加项目", _tag);
+      final items = await _api.getLatestItems();
+      Logger.d("最新添加项目加载完成，获取到 ${items.length} 个项目", _tag);
+      setState(() => _videoSections['latest'] = items);
+    } catch (e) {
+      Logger.e("加载最新添加项目失败", _tag, e);
+      setState(() => _videoSections['latest'] = []);
+    }
   }
 
   Future<void> _loadContinueWatching() async {
     try {
+      Logger.d("加载继续观看项目", _tag);
       final items = await _api.getResumeItems();
-      print('Continue Watching Items: ${items.length}');
+      Logger.d("继续观看项目加载完成，获取到 ${items.length} 个项目", _tag);
       setState(() => _videoSections['continue'] = items);
     } catch (e) {
-      print('Continue Watching Error: $e');
+      Logger.e("加载继续观看项目失败", _tag, e);
       setState(() => _videoSections['continue'] = []);
     }
   }
 
   Future<void> _loadFavorites() async {
     try {
+      Logger.d("加载收藏项目", _tag);
       final response = await _api.getVideos(
         startIndex: 0,
         limit: 20,
@@ -153,10 +190,11 @@ class _VideoListPageState extends State<VideoListPage> {
       );
       
       if (mounted) {
+        Logger.d("收藏项目加载完成，获取到 ${(response['Items'] as List).length} 个项目", _tag);
         setState(() => _videoSections['favorites'] = response['Items'] as List);
       }
     } catch (e) {
-      print('加载收藏失败: $e');
+      Logger.e("加载收藏项目失败", _tag, e);
       if (mounted) {
         setState(() => _videoSections['favorites'] = []);
       }
@@ -387,11 +425,5 @@ class _VideoListPageState extends State<VideoListPage> {
         isMovieView: isMovieView,
       );
     }).toList();
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
   }
 }

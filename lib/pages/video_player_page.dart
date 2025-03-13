@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 import '../services/emby_api.dart';
+import '../utils/logger.dart';
 
 class VideoPlayerPage extends StatefulWidget {
   final String itemId;
@@ -25,6 +26,8 @@ class VideoPlayerPage extends StatefulWidget {
 }
 
 class _VideoPlayerPageState extends State<VideoPlayerPage> {
+  static const String _tag = "VideoPlayer";
+  
   // 常量定义
   static const _maxRetries = 3;         // 最大重试次数
   static const _volumeStep = 0.05;      // 音量调节步长
@@ -135,42 +138,60 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   @override
   void initState() {
     super.initState();
+    Logger.i("初始化视频播放页面 - 视频ID: ${widget.itemId}, 标题: ${widget.title}", _tag);
+    
     // 设置横屏
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
     ]);
+    Logger.d("设置横屏模式", _tag);
+    
     // 设置全屏
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    Logger.d("设置全屏模式", _tag);
+    
     _initializePlayer();
     _initializeBrightness();
   }
 
   Future<void> _initializeBrightness() async {
+    Logger.d("初始化屏幕亮度", _tag);
     try {
       final window = WidgetsBinding.instance.window;
       _brightness = window.platformBrightness == Brightness.dark ? 0.3 : 0.7;
-    } catch (e) {
-      print('获取系统亮度失败: $e');
+      Logger.d("设置初始亮度: $_brightness", _tag);
+    } catch (e, stackTrace) {
+      Logger.e("获取系统亮度失败", _tag, e, stackTrace);
     }
   }
 
   Future<void> _initializePlayer() async {
+    Logger.i("开始初始化播放器", _tag);
     try {
       // 获取视频播放URL和信息
+      Logger.d("获取播放地址", _tag);
       final url = await widget.embyApi.getPlaybackUrl(widget.itemId);
       if (url.isEmpty) {
+        Logger.e("获取播放地址失败：地址为空", _tag);
         throw Exception('无法获取播放地址');
       }
+      Logger.d("成功获取播放地址: $url", _tag);
 
+      Logger.d("获取媒体信息", _tag);
       final playbackInfo = await widget.embyApi.getPlaybackInfo(widget.itemId);
       if (playbackInfo['MediaSources'] == null || playbackInfo['MediaSources'].isEmpty) {
+        Logger.e("获取媒体信息失败：MediaSources为空", _tag);
         throw Exception('无法获取媒体信息');
       }
+      Logger.d("成功获取媒体信息", _tag);
 
+      Logger.d("获取播放位置", _tag);
       final position = await widget.embyApi.getPlaybackPosition(widget.itemId);
+      Logger.d("当前播放位置: $position", _tag);
       
       // 初始化播放器
+      Logger.d("初始化播放器控制器", _tag);
       _controller = VideoPlayerController.networkUrl(
         Uri.parse(url),
         videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
@@ -178,16 +199,24 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
 
       // 添加错误监听
       _controller?.addListener(_onPlayerStateChanged);
+      Logger.d("添加播放器状态监听器", _tag);
 
       await _controller?.initialize();
+      Logger.d("播放器控制器初始化完成", _tag);
       
-      if (!mounted) return;
+      if (!mounted) {
+        Logger.w("页面已卸载，取消后续初始化", _tag);
+        return;
+      }
 
       // 设置初始位置和开始播放
       if (!widget.fromStart && position > 0) {
+        Logger.d("设置初始播放位置: ${position ~/ 10}微秒", _tag);
         await _controller?.seekTo(Duration(microseconds: (position ~/ 10)));
       }
+      
       await _controller?.play();
+      Logger.i("开始播放视频", _tag);
       
       setState(() {
         _isInitializing = false;
@@ -195,14 +224,17 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
 
       // 启动定时更新
       _startProgressTimer();
+      Logger.d("启动进度更新定时器", _tag);
 
-    } catch (e) {
-      print('初始化播放器失败: $e');
+    } catch (e, stackTrace) {
+      Logger.e("初始化播放器失败", _tag, e, stackTrace);
       if (_retryCount < _maxRetries) {
         _retryCount++;
+        Logger.w("准备第$_retryCount次重试", _tag);
         await Future.delayed(const Duration(seconds: 1));
         await _initializePlayer();
       } else if (mounted) {
+        Logger.e("超过最大重试次数，显示错误信息", _tag);
         setState(() {
           _error = '初始化失败，请检查网络连接';
           _isInitializing = false;
@@ -218,6 +250,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     
     // 错误处理
     if (playerValue.hasError) {
+      Logger.e("播放器错误: ${playerValue.errorDescription}", _tag);
       setState(() {
         _error = '播放错误: ${playerValue.errorDescription}';
       });
@@ -226,18 +259,20 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
 
     // 播放完成处理
     if (playerValue.position >= playerValue.duration) {
+      Logger.i("视频播放完成", _tag);
       _updateProgress(isPaused: true);
-      // 可以在这里添加播放完成的其他处理
     }
   }
 
   void _clearTimers() {
+    Logger.d("清理所有定时器", _tag);
     _progressTimer?.cancel();
     _hideControlsTimer?.cancel();
     _seekIndicatorTimer?.cancel();
   }
 
   void _startProgressTimer() {
+    Logger.d("启动进度更新定时器", _tag);
     _progressTimer?.cancel();
     _progressTimer = Timer.periodic(
       const Duration(seconds: _progressInterval),
@@ -250,12 +285,13 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   }
 
   void _startHideControlsTimer() {
-    if (_isDragging) return;
+    Logger.v("启动控制栏隐藏定时器", _tag);
     _hideControlsTimer?.cancel();
     _hideControlsTimer = Timer(
       const Duration(seconds: _controlsTimeout),
       () {
-        if (mounted) {
+        if (mounted && _showControls && !_isDragging) {
+          Logger.v("自动隐藏控制栏", _tag);
           setState(() => _showControls = false);
         }
       },
@@ -291,79 +327,126 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   }
 
   void _showSeekAnimation(int seconds) {
-    _startSeekTimer(seconds);
+    Logger.v("显示快进/快退动画: $seconds秒", _tag);
+    setState(() {
+      _seekSeconds = seconds;
+      _showSeekIndicator = true;
+    });
+    
+    _seekIndicatorTimer?.cancel();
+    _seekIndicatorTimer = Timer(const Duration(milliseconds: 500), () {
+      if (mounted) {
+        setState(() {
+          _showSeekIndicator = false;
+          _seekSeconds = 0;
+        });
+      }
+    });
   }
 
-  void _updateProgress({bool isPaused = false}) {
-    if (_controller?.value.isInitialized ?? false) {
-      widget.embyApi.updatePlaybackProgress(
+  Future<void> _updateProgress({bool isPaused = false}) async {
+    Logger.v("更新播放进度 - isPaused: $isPaused", _tag);
+    try {
+      if (_controller == null || !mounted) return;
+      final position = _controller!.value.position;
+      await widget.embyApi.updatePlaybackProgress(
         itemId: widget.itemId,
-        positionTicks: (_controller!.value.position.inMicroseconds * 10).toInt(),
+        positionTicks: position.inMicroseconds * 10,
         isPaused: isPaused,
       );
+      Logger.v("播放进度更新成功 - 位置: ${position.inSeconds}秒", _tag);
+    } catch (e, stackTrace) {
+      Logger.e("更新播放进度失败", _tag, e, stackTrace);
     }
   }
 
   void _toggleControls() {
+    Logger.d("切换控制栏显示状态", _tag);
     setState(() {
       _showControls = !_showControls;
       if (_showControls) {
         _startHideControlsTimer();
+      } else {
+        _hideControlsTimer?.cancel();
       }
     });
+    Logger.d("控制栏显示状态: ${_showControls ? '显示' : '隐藏'}", _tag);
   }
 
   void _adjustVolume(double delta) {
+    Logger.d("调整音量: $delta", _tag);
+    if (_controller == null) {
+      Logger.w("播放器控制器未初始化", _tag);
+      return;
+    }
+    
     setState(() {
       _currentVolume = (_currentVolume + delta).clamp(0.0, 1.0);
-      _controller?.setVolume(_currentVolume);
+      _controller!.setVolume(_currentVolume);
+      _showVolumeIndicator = true;
     });
+    Logger.d("当前音量: $_currentVolume", _tag);
   }
 
   void _seekRelative(Duration offset) {
-    if (_controller?.value.isInitialized ?? false) {
-      final newPosition = _controller!.value.position + offset;
-      final duration = _controller!.value.duration;
-      
-      Duration targetPosition;
-      if (newPosition < Duration.zero) {
-        targetPosition = Duration.zero;
-      } else if (newPosition > duration) {
-        targetPosition = duration;
-      } else {
-        targetPosition = newPosition;
-      }
-
-      _controller?.seekTo(targetPosition);
-      _startHideControlsTimer();
+    Logger.d("相对跳转: ${offset.inSeconds}秒", _tag);
+    if (_controller == null) {
+      Logger.w("播放器控制器未初始化", _tag);
+      return;
+    }
+    
+    final current = _controller!.value.position;
+    final duration = _controller!.value.duration;
+    final targetPosition = current + offset;
+    
+    if (targetPosition < Duration.zero) {
+      _controller!.seekTo(Duration.zero);
+      Logger.d("跳转到开始位置", _tag);
+    } else if (targetPosition > duration) {
+      _controller!.seekTo(duration);
+      Logger.d("跳转到结束位置", _tag);
+    } else {
+      _controller!.seekTo(targetPosition);
+      Logger.d("跳转到: ${targetPosition.inSeconds}秒", _tag);
     }
   }
 
   void _toggleFullScreen() {
+    Logger.d("切换全屏状态", _tag);
     setState(() {
       _isFullScreen = !_isFullScreen;
-      _showControls = true;
-      _startHideControlsTimer();
+      if (_isFullScreen) {
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+        Logger.d("进入全屏模式", _tag);
+      } else {
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+        Logger.d("退出全屏模式", _tag);
+      }
     });
   }
 
   @override
   void dispose() {
-    _progressTimer?.cancel();
-    _hideControlsTimer?.cancel();
-    _seekIndicatorTimer?.cancel();
+    Logger.i("销毁视频播放页面", _tag);
+    _clearTimers();
     _controller?.removeListener(_onPlayerStateChanged);
     if (_controller?.value.isInitialized == true) {
+      Logger.d("更新最终播放进度", _tag);
       _updateProgress(isPaused: true);
     }
+    Logger.d("释放播放器控制器", _tag);
     _controller?.dispose();
+    Logger.d("停止播放", _tag);
     widget.embyApi.stopPlayback(widget.itemId);
+    Logger.d("恢复屏幕方向为竖屏", _tag);
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
       DeviceOrientation.portraitDown,
     ]);
+    Logger.d("恢复系统UI显示模式", _tag);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
+    Logger.i("视频播放页面销毁完成", _tag);
   }
 
   @override
@@ -945,19 +1028,27 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   }
 
   void _togglePlayPause() {
-    setState(() {
-      if (_controller!.value.isPlaying) {
-        _controller?.pause();
-        _updateProgress(isPaused: true);
-      } else {
-        _controller?.play();
-        _updateProgress(isPaused: false);
-      }
-      _startHideControlsTimer();
-    });
+    Logger.d("切换播放/暂停状态", _tag);
+    if (_controller == null) {
+      Logger.w("播放器控制器未初始化", _tag);
+      return;
+    }
+    
+    if (_controller!.value.isPlaying) {
+      _controller!.pause();
+      _updateProgress(isPaused: true);
+      Logger.i("视频已暂停", _tag);
+    } else {
+      _controller!.play();
+      _startProgressTimer();
+      Logger.i("视频开始播放", _tag);
+    }
+    
+    setState(() {});
   }
 
   void _showPlaybackSpeedDialog() {
+    Logger.d("显示播放速度选择对话框", _tag);
     showDialog(
       context: context,
       builder: (context) => Dialog(
@@ -981,6 +1072,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
               for (var speed in [0.5, 0.75, 1.0, 1.25, 1.5, 2.0])
                 InkWell(
                   onTap: () {
+                    Logger.d("设置播放速度: ${speed}x", _tag);
                     setState(() {
                       _playbackSpeed = speed;
                       _controller?.setPlaybackSpeed(speed);
@@ -1050,6 +1142,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   }
 
   void _updateDraggingState(bool isDragging) {
+    Logger.v("更新拖动状态: ${isDragging ? '开始拖动' : '结束拖动'}", _tag);
     setState(() {
       _showControls = true;
       _isDragging = isDragging;
@@ -1060,16 +1153,24 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   }
 
   void onHorizontalDragStart(DragStartDetails details) {
-    if (_controller?.value.isInitialized != true) return;
+    Logger.d("开始水平拖动", _tag);
+    if (_controller?.value.isInitialized != true) {
+      Logger.w("播放器未初始化，忽略拖动操作", _tag);
+      return;
+    }
     _dragStartX = details.globalPosition.dx;
     _dragStartProgress = _controller!.value.position.inMilliseconds.toDouble();
     _previewPosition = _controller!.value.position;
     _updateDraggingState(true);
     _hideControlsTimer?.cancel();
+    Logger.d("初始拖动位置: $_dragStartX, 当前进度: ${_formatDuration(_previewPosition)}", _tag);
   }
 
   void onHorizontalDragUpdate(DragUpdateDetails details) {
-    if (!_isDragging || _dragStartX == null || _dragStartProgress == null) return;
+    if (!_isDragging || _dragStartX == null || _dragStartProgress == null) {
+      Logger.v("拖动状态无效，忽略更新", _tag);
+      return;
+    }
     
     final width = MediaQuery.of(context).size.width;
     final dx = details.globalPosition.dx - _dragStartX!;
@@ -1082,10 +1183,13 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       _previewPosition = Duration(milliseconds: newPosition.toInt().clamp(0, duration.inMilliseconds));
       _showControls = true;
     });
+    Logger.v("拖动更新 - 偏移: $dx, 百分比: ${(percentage * 100).toStringAsFixed(1)}%, 新位置: ${_formatDuration(_previewPosition)}", _tag);
   }
 
   void onHorizontalDragEnd(DragEndDetails details) {
+    Logger.d("结束水平拖动", _tag);
     if (_isDragging) {
+      Logger.d("跳转到新位置: ${_formatDuration(_previewPosition)}", _tag);
       _controller?.seekTo(_previewPosition);
       _updateDraggingState(false);
       _dragStartX = null;

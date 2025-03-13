@@ -3,8 +3,10 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
 import '../services/server_manager.dart';
+import '../utils/logger.dart';
 
 class EmbyApiService {
+  static const String _tag = "EmbyApi";
   String baseUrl;
   String username;
   String password;
@@ -211,7 +213,7 @@ class EmbyApiService {
     };
     
     final uri = Uri.parse(streamUrl).replace(queryParameters: params);
-    print('最终播放URL: ${uri.toString()}');
+    Logger.d('最终播放URL: ${uri.toString()}', _tag);
     return uri.toString();
   }
 
@@ -227,7 +229,7 @@ class EmbyApiService {
       );
       return response['UserData']?['PlaybackPositionTicks'] ?? 0;
     } catch (e) {
-      print('获取播放进度失败: $e');
+      Logger.e('获取播放进度失败', _tag, e);
       return 0;
     }
   }
@@ -258,9 +260,10 @@ class EmbyApiService {
         },
         allowNoContent: true,
       );
-      print('更新播放进度成功: $positionTicks ticks, isPaused: $isPaused');
+      Logger.i('更新播放进度成功: $positionTicks ticks, isPaused: $isPaused', _tag);
     } catch (e) {
-      print('更新播放进度失败: $e');
+      Logger.e('更新播放进度失败', _tag, e);
+      rethrow;
     }
   }
 
@@ -277,7 +280,8 @@ class EmbyApiService {
         },
       );
     } catch (e) {
-      print('停止播放失败: $e');
+      Logger.e('停止播放失败', _tag, e);
+      rethrow;
     }
   }
 
@@ -377,8 +381,8 @@ class EmbyApiService {
       }
       return [];
     } catch (e) {
-      print('获取 Views 失败: $e');
-      return [];
+      Logger.e('获取 Views 失败', _tag, e);
+      rethrow;
     }
   }
 

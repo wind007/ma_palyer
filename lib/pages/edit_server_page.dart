@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/emby_api.dart';
 import '../services/server_manager.dart';
+import '../utils/logger.dart';
 
 class EditServerPage extends StatefulWidget {
   final ServerInfo server;
@@ -12,6 +13,7 @@ class EditServerPage extends StatefulWidget {
 }
 
 class _EditServerPageState extends State<EditServerPage> {
+  static const String _tag = "EditServer";
   final _formKey = GlobalKey<FormState>();
   final _serverUrlController = TextEditingController();
   final _usernameController = TextEditingController();
@@ -23,6 +25,7 @@ class _EditServerPageState extends State<EditServerPage> {
   @override
   void initState() {
     super.initState();
+    Logger.i("初始化编辑服务器页面: ${widget.server.name}", _tag);
     // 预填充服务器信息
     _serverUrlController.text = widget.server.url;
     _usernameController.text = widget.server.username;
@@ -32,6 +35,7 @@ class _EditServerPageState extends State<EditServerPage> {
 
   @override
   void dispose() {
+    Logger.d("释放编辑服务器页面资源", _tag);
     _serverUrlController.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
@@ -40,11 +44,16 @@ class _EditServerPageState extends State<EditServerPage> {
   }
 
   Future<void> _submitForm() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      Logger.w("表单验证失败", _tag);
+      return;
+    }
 
+    Logger.i("开始更新服务器: ${widget.server.name}", _tag);
     setState(() => _isLoading = true);
 
     try {
+      Logger.d("创建API服务实例", _tag);
       final api = EmbyApiService(
         baseUrl: _serverUrlController.text,
         username: _usernameController.text,
@@ -52,30 +61,45 @@ class _EditServerPageState extends State<EditServerPage> {
       );
 
       // 先检查服务器连接状态
+      Logger.d("检查服务器连接状态", _tag);
       final isConnected = await api.checkServerConnection();
       if (!isConnected) {
+        Logger.e("服务器连接失败", _tag);
         throw Exception('无法连接到服务器，请检查服务器地址是否正确');
       }
+      Logger.d("服务器连接成功", _tag);
 
       // 进行身份验证
+      Logger.d("开始身份验证", _tag);
       final authResult = await api.authenticate();
+      Logger.i("身份验证成功: ${authResult['userInfo']['Name']}", _tag);
 
-      if (!mounted) return;
+      if (!mounted) {
+        Logger.w("页面已卸载，取消后续操作", _tag);
+        return;
+      }
 
+      final serverName = _serverNameController.text.isNotEmpty
+          ? _serverNameController.text
+          : authResult['serverInfo']['ServerName'] ?? '新服务器';
+
+      Logger.i("返回更新后的服务器信息: $serverName", _tag);
       // 返回更新后的服务器信息到上一页
       Navigator.of(context).pop({
         'url': _serverUrlController.text,
         'username': _usernameController.text,
         'password': _passwordController.text,
-        'name': _serverNameController.text.isNotEmpty
-            ? _serverNameController.text
-            : authResult['serverInfo']['ServerName'] ?? '新服务器',
+        'name': serverName,
         'accessToken': authResult['accessToken'],
         'userId': authResult['userInfo']['Id'],
       });
     } catch (e) {
-      if (!mounted) return;
-      print('$e');
+      Logger.e("更新服务器失败", _tag, e);
+      if (!mounted) {
+        Logger.w("页面已卸载，取消错误处理", _tag);
+        return;
+      }
+
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -85,12 +109,14 @@ class _EditServerPageState extends State<EditServerPage> {
           actions: [
             TextButton(
               onPressed: () {
+                Logger.d("用户选择重试", _tag);
                 Navigator.of(context).pop(); // 关闭对话框
               },
               child: const Text('重试'),
             ),
             TextButton(
               onPressed: () {
+                Logger.d("用户选择返回上一页", _tag);
                 Navigator.of(context).pop(); // 关闭对话框
                 Navigator.of(context).pop(); // 返回上一页
               },
@@ -126,9 +152,11 @@ class _EditServerPageState extends State<EditServerPage> {
               keyboardType: TextInputType.url,
               validator: (value) {
                 if (value == null || value.isEmpty) {
+                  Logger.w("服务器地址为空", _tag);
                   return '请输入服务器地址';
                 }
                 if (!value.startsWith('http://') && !value.startsWith('https://')) {
+                  Logger.w("服务器地址格式错误: $value", _tag);
                   return '服务器地址必须以 http:// 或 https:// 开头';
                 }
                 return null;
@@ -143,6 +171,7 @@ class _EditServerPageState extends State<EditServerPage> {
               ),
               validator: (value) {
                 if (value == null || value.isEmpty) {
+                  Logger.w("用户名为空", _tag);
                   return '请输入用户名';
                 }
                 return null;
@@ -160,6 +189,7 @@ class _EditServerPageState extends State<EditServerPage> {
                     _obscurePassword ? Icons.visibility : Icons.visibility_off,
                   ),
                   onPressed: () {
+                    Logger.v("切换密码显示状态", _tag);
                     setState(() {
                       _obscurePassword = !_obscurePassword;
                     });
@@ -168,6 +198,7 @@ class _EditServerPageState extends State<EditServerPage> {
               ),
               validator: (value) {
                 if (value == null || value.isEmpty) {
+                  Logger.w("密码为空", _tag);
                   return '请输入密码';
                 }
                 return null;

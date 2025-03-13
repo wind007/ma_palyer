@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/server_manager.dart';
 import '../services/theme_manager.dart';
+import '../utils/logger.dart';
 import 'add_server_page.dart';
 import 'edit_server_page.dart';
 import 'video_list_page.dart';
@@ -13,28 +14,34 @@ class ServerListPage extends StatefulWidget {
 }
 
 class _ServerListPageState extends State<ServerListPage> {
+  static const String _tag = "ServerList";
   final _serverManager = ServerManager();
   List<ServerInfo> _servers = [];
 
   @override
   void initState() {
     super.initState();
+    Logger.i("初始化服务器列表页面", _tag);
     _loadServers();
   }
 
   void _loadServers() {
+    Logger.d("加载服务器列表", _tag);
     setState(() {
       _servers = _serverManager.servers;
     });
+    Logger.d("已加载 ${_servers.length} 个服务器", _tag);
   }
 
   void _addServer() async {
+    Logger.i("打开添加服务器页面", _tag);
     final result = await Navigator.push<Map<String, dynamic>>(
       context,
       MaterialPageRoute(builder: (context) => const AddServerPage()),
     );
 
     if (result != null && mounted) {
+      Logger.d("添加新服务器: ${result['name']}", _tag);
       final serverInfo = ServerInfo(
         url: result['url']!,
         username: result['username']!,
@@ -44,11 +51,15 @@ class _ServerListPageState extends State<ServerListPage> {
         userId: result['userId']!,
       );
       await _serverManager.addServer(serverInfo);
+      Logger.i("服务器添加成功: ${serverInfo.name}", _tag);
       _loadServers();
+    } else {
+      Logger.d("取消添加服务器", _tag);
     }
   }
 
   void _onServerTap(ServerInfo server) {
+    Logger.i("进入服务器: ${server.name}", _tag);
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -58,12 +69,14 @@ class _ServerListPageState extends State<ServerListPage> {
   }
 
   void _editServer(ServerInfo server) async {
+    Logger.i("编辑服务器: ${server.name}", _tag);
     final result = await Navigator.push<Map<String, dynamic>>(
       context,
       MaterialPageRoute(builder: (context) => EditServerPage(server: server)),
     );
 
     if (result != null && mounted) {
+      Logger.d("更新服务器信息: ${result['name']}", _tag);
       final updatedServer = ServerInfo(
         url: result['url']!,
         username: result['username']!,
@@ -73,11 +86,15 @@ class _ServerListPageState extends State<ServerListPage> {
         userId: result['userId']!,
       );
       await _serverManager.updateServer(updatedServer);
+      Logger.i("服务器更新成功: ${updatedServer.name}", _tag);
       _loadServers();
+    } else {
+      Logger.d("取消编辑服务器", _tag);
     }
   }
 
   void _deleteServer(ServerInfo server) async {
+    Logger.i("准备删除服务器: ${server.name}", _tag);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -85,11 +102,17 @@ class _ServerListPageState extends State<ServerListPage> {
         content: Text('确定要删除服务器 "${server.name}" 吗？'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
+            onPressed: () {
+              Logger.d("取消删除服务器: ${server.name}", _tag);
+              Navigator.of(context).pop(false);
+            },
             child: const Text('取消'),
           ),
           TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
+            onPressed: () {
+              Logger.d("确认删除服务器: ${server.name}", _tag);
+              Navigator.of(context).pop(true);
+            },
             child: const Text('删除'),
           ),
         ],
@@ -98,6 +121,7 @@ class _ServerListPageState extends State<ServerListPage> {
 
     if (confirmed == true && mounted) {
       await _serverManager.removeServer(server.url);
+      Logger.i("服务器删除成功: ${server.name}", _tag);
       _loadServers();
     }
   }
@@ -111,7 +135,10 @@ class _ServerListPageState extends State<ServerListPage> {
         actions: [
           IconButton(
             icon: Icon(ThemeManager().isDarkMode ? Icons.light_mode : Icons.dark_mode),
-            onPressed: () => ThemeManager().toggleTheme(),
+            onPressed: () {
+              Logger.d("切换主题模式: ${ThemeManager().isDarkMode ? '浅色' : '深色'}", _tag);
+              ThemeManager().toggleTheme();
+            },
             tooltip: '切换主题',
           )
         ],

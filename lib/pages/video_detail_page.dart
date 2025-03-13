@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/emby_api.dart';
 import '../services/server_manager.dart';
+import '../utils/logger.dart';
 import './video_player_page.dart';
 
 class VideoDetailPage extends StatefulWidget {
@@ -18,6 +19,8 @@ class VideoDetailPage extends StatefulWidget {
 }
 
 class _VideoDetailPageState extends State<VideoDetailPage> {
+  static const String _tag = "VideoDetail";
+  
   final EmbyApiService _api = EmbyApiService(
     baseUrl: '',
     username: '',
@@ -31,30 +34,40 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
   @override
   void initState() {
     super.initState();
+    Logger.i("初始化视频详情页面: ${widget.video['Name']}", _tag);
     _api
       ..baseUrl = widget.server.url
       ..username = widget.server.username
       ..password = widget.server.password
-      ..accessToken = widget.server.accessToken;
+      ..accessToken = widget.server.accessToken
+      ..userId = widget.server.userId;
+    Logger.d("API服务初始化完成，userId: ${widget.server.userId}", _tag);
     _loadVideoDetails();
   }
 
-  Future<void> _loadVideoDetails() async {
-    try {
-      // 重新进行身份验证以获取新的访问令牌
-      final authResult = await _api.authenticate();
-      _api.accessToken = authResult['AccessToken'];
+  @override
+  void dispose() {
+    Logger.d("释放视频详情页面资源", _tag);
+    super.dispose();
+  }
 
+  Future<void> _loadVideoDetails() async {
+    Logger.i("开始加载视频详情: ${widget.video['Name']}", _tag);
+    try {
       final videoId = widget.video['Id'];
+      Logger.d("获取视频详情: $videoId", _tag);
       final details = await _api.getVideoDetails(videoId);
+      Logger.d("获取播放进度: $videoId", _tag);
       final position = await _api.getPlaybackPosition(videoId);
 
+      Logger.i("视频详情加载完成: ${details['Name']}", _tag);
       setState(() {
         _videoDetails = details;
         _playbackPosition = position;
         _isLoading = false;
       });
     } catch (e) {
+      Logger.e("加载视频详情失败", _tag, e);
       setState(() {
         _error = e.toString();
         _isLoading = false;
@@ -63,8 +76,12 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
   }
 
   void _playVideo({bool fromStart = false}) {
-    if (_videoDetails == null) return;
+    if (_videoDetails == null) {
+      Logger.w("无法播放视频：视频详情未加载", _tag);
+      return;
+    }
     
+    Logger.i("开始播放视频: ${_videoDetails!['Name']}, ${fromStart ? '从头开始' : '继续播放'}", _tag);
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -77,6 +94,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
       ),
     ).then((_) {
       // 返回时重新加载视频详情和播放进度
+      Logger.d("播放结束，重新加载视频详情", _tag);
       _loadVideoDetails();
     });
   }
