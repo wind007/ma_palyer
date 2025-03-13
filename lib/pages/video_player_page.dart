@@ -1,3 +1,5 @@
+// ignore_for_file: unused_field
+
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -37,6 +39,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   String? _error;               // 错误信息
   bool _showControls = false;   // 是否显示控制栏
   int _retryCount = 0;          // 重试次数
+  Duration _dragPosition = Duration.zero;   // 当前拖动位置
   
   // 播放控制
   double _currentVolume = 1.0;   // 当前音量
@@ -46,9 +49,6 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   double _brightness = 0.0;      // 当前亮度
 
   // 手势控制
-  double? _dragStartY;           // 垂直拖动起始位置
-  bool _isDraggingVolume = false; // 是否正在调节音量
-  bool _isDraggingBrightness = false; // 是否正在调节亮度
   bool _showVolumeIndicator = false;  // 是否显示音量指示器
   bool _showBrightnessIndicator = false; // 是否显示亮度指示器
   bool _showSeekIndicator = false;    // 是否显示快进快退指示器
@@ -410,46 +410,6 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
             _seekRelative(const Duration(seconds: 10));
           }
         },
-        onVerticalDragStart: (details) {
-          final screenWidth = MediaQuery.of(context).size.width;
-          _dragStartY = details.globalPosition.dy;
-          if (details.globalPosition.dx < screenWidth / 2) {
-            _isDraggingBrightness = true;
-            _showBrightnessIndicator = true;
-          } else {
-            _isDraggingVolume = true;
-            _showVolumeIndicator = true;
-          }
-          setState(() {});
-        },
-        onVerticalDragUpdate: (details) {
-          if (_dragStartY == null) return;
-          final delta = (_dragStartY! - details.globalPosition.dy) / 200;
-          if (_isDraggingVolume) {
-            _adjustVolume(delta);
-          } else if (_isDraggingBrightness) {
-            setState(() {
-              _brightness = (_brightness + delta).clamp(0.0, 1.0);
-              SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
-                statusBarBrightness: _brightness > 0.5 ? Brightness.dark : Brightness.light,
-              ));
-            });
-          }
-          _dragStartY = details.globalPosition.dy;
-        },
-        onVerticalDragEnd: (_) {
-          _dragStartY = null;
-          _isDraggingVolume = false;
-          _isDraggingBrightness = false;
-          Future.delayed(const Duration(seconds: 1), () {
-            if (mounted) {
-              setState(() {
-                _showVolumeIndicator = false;
-                _showBrightnessIndicator = false;
-              });
-            }
-          });
-        },
         child: Stack(
           children: [
             Center(
@@ -473,13 +433,13 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
               Positioned(
                 left: 0,
                 right: 0,
-                top: MediaQuery.of(context).size.height / 3,
+                top: MediaQuery.of(context).size.height / 4,
                 child: Center(
                   child: Container(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
                       color: Colors.black54,
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(6),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -489,12 +449,12 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                           color: Colors.white,
                           size: 32,
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 4),
                         Text(
                           '${_seekSeconds.abs()}秒',
                           style: const TextStyle(
                             color: Colors.white,
-                            fontSize: 20,
+                            fontSize: 18,
                           ),
                         ),
                       ],
@@ -507,10 +467,10 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                 right: MediaQuery.of(context).size.width / 4,
                 top: MediaQuery.of(context).size.height / 3,
                 child: Container(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
                     color: Colors.black54,
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(6),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -522,14 +482,14 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                                 ? Icons.volume_down
                                 : Icons.volume_up,
                         color: Colors.white,
-                        size: 32,
+                        size: 24,
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 4),
                       Text(
                         '${(_currentVolume * 100).round()}%',
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 20,
+                          fontSize: 16,
                         ),
                       ),
                     ],
@@ -541,10 +501,10 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                 left: MediaQuery.of(context).size.width / 4,
                 top: MediaQuery.of(context).size.height / 3,
                 child: Container(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
                     color: Colors.black54,
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(6),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -556,14 +516,14 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                                 ? Icons.brightness_medium
                                 : Icons.brightness_high,
                         color: Colors.white,
-                        size: 32,
+                        size: 24,
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 4),
                       Text(
                         '${(_brightness * 100).round()}%',
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 20,
+                          fontSize: 16,
                         ),
                       ),
                     ],
@@ -756,39 +716,65 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     return ValueListenableBuilder(
       valueListenable: _controller!,
       builder: (context, VideoPlayerValue value, child) {
-        return SliderTheme(
-          data: SliderTheme.of(context).copyWith(
-            activeTrackColor: Colors.red,
-            inactiveTrackColor: Colors.white.withOpacity(0.3),
-            thumbColor: Colors.red,
-            trackHeight: 2.0,
-            thumbShape: const RoundSliderThumbShape(
-              enabledThumbRadius: 6.0,
+        final duration = value.duration;
+        final position = _isDragging ? _dragPosition : value.position;
+
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                activeTrackColor: Colors.red,
+                inactiveTrackColor: Colors.white.withOpacity(0.3),
+                thumbColor: Colors.red,
+                trackHeight: 2.0,
+                thumbShape: const RoundSliderThumbShape(
+                  enabledThumbRadius: 6.0,
+                ),
+                overlayColor: Colors.red.withAlpha(32),
+                overlayShape: const RoundSliderOverlayShape(
+                  overlayRadius: 12.0,
+                ),
+              ),
+              child: Slider(
+                value: position.inMilliseconds.toDouble(),
+                min: 0.0,
+                max: duration.inMilliseconds.toDouble(),
+                onChangeStart: (value) {
+                  setState(() {
+                    _isDragging = true;
+                    _dragPosition = Duration(milliseconds: value.toInt());
+                  });
+                  _hideControlsTimer?.cancel();
+                },
+                onChanged: (value) {
+                  setState(() {
+                    _dragPosition = Duration(milliseconds: value.toInt());
+                  });
+                },
+                onChangeEnd: (value) {
+                  final newPosition = Duration(milliseconds: value.toInt());
+                  _controller?.seekTo(newPosition);
+                  setState(() {
+                    _isDragging = false;
+                  });
+                  _updateProgress(isPaused: !(_controller?.value.isPlaying ?? false));
+                  _startHideControlsTimer();
+                },
+              ),
             ),
-            overlayColor: Colors.red.withAlpha(32),
-            overlayShape: const RoundSliderOverlayShape(
-              overlayRadius: 12.0,
-            ),
-          ),
-          child: Slider(
-            value: value.position.inMilliseconds.toDouble(),
-            min: 0,
-            max: value.duration.inMilliseconds.toDouble(),
-            onChangeStart: (_) {
-              _isDragging = true;
-              _hideControlsTimer?.cancel();
-            },
-            onChanged: (newPosition) {
-              _controller?.seekTo(Duration(milliseconds: newPosition.toInt()));
-            },
-            onChangeEnd: (newPosition) {
-              _isDragging = false;
-              _updateProgress(
-                isPaused: !(_controller?.value.isPlaying ?? false),
-              );
-              _startHideControlsTimer();
-            },
-          ),
+            if (_isDragging)
+              Padding(
+                padding: const EdgeInsets.only(top: 4.0),
+                child: Text(
+                  _formatDuration(_dragPosition),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+          ],
         );
       },
     );
