@@ -816,19 +816,19 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     return Positioned(
       left: 0,
       right: 0,
-      top: MediaQuery.of(context).size.height / 2 - 50,
+      top: MediaQuery.of(context).size.height / 2 - _seekButtonSize / 2,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
           IconButton(
-            icon: const Icon(Icons.replay_10, color: Colors.white, size: 40),
+            icon: const Icon(Icons.replay_10, color: Colors.white, size: _seekButtonSize),
             onPressed: () {
               _seekRelative(const Duration(seconds: -10));
               _showSeekAnimation(-10);
             },
           ),
           IconButton(
-            icon: const Icon(Icons.forward_10, color: Colors.white, size: 40),
+            icon: const Icon(Icons.forward_10, color: Colors.white, size: _seekButtonSize),
             onPressed: () {
               _seekRelative(const Duration(seconds: 10));
               _showSeekAnimation(10);
@@ -1006,20 +1006,27 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   }
 
   Widget _buildPlayPauseButton() {
-    return Positioned.fill(
+    return Positioned(
+      left: 0,
+      right: 0,
+      top: MediaQuery.of(context).size.height / 2 - _seekButtonSize / 2,
       child: GestureDetector(
         onTap: _togglePlayPause,
         child: Center(
           child: Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.5),
+              color: Colors.black.withOpacity(0.4),
               shape: BoxShape.circle,
+              border: Border.all(
+                color: Colors.white.withOpacity(0.5),
+                width: 2,
+              ),
             ),
             child: Icon(
               _controller!.value.isPlaying ? Icons.pause : Icons.play_arrow,
               color: Colors.white,
-              size: 48,
+              size: _seekButtonSize,
             ),
           ),
         ),
