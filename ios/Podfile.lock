@@ -1,0 +1,51 @@
+PODS:
+  - Flutter (1.0.0)
+  - fvp (0.30.0):
+    - Flutter
+    - FlutterMacOS
+    - mdk (~> 0.31.0)
+  - mdk (0.31.0)
+  - path_provider_foundation (0.0.1):
+    - Flutter
+    - FlutterMacOS
+  - shared_preferences_foundation (0.0.1):
+    - Flutter
+    - FlutterMacOS
+  - video_player_avfoundation (0.0.1):
+    - Flutter
+    - FlutterMacOS
+
+DEPENDENCIES:
+  - Flutter (from `Flutter`)
+  - fvp (from `.symlinks/plugins/fvp/darwin`)
+  - path_provider_foundation (from `.symlinks/plugins/path_provider_foundation/darwin`)
+  - shared_preferences_foundation (from `.symlinks/plugins/shared_preferences_foundation/darwin`)
+  - video_player_avfoundation (from `.symlinks/plugins/video_player_avfoundation/darwin`)
+
+SPEC REPOS:
+  trunk:
+    - mdk
+
+EXTERNAL SOURCES:
+  Flutter:
+    :path: Flutter
+  fvp:
+    :path: ".symlinks/plugins/fvp/darwin"
+  path_provider_foundation:
+    :path: ".symlinks/plugins/path_provider_foundation/darwin"
+  shared_preferences_foundation:
+    :path: ".symlinks/plugins/shared_preferences_foundation/darwin"
+  video_player_avfoundation:
+    :path: ".symlinks/plugins/video_player_avfoundation/darwin"
+
+SPEC CHECKSUMS:
+  Flutter: e0871f40cf51350855a761d2e70bf5af5b9b5de7
+  fvp: 09ac649a31ccdeace1d75d56eee6d114d9d5f332
+  mdk: 90571adbea8ee78c2d36c1954741acfef9fdacb6
+  path_provider_foundation: 080d55be775b7414fd5a5ef3ac137b97b097e564
+  shared_preferences_foundation: 9e1978ff2562383bd5676f64ec4e9aa8fa06a6f7
+  video_player_avfoundation: 2cef49524dd1f16c5300b9cd6efd9611ce03639b
+
+PODFILE CHECKSUM: 4305caec6b40dde0ae97be1573c53de1882a07e5
+
+COCOAPODS: 1.16.2
