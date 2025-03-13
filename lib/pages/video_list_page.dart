@@ -3,6 +3,7 @@ import '../services/emby_api.dart';
 import '../services/server_manager.dart';
 import './video_detail_page.dart';
 import '../utils/error_dialog.dart';
+import './video_list_more_page.dart';
 
 class VideoListPage extends StatefulWidget {
   final ServerInfo server;
@@ -213,7 +214,7 @@ class _VideoListPageState extends State<VideoListPage> {
     );
   }
 
-  Widget _buildSection(String title, List<dynamic> items) {
+  Widget _buildSection(String title, List<dynamic> items, {String? viewId}) {
     if (items.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
 
     return SliverToBoxAdapter(
@@ -222,12 +223,33 @@ class _VideoListPageState extends State<VideoListPage> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
-            child: Text(
-              title,
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                if (viewId != null)
+                  TextButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => VideoListMorePage(
+                            server: widget.server,
+                            title: title,
+                            viewId: viewId,
+                          ),
+                        ),
+                      );
+                    },
+                    child: const Text('查看更多'),
+                  ),
+              ],
             ),
           ),
           SizedBox(
@@ -346,7 +368,7 @@ class _VideoListPageState extends State<VideoListPage> {
       final viewId = view['Id'];
       final viewName = view['Name'];
       final items = _videoSections[viewId] ?? [];
-      return _buildSection(viewName, items);
+      return _buildSection(viewName, items, viewId: viewId);
     }).toList();
   }
 
