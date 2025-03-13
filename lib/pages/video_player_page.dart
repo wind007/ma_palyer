@@ -24,8 +24,12 @@ class VideoPlayerPage extends StatefulWidget {
 class _VideoPlayerPageState extends State<VideoPlayerPage> {
   VideoPlayerController? _controller;
   Timer? _progressTimer;
+  Timer? _hideControlsTimer;
   bool _isInitializing = true;
   String? _error;
+  bool _showControls = false;
+  double _currentVolume = 1.0;
+  double _lastVolume = 1.0;  // 添加这个变量来记住静音前的音量
 
   @override
   void initState() {
@@ -57,7 +61,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
 
         // 启动定时更新
         _progressTimer?.cancel();
-        _progressTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
+        _progressTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
           if (_controller?.value.isPlaying == true) {
             widget.embyApi.updatePlaybackProgress(
               itemId: widget.itemId,
@@ -76,6 +80,50 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
           _isInitializing = false;
         });
       }
+    }
+  }
+
+  void _startHideControlsTimer() {
+    _hideControlsTimer?.cancel();
+    _hideControlsTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) {
+        setState(() {
+          _showControls = false;
+        });
+      }
+    });
+  }
+
+  void _toggleControls() {
+    setState(() {
+      _showControls = !_showControls;
+      if (_showControls) {
+        _startHideControlsTimer();
+      }
+    });
+  }
+
+  void _seekRelative(Duration offset) {
+    if (_controller?.value.isInitialized ?? false) {
+      final newPosition = _controller!.value.position + offset;
+      final duration = _controller!.value.duration;
+      
+      if (newPosition < Duration.zero) {
+        _controller?.seekTo(Duration.zero);
+      } else if (newPosition > duration) {
+        _controller?.seekTo(duration);
+      } else {
+        _controller?.seekTo(newPosition);
+      }
+      
+      // 更新进度
+      widget.embyApi.updatePlaybackProgress(
+        itemId: widget.itemId,
+        positionTicks: (newPosition.inMicroseconds * 10).toInt(),
+        isPaused: !(_controller?.value.isPlaying ?? false),
+      );
+      
+      _startHideControlsTimer();
     }
   }
 
@@ -110,135 +158,277 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: Text(widget.title)),
-      body: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Center(
-            child: AspectRatio(
-              aspectRatio: _controller!.value.aspectRatio,
-              child: VideoPlayer(_controller!),
+      body: SafeArea(
+        child: Stack(
+          children: [
+            // 视频播放器
+            GestureDetector(
+              onTap: _toggleControls,
+              onDoubleTapDown: (details) {
+                final screenWidth = MediaQuery.of(context).size.width;
+                if (details.globalPosition.dx < screenWidth / 2) {
+                  _seekRelative(const Duration(seconds: -10));
+                } else {
+                  _seekRelative(const Duration(seconds: 10));
+                }
+              },
+              child: Center(
+                child: AspectRatio(
+                  aspectRatio: _controller!.value.aspectRatio,
+                  child: VideoPlayer(_controller!),
+                ),
+              ),
             ),
-          ),
-          const SizedBox(height: 20),
-          ValueListenableBuilder(
-            valueListenable: _controller!,
-            builder: (context, VideoPlayerValue value, child) {
-              return Column(
-                children: [
-                  Container(
-                    height: 20,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        // 背景轨道
-                        Container(
-                          height: 2,
-                          color: Colors.grey[300],
+
+            // 控制层
+            if (_showControls) ...[
+              // 顶部控制栏
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.black.withOpacity(0.7),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.arrow_back, color: Colors.white),
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                      Expanded(
+                        child: Text(
+                          widget.title,
+                          style: const TextStyle(color: Colors.white),
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        // 进度条
-                        if (value.duration.inMilliseconds > 0)
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: Container(
-                              height: 2,
-                              width: MediaQuery.of(context).size.width * 
-                                (value.position.inMilliseconds / value.duration.inMilliseconds),
-                              color: Colors.red,
+                      ),
+                      // 音量控制
+                      Row(
+                        children: [
+                          IconButton(
+                            icon: Icon(
+                              _currentVolume == 0
+                                  ? Icons.volume_off
+                                  : _currentVolume < 0.5
+                                      ? Icons.volume_down
+                                      : Icons.volume_up,
+                              color: Colors.white,
                             ),
-                          ),
-                        // 可拖动的滑块
-                        SliderTheme(
-                          data: SliderTheme.of(context).copyWith(
-                            activeTrackColor: Colors.transparent,
-                            inactiveTrackColor: Colors.transparent,
-                            trackHeight: 2.0,
-                            thumbColor: Colors.red,
-                            thumbShape: const RoundSliderThumbShape(
-                              enabledThumbRadius: 6.0,
-                            ),
-                            overlayColor: Colors.red.withAlpha(32),
-                            overlayShape: const RoundSliderOverlayShape(
-                              overlayRadius: 12.0,
-                            ),
-                          ),
-                          child: Slider(
-                            value: value.position.inMilliseconds.toDouble(),
-                            min: 0,
-                            max: value.duration.inMilliseconds.toDouble(),
-                            onChanged: (newPosition) {
-                              _controller?.seekTo(Duration(milliseconds: newPosition.toInt()));
-                              // 拖动进度条后立即更新进度
-                              widget.embyApi.updatePlaybackProgress(
-                                itemId: widget.itemId,
-                                positionTicks: (newPosition.toInt() * 10000),
-                                isPaused: !(_controller?.value.isPlaying ?? false),
-                              );
+                            onPressed: () {
+                              setState(() {
+                                if (_currentVolume > 0) {
+                                  _lastVolume = _currentVolume;
+                                  _currentVolume = 0;
+                                } else {
+                                  _currentVolume = _lastVolume;
+                                }
+                                _controller?.setVolume(_currentVolume);
+                              });
+                              _startHideControlsTimer();
                             },
                           ),
-                        ),
+                          SizedBox(
+                            width: 100,
+                            child: SliderTheme(
+                              data: SliderTheme.of(context).copyWith(
+                                activeTrackColor: Colors.red,
+                                inactiveTrackColor: Colors.white.withOpacity(0.3),
+                                thumbColor: Colors.red,
+                                trackHeight: 2.0,
+                                thumbShape: const RoundSliderThumbShape(
+                                  enabledThumbRadius: 6.0,
+                                ),
+                                overlayColor: Colors.red.withAlpha(32),
+                                overlayShape: const RoundSliderOverlayShape(
+                                  overlayRadius: 12.0,
+                                ),
+                              ),
+                              child: Slider(
+                                value: _currentVolume,
+                                onChanged: (value) {
+                                  setState(() {
+                                    _currentVolume = value;
+                                    _controller?.setVolume(value);
+                                  });
+                                  _startHideControlsTimer();
+                                },
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // 快进快退指示
+              Positioned(
+                left: 0,
+                right: 0,
+                top: MediaQuery.of(context).size.height / 2 - 50,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.replay_10, color: Colors.white, size: 40),
+                      onPressed: () => _seekRelative(const Duration(seconds: -10)),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.forward_10, color: Colors.white, size: 40),
+                      onPressed: () => _seekRelative(const Duration(seconds: 10)),
+                    ),
+                  ],
+                ),
+              ),
+
+              // 底部控制栏
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                      colors: [
+                        Colors.black.withOpacity(0.7),
+                        Colors.transparent,
                       ],
                     ),
                   ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          '${value.position.inMinutes}:${(value.position.inSeconds % 60).toString().padLeft(2, '0')}',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey,
-                          ),
-                        ),
-                        Text(
-                          '${value.duration.inMinutes}:${(value.duration.inSeconds % 60).toString().padLeft(2, '0')}',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey,
-                          ),
-                        ),
-                      ],
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // 进度条
+                      ValueListenableBuilder(
+                        valueListenable: _controller!,
+                        builder: (context, VideoPlayerValue value, child) {
+                          return Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SliderTheme(
+                                data: SliderTheme.of(context).copyWith(
+                                  activeTrackColor: Colors.red,
+                                  inactiveTrackColor: Colors.white.withOpacity(0.3),
+                                  thumbColor: Colors.red,
+                                  trackHeight: 2.0,
+                                  thumbShape: const RoundSliderThumbShape(
+                                    enabledThumbRadius: 6.0,
+                                  ),
+                                  overlayColor: Colors.red.withAlpha(32),
+                                  overlayShape: const RoundSliderOverlayShape(
+                                    overlayRadius: 12.0,
+                                  ),
+                                ),
+                                child: Slider(
+                                  value: value.position.inMilliseconds.toDouble(),
+                                  min: 0,
+                                  max: value.duration.inMilliseconds.toDouble(),
+                                  onChanged: (newPosition) {
+                                    _controller?.seekTo(Duration(milliseconds: newPosition.toInt()));
+                                    widget.embyApi.updatePlaybackProgress(
+                                      itemId: widget.itemId,
+                                      positionTicks: (newPosition.toInt() * 10000),
+                                      isPaused: !(_controller?.value.isPlaying ?? false),
+                                    );
+                                    _startHideControlsTimer();
+                                  },
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      _formatDuration(value.position),
+                                      style: const TextStyle(color: Colors.white),
+                                    ),
+                                    Text(
+                                      _formatDuration(value.duration),
+                                      style: const TextStyle(color: Colors.white),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+
+            // 播放/暂停按钮
+            if (_showControls)
+              Positioned.fill(
+                child: GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      if (_controller!.value.isPlaying) {
+                        _controller?.pause();
+                        widget.embyApi.updatePlaybackProgress(
+                          itemId: widget.itemId,
+                          positionTicks: (_controller!.value.position.inMicroseconds * 10).toInt(),
+                          isPaused: true,
+                        );
+                      } else {
+                        _controller?.play();
+                        widget.embyApi.updatePlaybackProgress(
+                          itemId: widget.itemId,
+                          positionTicks: (_controller!.value.position.inMicroseconds * 10).toInt(),
+                          isPaused: false,
+                        );
+                      }
+                      _startHideControlsTimer();
+                    });
+                  },
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.5),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        _controller!.value.isPlaying ? Icons.pause : Icons.play_arrow,
+                        color: Colors.white,
+                        size: 48,
+                      ),
                     ),
                   ),
-                ],
-              );
-            },
-          ),
-        ],
-      ),
-      floatingActionButton: ValueListenableBuilder(
-        valueListenable: _controller!,
-        builder: (context, VideoPlayerValue value, child) {
-          return FloatingActionButton(
-            onPressed: () {
-              setState(() {
-                if (value.isPlaying) {
-                  _controller?.pause();
-                  // 暂停时立即更新进度
-                  widget.embyApi.updatePlaybackProgress(
-                    itemId: widget.itemId,
-                    positionTicks: (_controller!.value.position.inMicroseconds * 10).toInt(),
-                    isPaused: true,
-                  );
-                } else {
-                  _controller?.play();
-                  widget.embyApi.updatePlaybackProgress(
-                    itemId: widget.itemId,
-                    positionTicks: (_controller!.value.position.inMicroseconds * 10).toInt(),
-                    isPaused: false,
-                  );
-                }
-              });
-            },
-            child: Icon(
-              value.isPlaying ? Icons.pause : Icons.play_arrow,
-            ),
-          );
-        },
+                ),
+              ),
+          ],
+        ),
       ),
     );
+  }
+
+  String _formatDuration(Duration duration) {
+    String twoDigits(int n) => n.toString().padLeft(2, '0');
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes.remainder(60);
+    final seconds = duration.inSeconds.remainder(60);
+    
+    if (hours > 0) {
+      return '$hours:${twoDigits(minutes)}:${twoDigits(seconds)}';
+    }
+    return '${twoDigits(minutes)}:${twoDigits(seconds)}';
   }
 } 

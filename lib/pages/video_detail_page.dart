@@ -94,88 +94,92 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
       return const Center(child: Text('无法加载视频详情'));
     }
 
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 视频封面
-          if (_videoDetails!['ImageTags']?['Primary'] != null)
-            Stack(
-              children: [
-                Image.network(
-                  '${widget.server.url}/Items/${_videoDetails!['Id']}/Images/Primary',
-                  headers: {'X-Emby-Token': widget.server.accessToken},
-                  fit: BoxFit.cover,
-                  width: double.infinity,
-                  height: 300,
-                ),
-                Positioned.fill(
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: () => _playVideo(fromStart: true),
-                      child: Center(
-                        child: Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.5),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.play_arrow,
-                            color: Colors.white,
-                            size: 48,
+    return RefreshIndicator(
+      onRefresh: _loadVideoDetails,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 视频封面
+            if (_videoDetails!['ImageTags']?['Primary'] != null)
+              Stack(
+                children: [
+                  Image.network(
+                    '${widget.server.url}/Items/${_videoDetails!['Id']}/Images/Primary',
+                    headers: {'X-Emby-Token': widget.server.accessToken},
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    height: 300,
+                  ),
+                  Positioned.fill(
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () => _playVideo(fromStart: _playbackPosition == null || _playbackPosition == 0),
+                        child: Center(
+                          child: Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.5),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.play_arrow,
+                              color: Colors.white,
+                              size: 48,
+                            ),
                           ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              ],
-            ),
-          
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 标题
-                Text(
-                  _videoDetails!['Name'] ?? '',
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
-                const SizedBox(height: 8),
-                // 年份和时长
-                Text(
-                  '${_videoDetails!['ProductionYear'] ?? ''} · ${(_videoDetails!['RunTimeTicks'] ?? 0) ~/ 10000000 ~/ 60} 分钟',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-                const SizedBox(height: 16),
-                // 简介
-                Text(
-                  _videoDetails!['Overview'] ?? '暂无简介',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-                const SizedBox(height: 24),
-                // 演员列表
-                if (_videoDetails!['People'] != null) ...[                  
+                ],
+              ),
+            
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 标题
                   Text(
-                    '演职人员',
-                    style: Theme.of(context).textTheme.titleMedium,
+                    _videoDetails!['Name'] ?? '',
+                    style: Theme.of(context).textTheme.headlineSmall,
                   ),
                   const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    children: [
-                      for (var person in _videoDetails!['People'])
-                        Chip(label: Text('${person['Name']} (${person['Type']})')),
-                    ],
+                  // 年份和时长
+                  Text(
+                    '${_videoDetails!['ProductionYear'] ?? ''} · ${(_videoDetails!['RunTimeTicks'] ?? 0) ~/ 10000000 ~/ 60} 分钟',
+                    style: Theme.of(context).textTheme.bodyMedium,
                   ),
+                  const SizedBox(height: 16),
+                  // 简介
+                  Text(
+                    _videoDetails!['Overview'] ?? '暂无简介',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 24),
+                  // 演员列表
+                  if (_videoDetails!['People'] != null) ...[                  
+                    Text(
+                      '演职人员',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        for (var person in _videoDetails!['People'])
+                          Chip(label: Text('${person['Name']} (${person['Type']})')),
+                      ],
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -24,11 +24,6 @@ class EmbyApiService {
     bool allowNoContent = false,  // 添加参数来允许204响应
   }) async {
     try {
-      // 如果需要认证且没有token，先进行认证
-      if (requiresAuth && accessToken == null) {
-        await authenticate();
-      }
-
       final uri = Uri.parse('$baseUrl$path').replace(
         queryParameters: queryParams,
       );
@@ -45,6 +40,10 @@ class EmbyApiService {
 
       // 如果需要认证，添加token
       if (requiresAuth && accessToken != null) {
+        headers['X-Emby-Token'] = accessToken!;
+      } else if (requiresAuth && accessToken == null) {
+        // 只有在需要认证且没有token时才进行认证
+        await authenticate();
         headers['X-Emby-Token'] = accessToken!;
       }
 
