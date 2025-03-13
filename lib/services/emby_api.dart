@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
+import '../services/server_manager.dart';
 
 class EmbyApiService {
   String baseUrl;
@@ -363,10 +364,10 @@ class EmbyApiService {
   }
 
   // 获取用户视图
-  Future<List<dynamic>> getUserViews(dynamic server) async {
+  Future<List<dynamic>> getUserViews(ServerInfo server) async {
     try {
       final response = await _request(
-        path: '/Users/${server['userId']}/Views',
+        path: '/Users/${server.userId}/Views',
         method: 'GET',
       );
 

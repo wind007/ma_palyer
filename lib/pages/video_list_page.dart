@@ -22,8 +22,7 @@ class _VideoListPageState extends State<VideoListPage> {
     'latest': [], // 最新添加
     'continue': [], // 继续观看
     'favorites': [], // 收藏
-    'movies': [], // 电影
-    'tvshows': [], // 电视剧
+    'views': [], // 媒体库视图
   };
   
   bool _isLoading = true;
@@ -48,13 +47,14 @@ class _VideoListPageState extends State<VideoListPage> {
       final authResult = await _api.authenticate();
       _api.accessToken = authResult['accessToken'];
 
-      // 并行加载所有分区数据
+      // 先加载媒体库视图
+      await _loadViews();
+
+      // 并行加载其他分区数据
       await Future.wait([
         _loadLatestItems(),
         _loadContinueWatching(),
         _loadFavorites(),
-        _loadMovies(),
-        _loadTVShows(),
       ]);
 
       setState(() => _isLoading = false);
@@ -69,6 +69,52 @@ class _VideoListPageState extends State<VideoListPage> {
 
       if (retry && mounted) {
         _loadAllSections();
+      }
+    }
+  }
+
+  Future<void> _loadViews() async {
+    try {
+      final response = await _api.getUserViews(widget.server);
+      final views = (response as List).where((view) {
+        final type = view['CollectionType']?.toString().toLowerCase();
+        return type != null;
+      }).toList();
+      
+      setState(() => _videoSections['views'] = views);
+      
+      // 加载每个视图的内容
+      for (var view in views) {
+        await _loadViewContent(view);
+      }
+    } catch (e) {
+      print('加载媒体库视图失败: $e');
+      setState(() => _videoSections['views'] = []);
+    }
+  }
+
+  Future<void> _loadViewContent(Map<String, dynamic> view) async {
+    try {
+      final viewId = view['Id'];
+      final response = await _api.getVideos(
+        parentId: viewId,
+        startIndex: 0,
+        limit: 20,
+        sortBy: 'DateCreated',
+        sortOrder: 'Descending',
+      );
+      
+      if (mounted) {
+        setState(() {
+          _videoSections[viewId] = response['Items'] as List;
+        });
+      }
+    } catch (e) {
+      print('加载视图内容失败: $e');
+      if (mounted) {
+        setState(() {
+          _videoSections[view['Id']] = [];
+        });
       }
     }
   }
@@ -112,28 +158,6 @@ class _VideoListPageState extends State<VideoListPage> {
     }
   }
 
-  Future<void> _loadMovies() async {
-    final response = await _api.getVideos(
-      startIndex: 0,
-      limit: 20,
-      sortBy: 'DateCreated',
-      sortOrder: 'Descending',
-      filters: 'IncludeItemTypes=Movie',
-    );
-    setState(() => _videoSections['movies'] = response['Items']);
-  }
-
-  Future<void> _loadTVShows() async {
-    final response = await _api.getVideos(
-      startIndex: 0,
-      limit: 20,
-      sortBy: 'DateCreated',
-      sortOrder: 'Descending',
-      filters: 'IncludeItemTypes=Series',
-    );
-    setState(() => _videoSections['tvshows'] = response['Items']);
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -162,8 +186,7 @@ class _VideoListPageState extends State<VideoListPage> {
           _buildSection('最新添加', _videoSections['latest']!),
           if (_videoSections['favorites']!.isNotEmpty)
             _buildSection('我的收藏', _videoSections['favorites']!),
-          _buildSection('电影', _videoSections['movies']!),
-          _buildSection('电视剧', _videoSections['tvshows']!),
+          ..._buildViewSections(),
           const SliverPadding(padding: EdgeInsets.only(bottom: 20)),
         ],
       ),
@@ -316,6 +339,15 @@ class _VideoListPageState extends State<VideoListPage> {
         ),
       ),
     );
+  }
+
+  List<Widget> _buildViewSections() {
+    return _videoSections['views']!.map((view) {
+      final viewId = view['Id'];
+      final viewName = view['Name'];
+      final items = _videoSections[viewId] ?? [];
+      return _buildSection(viewName, items);
+    }).toList();
   }
 
   @override
