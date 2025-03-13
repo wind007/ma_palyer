@@ -21,6 +21,7 @@ class EmbyApiService {
     Map<String, String>? queryParams,
     dynamic body,
     bool requiresAuth = true,
+    bool allowNoContent = false,  // 添加参数来允许204响应
   }) async {
     try {
       // 如果需要认证且没有token，先进行认证
@@ -76,11 +77,21 @@ class EmbyApiService {
           queryParams: queryParams,
           body: body,
           requiresAuth: requiresAuth,
+          allowNoContent: allowNoContent,
         );
       }
 
-      if (response.statusCode != 200) {
+      // 允许204状态码
+      if (response.statusCode == 204 && allowNoContent) {
+        return null;
+      }
+
+      if (response.statusCode != 200 && response.statusCode != 204) {
         throw Exception('请求失败: ${response.statusCode}');
+      }
+
+      if (response.body.isEmpty) {
+        return null;
       }
 
       return json.decode(response.body);
@@ -177,11 +188,15 @@ class EmbyApiService {
   Future<int> getPlaybackPosition(String itemId) async {
     try {
       final response = await _request(
-        path: '/Users/$userId/PlaybackProgress/$itemId',
+        path: '/Users/$userId/Items/$itemId',
         method: 'GET',
+        queryParams: {
+          'Fields': 'UserData',
+        },
       );
-      return response['PositionTicks'] ?? 0;
+      return response['UserData']?['PlaybackPositionTicks'] ?? 0;
     } catch (e) {
+      print('获取播放进度失败: $e');
       return 0;
     }
   }
@@ -194,20 +209,25 @@ class EmbyApiService {
   }) async {
     try {
       await _request(
-        path: '/Sessions/Playing/Progress',
+        path: '/Users/$userId/PlayingItems/$itemId/Progress',
         method: 'POST',
         body: {
           'ItemId': itemId,
-          'UserId': userId,
+          'MediaSourceId': itemId,
           'PositionTicks': positionTicks,
           'IsPaused': isPaused,
+          'IsMuted': false,
           'PlayMethod': 'DirectStream',
           'RepeatMode': 'RepeatNone',
-          'PlaybackRate': 1,
+          'PlaybackStartTimeTicks': 0,
           'VolumeLevel': 100,
-          'IsMuted': false,
+          'AudioStreamIndex': 1,
+          'SubtitleStreamIndex': -1,
+          'PlaySessionId': 'flutter-app-${DateTime.now().millisecondsSinceEpoch}',
         },
+        allowNoContent: true,
       );
+      print('更新播放进度成功: $positionTicks ticks, isPaused: $isPaused');
     } catch (e) {
       print('更新播放进度失败: $e');
     }

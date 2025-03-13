@@ -15,6 +15,7 @@ class _AddServerPageState extends State<AddServerPage> {
   final _passwordController = TextEditingController();
   final _serverNameController = TextEditingController();
   bool _isLoading = false;
+  bool _obscurePassword = true;
 
   @override
   void dispose() {
@@ -117,11 +118,21 @@ class _AddServerPageState extends State<AddServerPage> {
             const SizedBox(height: 16),
             TextFormField(
               controller: _passwordController,
-              decoration: const InputDecoration(
+              obscureText: _obscurePassword,
+              decoration: InputDecoration(
                 labelText: '密码',
-                prefixIcon: Icon(Icons.lock),
+                prefixIcon: const Icon(Icons.lock),
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _obscurePassword ? Icons.visibility : Icons.visibility_off,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _obscurePassword = !_obscurePassword;
+                    });
+                  },
+                ),
               ),
-              obscureText: true,
               validator: (value) {
                 if (value == null || value.isEmpty) {
                   return '请输入密码';

@@ -7,12 +7,14 @@ class VideoPlayerPage extends StatefulWidget {
   final String itemId;
   final String title;
   final EmbyApiService embyApi;
+  final bool fromStart;
 
   const VideoPlayerPage({
     super.key,
     required this.itemId,
     required this.title,
     required this.embyApi,
+     required this.fromStart,
   });
 
   @override
@@ -35,7 +37,9 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     try {
       // 获取视频播放URL和上次播放位置
       final url = await widget.embyApi.getPlaybackUrl(widget.itemId);
+      final playbackInfo = await widget.embyApi.getPlaybackInfo(widget.itemId);
       final position = await widget.embyApi.getPlaybackPosition(widget.itemId);
+      final mediaSourceId = playbackInfo['MediaSources'][0]['Id'];
       
       print('播放URL: $url');
 
@@ -43,24 +47,25 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         Uri.parse(url),
         videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
       )..initialize().then((_) async {
-        if (position > 0) {
+        if (!widget.fromStart && position > 0) {
           await _controller?.seekTo(Duration(microseconds: (position ~/ 10)));
         }
         _controller?.play();
         setState(() {
           _isInitializing = false;
         });
-      });
 
-      // 添加进度监听
-      _controller?.addListener(() {
-        if (mounted && _controller?.value.isPlaying == true) {
-          widget.embyApi.updatePlaybackProgress(
-            itemId: widget.itemId,
-            positionTicks: (_controller!.value.position.inMicroseconds * 10).toInt(),
-            isPaused: false,
-          );
-        }
+        // 启动定时更新
+        _progressTimer?.cancel();
+        _progressTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
+          if (_controller?.value.isPlaying == true) {
+            widget.embyApi.updatePlaybackProgress(
+              itemId: widget.itemId,
+              positionTicks: (_controller!.value.position.inMicroseconds * 10).toInt(),
+              isPaused: false,
+            );
+          }
+        });
       });
 
     } catch (e) {
@@ -77,6 +82,13 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   @override
   void dispose() {
     _progressTimer?.cancel();
+    if (_controller?.value.isInitialized == true) {
+      widget.embyApi.updatePlaybackProgress(
+        itemId: widget.itemId,
+        positionTicks: (_controller!.value.position.inMicroseconds * 10).toInt(),
+        isPaused: true,
+      );
+    }
     _controller?.dispose();
     widget.embyApi.stopPlayback(widget.itemId);
     super.dispose();
@@ -157,6 +169,12 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                             max: value.duration.inMilliseconds.toDouble(),
                             onChanged: (newPosition) {
                               _controller?.seekTo(Duration(milliseconds: newPosition.toInt()));
+                              // 拖动进度条后立即更新进度
+                              widget.embyApi.updatePlaybackProgress(
+                                itemId: widget.itemId,
+                                positionTicks: (newPosition.toInt() * 10000),
+                                isPaused: !(_controller?.value.isPlaying ?? false),
+                              );
                             },
                           ),
                         ),
@@ -199,8 +217,19 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
               setState(() {
                 if (value.isPlaying) {
                   _controller?.pause();
+                  // 暂停时立即更新进度
+                  widget.embyApi.updatePlaybackProgress(
+                    itemId: widget.itemId,
+                    positionTicks: (_controller!.value.position.inMicroseconds * 10).toInt(),
+                    isPaused: true,
+                  );
                 } else {
                   _controller?.play();
+                  widget.embyApi.updatePlaybackProgress(
+                    itemId: widget.itemId,
+                    positionTicks: (_controller!.value.position.inMicroseconds * 10).toInt(),
+                    isPaused: false,
+                  );
                 }
               });
             },

@@ -72,6 +72,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
           itemId: _videoDetails!['Id'],
           title: _videoDetails!['Name'],
           embyApi: _api,
+          fromStart: fromStart,
         ),
       ),
     ).then((_) {
@@ -198,7 +199,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                       Expanded(
                         child: ElevatedButton.icon(
                           icon: const Icon(Icons.play_circle),
-                          label: const Text('继续播放'),
+                          label: Text('继续播放 (${_formatDuration(_playbackPosition! ~/ 10000000)})'),
                           onPressed: () => _playVideo(),
                         ),
                       ),
@@ -216,5 +217,18 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
               ),
             ),
     );
+  }
+
+  // 格式化时长
+  String _formatDuration(int seconds) {
+    final hours = seconds ~/ 3600;
+    final minutes = (seconds % 3600) ~/ 60;
+    final remainingSeconds = seconds % 60;
+    
+    if (hours > 0) {
+      return '${hours}:${minutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
+    } else {
+      return '${minutes}:${remainingSeconds.toString().padLeft(2, '0')}';
+    }
   }
 }
