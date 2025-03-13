@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 import '../services/emby_api.dart';
-import '../utils/error_dialog.dart';
 
 class VideoPlayerPage extends StatefulWidget {
   final String itemId;
@@ -30,6 +29,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   // 定时器
   Timer? _progressTimer;      // 进度更新定时器
   Timer? _hideControlsTimer;  // 控制栏隐藏定时器
+  Timer? _seekIndicatorTimer; // 快进快退指示器定时器
   
   // 状态标记
   bool _isInitializing = true;  // 初始化状态
@@ -43,6 +43,16 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   double _lastVolume = 1.0;      // 静音前的音量
   bool _isFullScreen = false;    // 全屏状态
   double _playbackSpeed = 1.0;   // 播放速度
+  double _brightness = 0.0;      // 当前亮度
+
+  // 手势控制
+  double? _dragStartY;           // 垂直拖动起始位置
+  bool _isDraggingVolume = false; // 是否正在调节音量
+  bool _isDraggingBrightness = false; // 是否正在调节亮度
+  bool _showVolumeIndicator = false;  // 是否显示音量指示器
+  bool _showBrightnessIndicator = false; // 是否显示亮度指示器
+  bool _showSeekIndicator = false;    // 是否显示快进快退指示器
+  int _seekSeconds = 0;         // 快进快退秒数
 
   // 常量
   static const _maxRetries = 3;         // 最大重试次数
@@ -71,6 +81,16 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     // 设置全屏
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     _initializePlayer();
+    _initializeBrightness();
+  }
+
+  Future<void> _initializeBrightness() async {
+    try {
+      final window = WidgetsBinding.instance.window;
+      _brightness = window.platformBrightness == Brightness.dark ? 0.3 : 0.7;
+    } catch (e) {
+      print('获取系统亮度失败: $e');
+    }
   }
 
   Future<void> _initializePlayer() async {
@@ -230,31 +250,20 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
 
   @override
   void dispose() {
-    // 取消所有定时器
     _progressTimer?.cancel();
     _hideControlsTimer?.cancel();
-    
-    // 移除监听器
+    _seekIndicatorTimer?.cancel();
     _controller?.removeListener(_onPlayerStateChanged);
-    
-    // 更新最终进度
     if (_controller?.value.isInitialized == true) {
       _updateProgress(isPaused: true);
     }
-    
-    // 释放控制器
     _controller?.dispose();
-    
-    // 停止播放
     widget.embyApi.stopPlayback(widget.itemId);
-    
-    // 恢复屏幕方向和系统UI
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
       DeviceOrientation.portraitDown,
     ]);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    
     super.dispose();
   }
 
@@ -393,31 +402,193 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         onTap: _toggleControls,
         onDoubleTapDown: (details) {
           final screenWidth = MediaQuery.of(context).size.width;
-          if (details.globalPosition.dx < screenWidth / 2) {
+          if (details.globalPosition.dx < screenWidth / 3) {
+            _showSeekAnimation(-10);
             _seekRelative(const Duration(seconds: -10));
-          } else {
+          } else if (details.globalPosition.dx > screenWidth * 2 / 3) {
+            _showSeekAnimation(10);
             _seekRelative(const Duration(seconds: 10));
           }
         },
-        child: Center(
-          child: _isFullScreen
-              ? SizedBox.expand(
-                  child: FittedBox(
-                    fit: BoxFit.cover,
-                    child: SizedBox(
-                      width: _controller!.value.size.width,
-                      height: _controller!.value.size.height,
+        onVerticalDragStart: (details) {
+          final screenWidth = MediaQuery.of(context).size.width;
+          _dragStartY = details.globalPosition.dy;
+          if (details.globalPosition.dx < screenWidth / 2) {
+            _isDraggingBrightness = true;
+            _showBrightnessIndicator = true;
+          } else {
+            _isDraggingVolume = true;
+            _showVolumeIndicator = true;
+          }
+          setState(() {});
+        },
+        onVerticalDragUpdate: (details) {
+          if (_dragStartY == null) return;
+          final delta = (_dragStartY! - details.globalPosition.dy) / 200;
+          if (_isDraggingVolume) {
+            _adjustVolume(delta);
+          } else if (_isDraggingBrightness) {
+            setState(() {
+              _brightness = (_brightness + delta).clamp(0.0, 1.0);
+              SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
+                statusBarBrightness: _brightness > 0.5 ? Brightness.dark : Brightness.light,
+              ));
+            });
+          }
+          _dragStartY = details.globalPosition.dy;
+        },
+        onVerticalDragEnd: (_) {
+          _dragStartY = null;
+          _isDraggingVolume = false;
+          _isDraggingBrightness = false;
+          Future.delayed(const Duration(seconds: 1), () {
+            if (mounted) {
+              setState(() {
+                _showVolumeIndicator = false;
+                _showBrightnessIndicator = false;
+              });
+            }
+          });
+        },
+        child: Stack(
+          children: [
+            Center(
+              child: _isFullScreen
+                  ? SizedBox.expand(
+                      child: FittedBox(
+                        fit: BoxFit.cover,
+                        child: SizedBox(
+                          width: _controller!.value.size.width,
+                          height: _controller!.value.size.height,
+                          child: VideoPlayer(_controller!),
+                        ),
+                      ),
+                    )
+                  : AspectRatio(
+                      aspectRatio: _controller!.value.aspectRatio,
                       child: VideoPlayer(_controller!),
                     ),
+            ),
+            if (_showSeekIndicator)
+              Positioned(
+                left: 0,
+                right: 0,
+                top: MediaQuery.of(context).size.height / 3,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          _seekSeconds < 0 ? Icons.fast_rewind : Icons.fast_forward,
+                          color: Colors.white,
+                          size: 32,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '${_seekSeconds.abs()}秒',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                )
-              : AspectRatio(
-                  aspectRatio: _controller!.value.aspectRatio,
-                  child: VideoPlayer(_controller!),
                 ),
+              ),
+            if (_showVolumeIndicator)
+              Positioned(
+                right: MediaQuery.of(context).size.width / 4,
+                top: MediaQuery.of(context).size.height / 3,
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _currentVolume == 0
+                            ? Icons.volume_off
+                            : _currentVolume < 0.5
+                                ? Icons.volume_down
+                                : Icons.volume_up,
+                        color: Colors.white,
+                        size: 32,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '${(_currentVolume * 100).round()}%',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            if (_showBrightnessIndicator)
+              Positioned(
+                left: MediaQuery.of(context).size.width / 4,
+                top: MediaQuery.of(context).size.height / 3,
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _brightness < 0.3
+                            ? Icons.brightness_low
+                            : _brightness < 0.7
+                                ? Icons.brightness_medium
+                                : Icons.brightness_high,
+                        color: Colors.white,
+                        size: 32,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '${(_brightness * 100).round()}%',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );
+  }
+
+  void _showSeekAnimation(int seconds) {
+    setState(() {
+      _seekSeconds = seconds;
+      _showSeekIndicator = true;
+    });
+    _seekIndicatorTimer?.cancel();
+    _seekIndicatorTimer = Timer(const Duration(seconds: 1), () {
+      if (mounted) {
+        setState(() {
+          _showSeekIndicator = false;
+        });
+      }
+    });
   }
 
   Widget _buildTopBar() {
@@ -458,7 +629,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
 
   Widget _buildVolumeControl() {
     return Positioned(
-      left: 16,
+      right: 16,
       top: 0,
       bottom: 0,
       child: Center(

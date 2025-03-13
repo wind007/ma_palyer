@@ -101,17 +101,36 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 视频封面
-            if (_videoDetails!['ImageTags']?['Primary'] != null)
+            // 视频背景图
+            if (_videoDetails!['ImageTags']?['Backdrop'] != null || _videoDetails!['BackdropImageTags']?.isNotEmpty == true)
               Stack(
                 children: [
                   Image.network(
-                    '${widget.server.url}/Items/${_videoDetails!['Id']}/Images/Primary',
+                    _videoDetails!['ImageTags']?['Backdrop'] != null
+                        ? '${widget.server.url}/Items/${_videoDetails!['Id']}/Images/Backdrop'
+                        : '${widget.server.url}/Items/${_videoDetails!['Id']}/Images/Backdrop/0',
                     headers: {'X-Emby-Token': widget.server.accessToken},
                     fit: BoxFit.cover,
                     width: double.infinity,
-                    height: 300,
+                    height: 400,
                   ),
+                  // 添加渐变遮罩
+                  Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.transparent,
+                            Theme.of(context).scaffoldBackgroundColor,
+                          ],
+                          stops: const [0.5, 1.0],
+                        ),
+                      ),
+                    ),
+                  ),
+                  // 播放按钮
                   Positioned.fill(
                     child: Material(
                       color: Colors.transparent,
@@ -119,7 +138,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                         onTap: () => _playVideo(fromStart: _playbackPosition == null || _playbackPosition == 0),
                         child: Center(
                           child: Container(
-                            padding: const EdgeInsets.all(16),
+                            padding: const EdgeInsets.all(20),
                             decoration: BoxDecoration(
                               color: Colors.black.withOpacity(0.5),
                               shape: BoxShape.circle,
@@ -127,11 +146,69 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                             child: const Icon(
                               Icons.play_arrow,
                               color: Colors.white,
-                              size: 48,
+                              size: 64,
                             ),
                           ),
                         ),
                       ),
+                    ),
+                  ),
+                  // 视频信息覆盖层
+                  Positioned(
+                    left: 16,
+                    right: 16,
+                    bottom: 16,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _videoDetails!['Name'] ?? '',
+                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                            color: Colors.white,
+                            shadows: [
+                              const Shadow(
+                                offset: Offset(1, 1),
+                                blurRadius: 2,
+                                color: Colors.black,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            if (_videoDetails!['ProductionYear'] != null) ...[
+                              Text(
+                                '${_videoDetails!['ProductionYear']}',
+                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  color: Colors.white,
+                                  shadows: [
+                                    const Shadow(
+                                      offset: Offset(1, 1),
+                                      blurRadius: 2,
+                                      color: Colors.black,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const Text(' · ', style: TextStyle(color: Colors.white)),
+                            ],
+                            Text(
+                              '${(_videoDetails!['RunTimeTicks'] ?? 0) ~/ 10000000 ~/ 60} 分钟',
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                color: Colors.white,
+                                shadows: [
+                                  const Shadow(
+                                    offset: Offset(1, 1),
+                                    blurRadius: 2,
+                                    color: Colors.black,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -142,37 +219,237 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 标题
-                  Text(
-                    _videoDetails!['Name'] ?? '',
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  const SizedBox(height: 8),
-                  // 年份和时长
-                  Text(
-                    '${_videoDetails!['ProductionYear'] ?? ''} · ${(_videoDetails!['RunTimeTicks'] ?? 0) ~/ 10000000 ~/ 60} 分钟',
-                    style: Theme.of(context).textTheme.bodyMedium,
+                  // 评分和类型信息
+                  Row(
+                    children: [
+                      if (_videoDetails!['CommunityRating'] != null) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).primaryColor,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.star, color: Colors.white, size: 16),
+                              const SizedBox(width: 4),
+                              Text(
+                                _videoDetails!['CommunityRating'].toStringAsFixed(1),
+                                style: const TextStyle(color: Colors.white),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                      ],
+                      if (_videoDetails!['Genres'] != null && (_videoDetails!['Genres'] as List).isNotEmpty)
+                        Expanded(
+                          child: Text(
+                            (_videoDetails!['Genres'] as List).join(' · '),
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Theme.of(context).textTheme.bodySmall?.color,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                   const SizedBox(height: 16),
-                  // 简介
-                  Text(
-                    _videoDetails!['Overview'] ?? '暂无简介',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 24),
-                  // 演员列表
-                  if (_videoDetails!['People'] != null) ...[                  
+                  
+                  // 技术信息
+                  if (_videoDetails!['MediaSources'] != null && (_videoDetails!['MediaSources'] as List).isNotEmpty) ...[
                     Text(
-                      '演职人员',
-                      style: Theme.of(context).textTheme.titleMedium,
+                      '技术信息',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      children: [
-                        for (var person in _videoDetails!['People'])
-                          Chip(label: Text('${person['Name']} (${person['Type']})')),
-                      ],
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).cardColor,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // 视频信息
+                          if (_videoDetails!['MediaSources'][0]['Container'] != null ||
+                              _videoDetails!['MediaSources'][0]['Width'] != null) ...[
+                            Row(
+                              children: [
+                                const Icon(Icons.videocam_outlined, size: 16),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    [
+                                      _videoDetails!['MediaSources'][0]['Container']?.toString().toUpperCase(),
+                                      if (_videoDetails!['MediaSources'][0]['Width'] != null)
+                                        '${_videoDetails!['MediaSources'][0]['Width']}x${_videoDetails!['MediaSources'][0]['Height']}',
+                                      _videoDetails!['MediaSources'][0]['VideoCodec']?.toString().toUpperCase(),
+                                    ].where((e) => e != null).join(' · '),
+                                    style: Theme.of(context).textTheme.bodyMedium,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                          ],
+                          
+                          // 音频信息
+                          if (_videoDetails!['MediaSources'][0]['AudioCodec'] != null) ...[
+                            Row(
+                              children: [
+                                const Icon(Icons.audiotrack_outlined, size: 16),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    [
+                                      _videoDetails!['MediaSources'][0]['AudioCodec']?.toString().toUpperCase(),
+                                      _videoDetails!['MediaSources'][0]['AudioChannels'] != null
+                                          ? '${_videoDetails!['MediaSources'][0]['AudioChannels']} 声道'
+                                          : null,
+                                    ].where((e) => e != null).join(' · '),
+                                    style: Theme.of(context).textTheme.bodyMedium,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                          ],
+                          
+                          // 文件信息
+                          if (_videoDetails!['MediaSources'][0]['Size'] != null) ...[
+                            Row(
+                              children: [
+                                const Icon(Icons.folder_outlined, size: 16),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    '${(_videoDetails!['MediaSources'][0]['Size'] / 1024 / 1024 / 1024).toStringAsFixed(2)} GB',
+                                    style: Theme.of(context).textTheme.bodyMedium,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+                  
+                  // 制作信息
+                  if (_videoDetails!['Studios'] != null && (_videoDetails!['Studios'] as List).isNotEmpty) ...[
+                    Text(
+                      '制作信息',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).cardColor,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          for (var studio in _videoDetails!['Studios'])
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.business_outlined, size: 16),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      studio['Name'],
+                                      style: Theme.of(context).textTheme.bodyMedium,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+                  
+                  // 简介
+                  if (_videoDetails!['Overview'] != null && _videoDetails!['Overview'].toString().isNotEmpty) ...[
+                    Text(
+                      '简介',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _videoDetails!['Overview'],
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+                  
+                  // 演职人员列表
+                  if (_videoDetails!['People'] != null && (_videoDetails!['People'] as List).isNotEmpty) ...[
+                    Text(
+                      '演职人员',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      height: 120,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: (_videoDetails!['People'] as List).length,
+                        itemBuilder: (context, index) {
+                          final person = _videoDetails!['People'][index];
+                          return Container(
+                            width: 80,
+                            margin: const EdgeInsets.only(right: 12),
+                            child: Column(
+                              children: [
+                                CircleAvatar(
+                                  radius: 30,
+                                  backgroundImage: person['PrimaryImageTag'] != null
+                                      ? NetworkImage(
+                                          '${widget.server.url}/Items/${person['Id']}/Images/Primary?tag=${person['PrimaryImageTag']}&X-Emby-Token=${widget.server.accessToken}',
+                                        )
+                                      : null,
+                                  child: person['PrimaryImageTag'] == null
+                                      ? const Icon(Icons.person, size: 30)
+                                      : null,
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  person['Name'],
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                  maxLines: 2,
+                                  textAlign: TextAlign.center,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                Text(
+                                  person['Type'],
+                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.7),
+                                  ),
+                                  maxLines: 1,
+                                  textAlign: TextAlign.center,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
                     ),
                   ],
                 ],
