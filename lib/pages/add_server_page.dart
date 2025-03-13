@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/emby_api.dart';
+import '../utils/error_dialog.dart';
 
 class AddServerPage extends StatefulWidget {
   const AddServerPage({super.key});
@@ -62,10 +63,16 @@ class _AddServerPageState extends State<AddServerPage> {
       });
     } catch (e) {
       if (!mounted) return;
-      print('$e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('登录失败: $e')),
+      
+      final retry = await ErrorDialog.show(
+        context: context,
+        title: '登录失败',
+        message: e.toString(),
       );
+
+      if (retry && mounted) {
+        _submitForm();
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

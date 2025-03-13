@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/emby_api.dart';
 import '../services/server_manager.dart';
 import './video_detail_page.dart';
+import '../utils/error_dialog.dart';
 
 class VideoListPage extends StatefulWidget {
   final ServerInfo server;
@@ -58,10 +59,17 @@ class _VideoListPageState extends State<VideoListPage> {
 
       setState(() => _isLoading = false);
     } catch (e) {
-      setState(() {
-        _error = e.toString();
-        _isLoading = false;
-      });
+      if (!mounted) return;
+      
+      final retry = await ErrorDialog.show(
+        context: context,
+        title: '加载失败',
+        message: e.toString(),
+      );
+
+      if (retry && mounted) {
+        _loadAllSections();
+      }
     }
   }
 

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 import '../services/emby_api.dart';
+import '../utils/error_dialog.dart';
 
 class VideoPlayerPage extends StatefulWidget {
   final String itemId;

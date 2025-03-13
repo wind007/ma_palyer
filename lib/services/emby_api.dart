@@ -124,6 +124,14 @@ class EmbyApiService {
         },
       );
 
+      if (authData == null) {
+        throw Exception('服务器返回数据为空');
+      }
+
+      if (!authData.containsKey('AccessToken') || !authData.containsKey('User')) {
+        throw Exception('服务器返回数据格式错误');
+      }
+
       accessToken = authData['AccessToken'];
       userId = authData['User']['Id'];
       
@@ -134,7 +142,21 @@ class EmbyApiService {
         'serverInfo': authData['Server'] ?? {},
       };
     } catch (e) {
-      throw Exception('认证失败: $e');
+      // 清除可能存在的旧数据
+      accessToken = null;
+      userId = null;
+      
+      if (e.toString().contains('SocketException')) {
+        throw Exception('无法连接到服务器，请检查网络或服务器地址');
+      } else if (e.toString().contains('400')) {
+        throw Exception('用户名或密码错误');
+      } else if (e.toString().contains('404')) {
+        throw Exception('服务器地址错误');
+      } else if (e.toString().contains('证书')) {
+        throw Exception('服务器证书验证失败，请检查服务器配置');
+      }
+      
+      throw Exception('认证失败: ${e.toString()}');
     }
   }
 
