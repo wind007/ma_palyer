@@ -49,10 +49,18 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   double _brightness = 0.0;      // 当前亮度
 
   // 手势控制
+  double? _dragStartX;           // 水平拖动起始位置
+  double? _dragStartY;           // 垂直拖动起始位置
+  double? _dragStartProgress;    // 拖动开始时的播放进度
+  bool _isDraggingProgress = false;  // 是否正在拖动进度条
+  bool _isDraggingVolume = false;    // 是否正在调节音量
+  bool _isDraggingBrightness = false; // 是否正在调节亮度
   bool _showVolumeIndicator = false;  // 是否显示音量指示器
   bool _showBrightnessIndicator = false; // 是否显示亮度指示器
   bool _showSeekIndicator = false;    // 是否显示快进快退指示器
+  bool _showPreviewTime = false;      // 是否显示预览时间
   int _seekSeconds = 0;         // 快进快退秒数
+  Duration _previewPosition = Duration.zero; // 预览位置
 
   // 常量
   static const _maxRetries = 3;         // 最大重试次数
@@ -410,6 +418,102 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
             _seekRelative(const Duration(seconds: 10));
           }
         },
+        onHorizontalDragStart: (details) {
+          if (_controller?.value.isInitialized != true) return;
+          _dragStartX = details.globalPosition.dx;
+          _dragStartProgress = _controller!.value.position.inMilliseconds.toDouble();
+          _isDraggingProgress = true;
+          _previewPosition = _controller!.value.position;
+          setState(() {
+            _showControls = true;
+            _isDragging = true;
+          });
+          _hideControlsTimer?.cancel();
+        },
+        onHorizontalDragUpdate: (details) {
+          if (!_isDraggingProgress || _dragStartX == null || _dragStartProgress == null) return;
+          
+          final width = MediaQuery.of(context).size.width;
+          final dx = details.globalPosition.dx - _dragStartX!;
+          final percentage = dx / width;
+          
+          final duration = _controller!.value.duration;
+          final newPosition = _dragStartProgress! + (duration.inMilliseconds * percentage);
+          
+          setState(() {
+            _previewPosition = Duration(milliseconds: newPosition.toInt().clamp(0, duration.inMilliseconds));
+          });
+        },
+        onHorizontalDragEnd: (details) {
+          if (_isDraggingProgress) {
+            _controller?.seekTo(_previewPosition);
+            setState(() {
+              _isDragging = false;
+            });
+            _isDraggingProgress = false;
+            _dragStartX = null;
+            _dragStartProgress = null;
+            _startHideControlsTimer();
+          }
+        },
+        onVerticalDragStart: (details) {
+          final screenWidth = MediaQuery.of(context).size.width;
+          _dragStartY = details.globalPosition.dy;
+          
+          // 左半边屏幕控制亮度，右半边屏幕控制音量
+          if (details.globalPosition.dx < screenWidth / 2) {
+            _isDraggingBrightness = true;
+            setState(() {
+              _showBrightnessIndicator = true;
+            });
+          } else {
+            _isDraggingVolume = true;
+            setState(() {
+              _showVolumeIndicator = true;
+            });
+          }
+        },
+        onVerticalDragUpdate: (details) {
+          if (_dragStartY == null) return;
+          
+          // 计算垂直滑动距离相对于屏幕高度的比例
+          final height = MediaQuery.of(context).size.height;
+          final dy = _dragStartY! - details.globalPosition.dy;
+          final percentage = dy / height;
+          
+          if (_isDraggingVolume) {
+            // 调节音量
+            setState(() {
+              _currentVolume = (_currentVolume + percentage).clamp(0.0, 1.0);
+              _controller?.setVolume(_currentVolume);
+            });
+          } else if (_isDraggingBrightness) {
+            // 调节亮度
+            setState(() {
+              _brightness = (_brightness + percentage).clamp(0.0, 1.0);
+              SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
+                statusBarBrightness: _brightness > 0.5 ? Brightness.dark : Brightness.light,
+              ));
+            });
+          }
+          
+          _dragStartY = details.globalPosition.dy;
+        },
+        onVerticalDragEnd: (_) {
+          _dragStartY = null;
+          _isDraggingVolume = false;
+          _isDraggingBrightness = false;
+          
+          // 延迟隐藏指示器
+          Future.delayed(const Duration(seconds: 1), () {
+            if (mounted) {
+              setState(() {
+                _showVolumeIndicator = false;
+                _showBrightnessIndicator = false;
+              });
+            }
+          });
+        },
         child: Stack(
           children: [
             Center(
@@ -433,7 +537,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
               Positioned(
                 left: 0,
                 right: 0,
-                top: MediaQuery.of(context).size.height / 4,
+                top: MediaQuery.of(context).size.height / 6,
                 child: Center(
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -447,14 +551,47 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                         Icon(
                           _seekSeconds < 0 ? Icons.fast_rewind : Icons.fast_forward,
                           color: Colors.white,
-                          size: 32,
+                          size: 24,
                         ),
                         const SizedBox(width: 4),
                         Text(
                           '${_seekSeconds.abs()}秒',
                           style: const TextStyle(
                             color: Colors.white,
-                            fontSize: 18,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            if (_showPreviewTime)
+              Positioned(
+                left: 0,
+                right: 0,
+                top: MediaQuery.of(context).size.height / 6,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.access_time,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          _formatDuration(_previewPosition),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
                           ),
                         ),
                       ],
@@ -465,7 +602,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
             if (_showVolumeIndicator)
               Positioned(
                 right: MediaQuery.of(context).size.width / 4,
-                top: MediaQuery.of(context).size.height / 3,
+                top: MediaQuery.of(context).size.height / 6,
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
@@ -499,7 +636,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
             if (_showBrightnessIndicator)
               Positioned(
                 left: MediaQuery.of(context).size.width / 4,
-                top: MediaQuery.of(context).size.height / 3,
+                top: MediaQuery.of(context).size.height / 6,
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
@@ -717,10 +854,10 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       valueListenable: _controller!,
       builder: (context, VideoPlayerValue value, child) {
         final duration = value.duration;
-        final position = _isDragging ? _dragPosition : value.position;
+        final position = _isDragging ? _previewPosition : value.position;
 
-        return Column(
-          mainAxisSize: MainAxisSize.min,
+        return Stack(
+          clipBehavior: Clip.none,
           children: [
             SliderTheme(
               data: SliderTheme.of(context).copyWith(
@@ -743,13 +880,13 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                 onChangeStart: (value) {
                   setState(() {
                     _isDragging = true;
-                    _dragPosition = Duration(milliseconds: value.toInt());
+                    _previewPosition = Duration(milliseconds: value.toInt());
                   });
                   _hideControlsTimer?.cancel();
                 },
                 onChanged: (value) {
                   setState(() {
-                    _dragPosition = Duration(milliseconds: value.toInt());
+                    _previewPosition = Duration(milliseconds: value.toInt());
                   });
                 },
                 onChangeEnd: (value) {
@@ -764,13 +901,33 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
               ),
             ),
             if (_isDragging)
-              Padding(
-                padding: const EdgeInsets.only(top: 4.0),
-                child: Text(
-                  _formatDuration(_dragPosition),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
+              Positioned(
+                left: (position.inMilliseconds / duration.inMilliseconds) * 
+                  (MediaQuery.of(context).size.width - 64) - 30, // 调整位置以居中显示
+                bottom: 20, // 调整到滑块上方
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.access_time,
+                        color: Colors.white,
+                        size: 12,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _formatDuration(position),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
