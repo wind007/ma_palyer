@@ -133,9 +133,22 @@ class _VideoListPageState extends State<VideoListPage> {
     return RefreshIndicator(
       onRefresh: _loadAllSections,
       child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
         controller: _scrollController,
         slivers: [
           _buildAppBar(),
+          SliverToBoxAdapter(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                child: TextButton.icon(
+                  onPressed: () => _loadAllSections(),
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('刷新'),
+                ),
+              ),
+            ),
+          ),
           if (_videoSections['continue']!.isNotEmpty)
             _buildSection('继续观看', _videoSections['continue']!),
           _buildSection('最新添加', _videoSections['latest']!),

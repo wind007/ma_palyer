@@ -30,6 +30,8 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   bool _showControls = false;
   double _currentVolume = 1.0;
   double _lastVolume = 1.0;  // 添加这个变量来记住静音前的音量
+  bool _isFullScreen = false;  // 添加缩放模式状态
+  double _playbackSpeed = 1.0;  // 添加播放速度状态
 
   @override
   void initState() {
@@ -173,10 +175,21 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                 }
               },
               child: Center(
-                child: AspectRatio(
-                  aspectRatio: _controller!.value.aspectRatio,
-                  child: VideoPlayer(_controller!),
-                ),
+                child: _isFullScreen
+                    ? SizedBox.expand(
+                        child: FittedBox(
+                          fit: BoxFit.cover,
+                          child: SizedBox(
+                            width: _controller!.value.size.width,
+                            height: _controller!.value.size.height,
+                            child: VideoPlayer(_controller!),
+                          ),
+                        ),
+                      )
+                    : AspectRatio(
+                        aspectRatio: _controller!.value.aspectRatio,
+                        child: VideoPlayer(_controller!),
+                      ),
               ),
             ),
 
@@ -212,33 +225,59 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      // 音量控制
-                      Row(
-                        children: [
-                          IconButton(
-                            icon: Icon(
-                              _currentVolume == 0
-                                  ? Icons.volume_off
-                                  : _currentVolume < 0.5
-                                      ? Icons.volume_down
-                                      : Icons.volume_up,
-                              color: Colors.white,
-                            ),
-                            onPressed: () {
-                              setState(() {
-                                if (_currentVolume > 0) {
-                                  _lastVolume = _currentVolume;
-                                  _currentVolume = 0;
-                                } else {
-                                  _currentVolume = _lastVolume;
-                                }
-                                _controller?.setVolume(_currentVolume);
-                              });
-                              _startHideControlsTimer();
-                            },
+                    ],
+                  ),
+                ),
+              ),
+
+              // 音量控制 - 左侧垂直布局
+              Positioned(
+                left: 16,
+                top: 0,
+                bottom: 0,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          iconSize: 20,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(
+                            minWidth: 32,
+                            minHeight: 32,
                           ),
-                          SizedBox(
-                            width: 100,
+                          icon: Icon(
+                            _currentVolume == 0
+                                ? Icons.volume_off
+                                : _currentVolume < 0.5
+                                    ? Icons.volume_down
+                                    : Icons.volume_up,
+                            color: Colors.white,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              if (_currentVolume > 0) {
+                                _lastVolume = _currentVolume;
+                                _currentVolume = 0;
+                              } else {
+                                _currentVolume = _lastVolume;
+                              }
+                              _controller?.setVolume(_currentVolume);
+                            });
+                            _startHideControlsTimer();
+                          },
+                        ),
+                        const SizedBox(height: 4),
+                        RotatedBox(
+                          quarterTurns: 3,
+                          child: SizedBox(
+                            width: 80,
                             child: SliderTheme(
                               data: SliderTheme.of(context).copyWith(
                                 activeTrackColor: Colors.red,
@@ -265,9 +304,9 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                               ),
                             ),
                           ),
-                        ],
-                      ),
-                    ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -357,9 +396,128 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                                       _formatDuration(value.position),
                                       style: const TextStyle(color: Colors.white),
                                     ),
-                                    Text(
-                                      _formatDuration(value.duration),
-                                      style: const TextStyle(color: Colors.white),
+                                    Row(
+                                      children: [
+                                        Text(
+                                          _formatDuration(value.duration),
+                                          style: const TextStyle(color: Colors.white),
+                                        ),
+                                        const SizedBox(width: 16),
+                                        // 倍速播放按钮
+                                        GestureDetector(
+                                          onTap: () {
+                                            showDialog(
+                                              context: context,
+                                              builder: (context) => Dialog(
+                                                backgroundColor: Colors.black87,
+                                                child: Container(
+                                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                                  child: Column(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      const Padding(
+                                                        padding: EdgeInsets.only(bottom: 16),
+                                                        child: Text(
+                                                          '播放速度',
+                                                          style: TextStyle(
+                                                            color: Colors.white,
+                                                            fontSize: 16,
+                                                            fontWeight: FontWeight.bold,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      for (var speed in [0.5, 0.75, 1.0, 1.25, 1.5, 2.0])
+                                                        InkWell(
+                                                          onTap: () {
+                                                            setState(() {
+                                                              _playbackSpeed = speed;
+                                                              _controller?.setPlaybackSpeed(speed);
+                                                            });
+                                                            Navigator.pop(context);
+                                                            _startHideControlsTimer();
+                                                          },
+                                                          child: Container(
+                                                            padding: const EdgeInsets.symmetric(
+                                                              vertical: 12,
+                                                              horizontal: 24,
+                                                            ),
+                                                            decoration: BoxDecoration(
+                                                              color: _playbackSpeed == speed
+                                                                  ? Colors.red.withOpacity(0.3)
+                                                                  : Colors.transparent,
+                                                            ),
+                                                            child: Text(
+                                                              '${speed}x',
+                                                              style: TextStyle(
+                                                                color: _playbackSpeed == speed
+                                                                    ? Colors.red
+                                                                    : Colors.white,
+                                                                fontSize: 15,
+                                                              ),
+                                                              textAlign: TextAlign.center,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 8,
+                                              vertical: 4,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: Colors.black38,
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                const Icon(
+                                                  Icons.speed,
+                                                  color: Colors.white,
+                                                  size: 16,
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  '${_playbackSpeed}x',
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 14,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        // 缩放按钮
+                                        GestureDetector(
+                                          onTap: () {
+                                            setState(() {
+                                              _isFullScreen = !_isFullScreen;
+                                            });
+                                            _startHideControlsTimer();
+                                          },
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 8,
+                                              vertical: 4,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: Colors.black38,
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                            child: Icon(
+                                              _isFullScreen ? Icons.fit_screen : Icons.fullscreen,
+                                              color: Colors.white,
+                                              size: 16,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),
