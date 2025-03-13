@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/emby_api.dart';
 import '../services/server_manager.dart';
+import '../services/api_service_manager.dart';
 import './video_detail_page.dart';
 import '../utils/error_dialog.dart';
 import './video_list_more_page.dart';
@@ -15,7 +16,7 @@ class VideoListPage extends StatefulWidget {
 }
 
 class _VideoListPageState extends State<VideoListPage> {
-  final EmbyApiService _api = EmbyApiService(baseUrl: '', username: '', password: '');
+  late final EmbyApiService _api;
   final ScrollController _scrollController = ScrollController();
   
   // 不同分类的视频数据
@@ -32,22 +33,25 @@ class _VideoListPageState extends State<VideoListPage> {
   @override
   void initState() {
     super.initState();
-    _api
-      ..baseUrl = widget.server.url
-      ..username = widget.server.username
-      ..password = widget.server.password
-      ..accessToken = widget.server.accessToken;
-    _loadAllSections();
+    _initializeApi();
+  }
+
+  Future<void> _initializeApi() async {
+    try {
+      _api = await ApiServiceManager().initializeEmbyApi(widget.server);
+      _loadAllSections();
+    } catch (e) {
+      setState(() {
+        _error = '初始化失败: $e';
+        _isLoading = false;
+      });
+    }
   }
 
   Future<void> _loadAllSections() async {
     setState(() => _isLoading = true);
 
     try {
-      // 重新进行身份验证
-      final authResult = await _api.authenticate();
-      _api.accessToken = authResult['accessToken'];
-
       // 先加载媒体库视图
       await _loadViews();
 
@@ -214,7 +218,12 @@ class _VideoListPageState extends State<VideoListPage> {
     );
   }
 
-  Widget _buildSection(String title, List<dynamic> items, {String? viewId}) {
+  Widget _buildSection(
+    String title,
+    List<dynamic> items, {
+    String? viewId,
+    bool isMovieView = false,
+  }) {
     if (items.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
 
     return SliverToBoxAdapter(
@@ -243,6 +252,7 @@ class _VideoListPageState extends State<VideoListPage> {
                             server: widget.server,
                             title: title,
                             viewId: viewId,
+                            isMovieView: isMovieView,
                           ),
                         ),
                       );
@@ -368,7 +378,14 @@ class _VideoListPageState extends State<VideoListPage> {
       final viewId = view['Id'];
       final viewName = view['Name'];
       final items = _videoSections[viewId] ?? [];
-      return _buildSection(viewName, items, viewId: viewId);
+      final isMovieView = view['CollectionType']?.toString().toLowerCase() == 'movies';
+      
+      return _buildSection(
+        viewName,
+        items,
+        viewId: viewId,
+        isMovieView: isMovieView,
+      );
     }).toList();
   }
 

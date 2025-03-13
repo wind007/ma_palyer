@@ -1,18 +1,24 @@
 import 'package:flutter/material.dart';
 import '../services/emby_api.dart';
 import '../services/server_manager.dart';
+import '../services/api_service_manager.dart';
 import './video_detail_page.dart';
+import '../utils/error_dialog.dart';
 
 class VideoListMorePage extends StatefulWidget {
   final ServerInfo server;
   final String title;
   final String viewId;
+  final String? parentId;
+  final bool isMovieView;
 
   const VideoListMorePage({
     super.key,
     required this.server,
     required this.title,
     required this.viewId,
+    this.parentId,
+    required this.isMovieView,
   });
 
   @override
@@ -20,32 +26,39 @@ class VideoListMorePage extends StatefulWidget {
 }
 
 class _VideoListMorePageState extends State<VideoListMorePage> {
-  final EmbyApiService _api = EmbyApiService(baseUrl: '', username: '', password: '');
+  late final EmbyApiService _api;
   final ScrollController _scrollController = ScrollController();
-  final List<dynamic> _items = [];
+  final List<dynamic> _videos = [];
   bool _isLoading = false;
   bool _hasMore = true;
-  int _currentPage = 0;
-  static const int _pageSize = 20;
+  int _startIndex = 0;
+  final int _limit = 20;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _api
-      ..baseUrl = widget.server.url
-      ..username = widget.server.username
-      ..password = widget.server.password
-      ..accessToken = widget.server.accessToken;
-    
+    _initializeApi();
     _scrollController.addListener(_onScroll);
-    _loadMore();
+  }
+
+  Future<void> _initializeApi() async {
+    try {
+      _api = await ApiServiceManager().initializeEmbyApi(widget.server);
+      _loadMore();
+    } catch (e) {
+      setState(() {
+        _error = '初始化失败: $e';
+        _isLoading = false;
+      });
+    }
   }
 
   void _onScroll() {
-    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
-      if (!_isLoading && _hasMore) {
-        _loadMore();
-      }
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200 &&
+        !_isLoading &&
+        _hasMore) {
+      _loadMore();
     }
   }
 
@@ -55,36 +68,47 @@ class _VideoListMorePageState extends State<VideoListMorePage> {
     setState(() => _isLoading = true);
 
     try {
-            // 重新进行身份验证
-      final authResult = await _api.authenticate();
-      _api.accessToken = authResult['accessToken'];
-      
       final response = await _api.getVideos(
-        parentId: widget.viewId,
-        startIndex: _currentPage * _pageSize,
-        limit: _pageSize,
+        parentId: widget.parentId ?? widget.viewId,
+        startIndex: _startIndex,
+        limit: _limit,
         sortBy: 'SortName',
         sortOrder: 'Ascending',
-        fields: 'PrimaryImageAspectRatio,BasicSyncInfo,Path,MediaSources,MediaStreams,UserData',
-        imageTypes: 'Primary'
+        imageTypes: 'Primary',
+        filters: widget.isMovieView ? 'IncludeItemTypes=Movie' : 'IncludeItemTypes=Series',
       );
 
-      final newItems = response['Items'] as List;
+      final items = response['Items'] as List;
       
-      if (mounted) {
-        setState(() {
-          _items.addAll(newItems);
-          _currentPage++;
-          _hasMore = newItems.length == _pageSize;
-          _isLoading = false;
-        });
+      if (items.isEmpty) {
+        setState(() => _hasMore = false);
+        return;
       }
+
+      setState(() {
+        _videos.addAll(items);
+        _startIndex += items.length;
+        _isLoading = false;
+      });
     } catch (e) {
-      print('加载更多失败: $e');
-      if (mounted) {
-        setState(() => _isLoading = false);
+      if (!mounted) return;
+      
+      final retry = await ErrorDialog.show(
+        context: context,
+        title: '加载失败',
+        message: e.toString(),
+      );
+
+      if (retry && mounted) {
+        _loadMore();
       }
     }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   @override
@@ -93,116 +117,65 @@ class _VideoListMorePageState extends State<VideoListMorePage> {
       appBar: AppBar(
         title: Text(widget.title),
       ),
-      body: GridView.builder(
-        controller: _scrollController,
-        padding: const EdgeInsets.all(16),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 3,
-          childAspectRatio: 0.7,
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
-        ),
-        itemCount: _items.length + (_hasMore ? 1 : 0),
-        itemBuilder: (context, index) {
-          if (index == _items.length) {
-            return const Center(child: CircularProgressIndicator());
-          }
+      body: _error != null
+          ? Center(child: Text(_error!))
+          : GridView.builder(
+              controller: _scrollController,
+              padding: const EdgeInsets.all(8),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                childAspectRatio: 0.7,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 8,
+              ),
+              itemCount: _videos.length + (_hasMore ? 1 : 0),
+              itemBuilder: (context, index) {
+                if (index == _videos.length) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-          final item = _items[index];
-          return _buildVideoCard(item);
-        },
-      ),
-    );
-  }
+                final video = _videos[index];
+                final imageUrl = _api.getImageUrl(
+                  itemId: video['Id'],
+                  imageType: 'Primary',
+                );
 
-  Widget _buildVideoCard(dynamic video) {
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => VideoDetailPage(
-              server: widget.server,
-              video: video,
-            ),
-          ),
-        );
-      },
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Stack(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: AspectRatio(
-                    aspectRatio: 2/3,
-                    child: video['ImageTags']?['Primary'] != null
-                        ? Image.network(
-                            '${widget.server.url}/Items/${video['Id']}/Images/Primary',
-                            headers: {'X-Emby-Token': widget.server.accessToken},
+                return GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => VideoDetailPage(
+                          server: widget.server,
+                          video: video,
+                        ),
+                      ),
+                    );
+                  },
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.network(
+                            imageUrl,
                             fit: BoxFit.cover,
-                          )
-                        : Container(
-                            color: Colors.grey[300],
-                            child: const Icon(Icons.movie, size: 32),
+                            width: double.infinity,
                           ),
-                  ),
-                ),
-                if (video['UserData']?['Played'] == true)
-                  Positioned(
-                    right: 4,
-                    top: 4,
-                    child: Container(
-                      padding: const EdgeInsets.all(2),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.6),
-                        borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
-                      child: const Icon(
-                        Icons.check,
-                        color: Colors.white,
-                        size: 16,
+                      const SizedBox(height: 4),
+                      Text(
+                        video['Name'],
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
+                    ],
                   ),
-                if (video['UserData']?['PlaybackPositionTicks'] != null &&
-                    video['UserData']?['PlaybackPositionTicks'] > 0)
-                  Positioned(
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    child: LinearProgressIndicator(
-                      value: video['UserData']?['PlaybackPositionTicks'] /
-                          video['RunTimeTicks'],
-                      backgroundColor: Colors.black45,
-                      valueColor: const AlwaysStoppedAnimation<Color>(
-                        Colors.red,
-                      ),
-                    ),
-                  ),
-              ],
+                );
+              },
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            video['Name'] ?? '未知标题',
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
     );
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
   }
 } 

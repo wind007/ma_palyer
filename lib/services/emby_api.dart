@@ -30,13 +30,13 @@ class EmbyApiService {
     Map<String, String>? queryParams,
     dynamic body,
     bool requiresAuth = true,
-    bool allowNoContent = false,  // 添加参数来允许204响应
+    bool allowNoContent = false,
   }) async {
     try {
       final uri = Uri.parse('$baseUrl$path').replace(
         queryParameters: queryParams,
       );
-      print('请求路径: ${uri.toString()}');
+      
       // 准备请求头
       final headers = {
         'Content-Type': 'application/json',
@@ -47,12 +47,8 @@ class EmbyApiService {
         'X-Emby-Language': 'zh-cn',
       };
 
-      // 如果需要认证，添加token
+      // 如果需要认证且有token，添加token
       if (requiresAuth && accessToken != null) {
-        headers['X-Emby-Token'] = accessToken!;
-      } else if (requiresAuth && accessToken == null) {
-        // 只有在需要认证且没有token时才进行认证
-        await authenticate();
         headers['X-Emby-Token'] = accessToken!;
       }
 
@@ -367,8 +363,12 @@ class EmbyApiService {
   // 获取用户视图
   Future<List<dynamic>> getUserViews(ServerInfo server) async {
     try {
+      if (userId == null) {
+        userId = server.userId;
+      }
+      
       final response = await _request(
-        path: '/Users/${server.userId}/Views',
+        path: '/Users/$userId/Views',
         method: 'GET',
       );
 
@@ -380,5 +380,12 @@ class EmbyApiService {
       print('获取 Views 失败: $e');
       return [];
     }
+  }
+
+  String getImageUrl({
+    required String itemId,
+    required String imageType,
+  }) {
+    return '$baseUrl/Items/$itemId/Images/$imageType?X-Emby-Token=$accessToken';
   }
 }
