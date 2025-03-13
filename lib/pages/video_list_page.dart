@@ -98,7 +98,7 @@ class _VideoListPageState extends State<VideoListPage> {
         sortOrder: 'Ascending',
         filters: 'Filters=IsFavorite',
         fields: 'BasicSyncInfo',
-        IncludeItemTypes: 'Movie,Series'
+        includeItemTypes: 'Movie,Series'
       );
       
       if (mounted) {
