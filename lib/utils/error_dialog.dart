@@ -6,7 +6,7 @@ class ErrorDialog {
     required String title,
     required String message,
     String retryText = '重试',
-    String backText = '返回上一页',
+    String closeText = '关闭',
   }) async {
     final result = await showDialog<bool>(
       context: context,
@@ -25,18 +25,11 @@ class ErrorDialog {
             onPressed: () {
               Navigator.of(context).pop(false); // 返回false表示不重试
             },
-            child: Text(backText),
+            child: Text(closeText),
           ),
         ],
       ),
     );
-    
-    // 如果用户选择返回上一页
-    if (result == false) {
-      if (context.mounted) {
-        Navigator.of(context).pop();
-      }
-    }
     
     return result ?? false;
   }

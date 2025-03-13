@@ -4,11 +4,8 @@ import 'services/theme_manager.dart';
 import 'pages/add_server_page.dart';
 import 'pages/edit_server_page.dart';
 import 'pages/video_list_page.dart';
-import 'pages/video_detail_page.dart';
-import 'pages/video_player_page.dart';
 import 'package:fvp/fvp.dart' as fvp;
 
-import 'dart:io';
 
 void main() async {
   
