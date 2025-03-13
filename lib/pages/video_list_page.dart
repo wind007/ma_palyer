@@ -90,14 +90,26 @@ class _VideoListPageState extends State<VideoListPage> {
   }
 
   Future<void> _loadFavorites() async {
-    final response = await _api.getVideos(
-      startIndex: 0,
-      limit: 20,
-      sortBy: 'DateCreated',
-      sortOrder: 'Descending',
-      filters: 'IsFavorite=true',
-    );
-    setState(() => _videoSections['favorites'] = response['Items']);
+    try {
+      final response = await _api.getVideos(
+        startIndex: 0,
+        limit: 20,
+        sortBy: 'SortName',
+        sortOrder: 'Ascending',
+        filters: 'Filters=IsFavorite',
+        fields: 'BasicSyncInfo',
+        IncludeItemTypes: 'Movie,Series'
+      );
+      
+      if (mounted) {
+        setState(() => _videoSections['favorites'] = response['Items'] as List);
+      }
+    } catch (e) {
+      print('加载收藏失败: $e');
+      if (mounted) {
+        setState(() => _videoSections['favorites'] = []);
+      }
+    }
   }
 
   Future<void> _loadMovies() async {

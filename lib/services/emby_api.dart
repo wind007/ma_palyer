@@ -35,7 +35,7 @@ class EmbyApiService {
       final uri = Uri.parse('$baseUrl$path').replace(
         queryParameters: queryParams,
       );
-
+      print('请求路径: ${uri.toString()}');
       // 准备请求头
       final headers = {
         'Content-Type': 'application/json',
@@ -288,25 +288,26 @@ class EmbyApiService {
   Future<Map<String, dynamic>> getVideos({
     required int startIndex,
     required int limit,
+    String fields = 'PrimaryImageAspectRatio,Overview',
+    String includeItemTypes= 'Movie,Series',
     String? parentId,
     String? sortBy = 'SortName',
     String? sortOrder = 'Descending',
     String filters = '',
+
   }) async {
     final queryParams = {
       'Recursive': 'true',
-      'Fields': 'PrimaryImageAspectRatio,Overview',
+      'IncludeItemTypes': includeItemTypes,
+      'Fields': fields,
       'ImageTypeLimit': '1',
       'EnableImageTypes': 'Primary,Backdrop',
       'StartIndex': startIndex.toString(),
       'Limit': limit.toString(),
       'EnableTotalRecordCount': 'true',
       'SortBy': sortBy ?? 'SortName',
+      'SortOrder': sortOrder ?? 'Descending',
     };
-
-    if (sortOrder != null) {
-      queryParams['SortOrder'] = sortOrder;
-    }
 
     if (parentId != null) {
       queryParams['ParentId'] = parentId;
@@ -316,11 +317,13 @@ class EmbyApiService {
       queryParams.addAll(Uri.splitQueryString(filters));
     }
 
-    return await _request(
+    final response = await _request(
       path: '/Users/$userId/Items',
       method: 'GET',
       queryParams: queryParams,
     );
+
+    return response;
   }
 
   // 获取视频详情
@@ -357,5 +360,23 @@ class EmbyApiService {
       method: 'GET',
     );
     return data is List ? data : [];
+  }
+
+  // 获取用户视图
+  Future<List<dynamic>> getUserViews(dynamic server) async {
+    try {
+      final response = await _request(
+        path: '/Users/${server['userId']}/Views',
+        method: 'GET',
+      );
+
+      if (response != null && response['Items'] is List) {
+        return response['Items'] as List<dynamic>;
+      }
+      return [];
+    } catch (e) {
+      print('获取 Views 失败: $e');
+      return [];
+    }
   }
 }
