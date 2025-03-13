@@ -84,14 +84,6 @@ class ServerManager {
   // 获取所有服务器
   List<ServerInfo> get servers => List.unmodifiable(_servers);
 
-  // 根据URL获取服务器
-  ServerInfo? getServerByUrl(String url) {
-    try {
-      return _servers.firstWhere((server) => server.url == url);
-    } catch (e) {
-      return null;
-    }
-  }
 
   // 更新服务器信息
   Future<void> updateServer(ServerInfo updatedServer) async {
