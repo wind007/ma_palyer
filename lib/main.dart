@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'services/server_manager.dart';
+import 'services/theme_manager.dart';
 import 'pages/add_server_page.dart';
 import 'pages/edit_server_page.dart';
 import 'pages/video_list_page.dart';
@@ -13,22 +14,69 @@ void main() async {
   
   WidgetsFlutterBinding.ensureInitialized();
   
-  ServerManager().init();
+  await ServerManager().init();
+  await ThemeManager().init();
   fvp.registerWith();
     
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  final _themeManager = ThemeManager();
+
+  @override
+  void initState() {
+    super.initState();
+    _themeManager.addListener(() {
+      setState(() {});
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Emby Client',
+      themeMode: _themeManager.isDarkMode ? ThemeMode.dark : ThemeMode.light,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.blue,
+          brightness: Brightness.light,
+        ),
         useMaterial3: true,
+        cardTheme: CardTheme(
+          elevation: 2,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        appBarTheme: const AppBarTheme(
+          centerTitle: true,
+          elevation: 0,
+        ),
+      ),
+      darkTheme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.blue,
+          brightness: Brightness.dark,
+        ),
+        useMaterial3: true,
+        cardTheme: CardTheme(
+          elevation: 2,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        appBarTheme: const AppBarTheme(
+          centerTitle: true,
+          elevation: 0,
+        ),
       ),
       home: const ServerListPage(),
     );
@@ -140,43 +188,95 @@ class _ServerListPageState extends State<ServerListPage> {
         title: const Text('服务器列表'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: _addServer,
-            tooltip: '添加服务器',
-          ),
+            icon: Icon(ThemeManager().isDarkMode ? Icons.light_mode : Icons.dark_mode),
+            onPressed: () => ThemeManager().toggleTheme(),
+            tooltip: '切换主题',
+          )
         ],
       ),
       body: _servers.isEmpty
-          ? const Center(
-              child: Text('暂无服务器'),
-            )
-          : ListView.builder(
-              itemCount: _servers.length,
-              itemBuilder: (context, index) {
-                final server = _servers[index];
-                return ListTile(
-                  leading: const Icon(Icons.computer),
-                  title: Text(server.name),
-                  subtitle: Text(server.url),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.edit),
-                        onPressed: () => _editServer(server),
-                        tooltip: '编辑服务器',
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete),
-                        onPressed: () => _deleteServer(server),
-                        tooltip: '删除服务器',
-                      ),
-                    ],
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.computer_outlined,
+                    size: 64,
+                    color: Colors.grey[400],
                   ),
-                  onTap: () => _onServerTap(server),
+                  const SizedBox(height: 16),
+                  Text(
+                    '暂无服务器',
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton.icon(
+                    onPressed: _addServer,
+                    icon: const Icon(Icons.add),
+                    label: const Text('添加服务器'),
+                  ),
+                ],
+              ),
+            )
+          : AnimatedList(
+              initialItemCount: _servers.length,
+              itemBuilder: (context, index, animation) {
+                final server = _servers[index];
+                return SlideTransition(
+                  position: animation.drive(Tween(
+                    begin: const Offset(-1, 0),
+                    end: Offset.zero,
+                  )),
+                  child: Card(
+                    margin: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    child: ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: Theme.of(context).primaryColor,
+                        child: const Icon(
+                          Icons.computer,
+                          color: Colors.white,
+                        ),
+                      ),
+                      title: Text(
+                        server.name,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      subtitle: Text(server.url),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.edit),
+                            onPressed: () => _editServer(server),
+                            tooltip: '编辑服务器',
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete),
+                            color: Colors.red[300],
+                            onPressed: () => _deleteServer(server),
+                            tooltip: '删除服务器',
+                          ),
+                        ],
+                      ),
+                      onTap: () => _onServerTap(server),
+                    ),
+                  ),
                 );
               },
             ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _addServer,
+        tooltip: '添加服务器',
+        child: const Icon(Icons.add),
+      ),
     );
   }
 }
