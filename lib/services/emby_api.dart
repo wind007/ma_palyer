@@ -388,4 +388,19 @@ class EmbyApiService {
   }) {
     return '$baseUrl/Items/$itemId/Images/$imageType?X-Emby-Token=$accessToken';
   }
+
+  // 获取服务器信息
+  Future<Map<String, dynamic>> getServerInfo() async {
+    final response = await _request(
+      path: '/System/Info/Public',
+      method: 'GET',
+      requiresAuth: false,
+    );
+    
+    if (response == null) {
+      throw Exception('获取服务器信息失败：服务器返回数据为空');
+    }
+    
+    return response;
+  }
 }

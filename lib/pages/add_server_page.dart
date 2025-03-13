@@ -39,12 +39,9 @@ class _AddServerPageState extends State<AddServerPage> {
         password: _passwordController.text,
       );
 
-      // 先检查服务器连接状态
-      final isConnected = await api.checkServerConnection();
-      if (!isConnected) {
-        throw Exception('无法连接到服务器，请检查服务器地址是否正确');
-      }
-
+      // 先检查服务器连接状态并获取服务器信息
+      final serverInfo = await api.getServerInfo();
+      
       // 进行身份验证
       final authResult = await api.authenticate();
 
@@ -57,7 +54,7 @@ class _AddServerPageState extends State<AddServerPage> {
         'password': _passwordController.text,
         'name': _serverNameController.text.isNotEmpty
             ? _serverNameController.text
-            : authResult['serverInfo']['ServerName'] ?? '新服务器',
+            : serverInfo['ServerName'] ?? '未知服务器',
         'accessToken': authResult['accessToken'],
         'userId': authResult['userInfo']['Id'],
       });
