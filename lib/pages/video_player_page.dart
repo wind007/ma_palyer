@@ -41,9 +41,20 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     colors: [Colors.black54, Colors.transparent],
   );
 
+  static const _topBarGradient = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [Colors.black87, Colors.transparent],
+  );
+
   static const _indicatorDecoration = BoxDecoration(
     color: Colors.black54,
     borderRadius: BorderRadius.all(Radius.circular(6)),
+  );
+
+  static const _buttonDecoration = BoxDecoration(
+    color: Colors.black38,
+    borderRadius: BorderRadius.all(Radius.circular(4)),
   );
 
   static const _indicatorPadding = EdgeInsets.symmetric(
@@ -51,9 +62,33 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     vertical: 8,
   );
 
+  static const _buttonPadding = EdgeInsets.symmetric(
+    horizontal: 8,
+    vertical: 4,
+  );
+
   static const _indicatorTextStyle = TextStyle(
     color: Colors.white,
     fontSize: 16,
+  );
+
+  static const _timeTextStyle = TextStyle(
+    color: Colors.white,
+    fontSize: 14,
+  );
+
+  static final _sliderThemeData = SliderThemeData(
+    activeTrackColor: Colors.red,
+    inactiveTrackColor: Colors.white.withOpacity(0.3),
+    thumbColor: Colors.red,
+    trackHeight: 2.0,
+    thumbShape: const RoundSliderThumbShape(
+      enabledThumbRadius: 6.0,
+    ),
+    overlayColor: Colors.red.withAlpha(32),
+    overlayShape: const RoundSliderOverlayShape(
+      overlayRadius: 12.0,
+    ),
   );
 
   static const _errorMessages = {
@@ -196,6 +231,12 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     }
   }
 
+  void _clearTimers() {
+    _progressTimer?.cancel();
+    _hideControlsTimer?.cancel();
+    _seekIndicatorTimer?.cancel();
+  }
+
   void _startProgressTimer() {
     _progressTimer?.cancel();
     _progressTimer = Timer.periodic(
@@ -206,16 +247,6 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         }
       },
     );
-  }
-
-  void _updateProgress({bool isPaused = false}) {
-    if (_controller?.value.isInitialized ?? false) {
-      widget.embyApi.updatePlaybackProgress(
-        itemId: widget.itemId,
-        positionTicks: (_controller!.value.position.inMicroseconds * 10).toInt(),
-        isPaused: isPaused,
-      );
-    }
   }
 
   void _startHideControlsTimer() {
@@ -229,6 +260,48 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         }
       },
     );
+  }
+
+  void _startSeekTimer(int seconds) {
+    _seekIndicatorTimer?.cancel();
+    
+    // 如果新的快进/快退方向与之前相同，累加时间
+    if ((_accumulatedSeekSeconds > 0 && seconds > 0) || 
+        (_accumulatedSeekSeconds < 0 && seconds < 0)) {
+      _accumulatedSeekSeconds += seconds;
+    } else {
+      _accumulatedSeekSeconds = seconds;
+    }
+
+    setState(() {
+      _seekSeconds = _accumulatedSeekSeconds;
+      _showSeekIndicator = true;
+    });
+
+    _seekIndicatorTimer = Timer(const Duration(seconds: 1), () {
+      if (mounted) {
+        setState(() {
+          _showSeekIndicator = false;
+          _accumulatedSeekSeconds = 0; // 重置累计时间
+        });
+        // 在指示器消失时更新进度
+        _updateProgress(isPaused: !(_controller?.value.isPlaying ?? false));
+      }
+    });
+  }
+
+  void _showSeekAnimation(int seconds) {
+    _startSeekTimer(seconds);
+  }
+
+  void _updateProgress({bool isPaused = false}) {
+    if (_controller?.value.isInitialized ?? false) {
+      widget.embyApi.updatePlaybackProgress(
+        itemId: widget.itemId,
+        positionTicks: (_controller!.value.position.inMicroseconds * 10).toInt(),
+        isPaused: isPaused,
+      );
+    }
   }
 
   void _toggleControls() {
@@ -445,7 +518,6 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
           final screenWidth = MediaQuery.of(context).size.width;
           _dragStartY = details.globalPosition.dy;
           
-          // 左半边屏幕控制亮度，右半边屏幕控制音量
           if (details.globalPosition.dx < screenWidth / 2) {
             _isDraggingBrightness = true;
             setState(() {
@@ -526,18 +598,6 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                   ),
                 ),
               ),
-            if (_isDragging)
-              Positioned(
-                left: 0,
-                right: 0,
-                top: MediaQuery.of(context).size.height / _indicatorTopPosition,
-                child: Center(
-                  child: _buildIndicator(
-                    icon: Icons.access_time,
-                    text: _formatDuration(_previewPosition),
-                  ),
-                ),
-              ),
             if (_showVolumeIndicator)
               Positioned(
                 right: MediaQuery.of(context).size.width / 4,
@@ -570,34 +630,6 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     );
   }
 
-  void _showSeekAnimation(int seconds) {
-    _seekIndicatorTimer?.cancel();
-    
-    // 如果新的快进/快退方向与之前相同，累加时间
-    if ((_accumulatedSeekSeconds > 0 && seconds > 0) || 
-        (_accumulatedSeekSeconds < 0 && seconds < 0)) {
-      _accumulatedSeekSeconds += seconds;
-    } else {
-      _accumulatedSeekSeconds = seconds;
-    }
-
-    setState(() {
-      _seekSeconds = _accumulatedSeekSeconds;
-      _showSeekIndicator = true;
-    });
-
-    _seekIndicatorTimer = Timer(const Duration(seconds: 1), () {
-      if (mounted) {
-        setState(() {
-          _showSeekIndicator = false;
-          _accumulatedSeekSeconds = 0; // 重置累计时间
-        });
-        // 在指示器消失时更新进度
-        _updateProgress(isPaused: !(_controller?.value.isPlaying ?? false));
-      }
-    });
-  }
-
   Widget _buildTopBar() {
     return Positioned(
       top: 0,
@@ -606,14 +638,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Colors.black.withOpacity(0.7),
-              Colors.transparent,
-            ],
-          ),
+          gradient: _topBarGradient,
         ),
         child: Row(
           children: [
@@ -683,19 +708,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                 child: SizedBox(
                   width: 80,
                   child: SliderTheme(
-                    data: SliderTheme.of(context).copyWith(
-                      activeTrackColor: Colors.red,
-                      inactiveTrackColor: Colors.white.withOpacity(0.3),
-                      thumbColor: Colors.red,
-                      trackHeight: 2.0,
-                      thumbShape: const RoundSliderThumbShape(
-                        enabledThumbRadius: 6.0,
-                      ),
-                      overlayColor: Colors.red.withAlpha(32),
-                      overlayShape: const RoundSliderOverlayShape(
-                        overlayRadius: 12.0,
-                      ),
-                    ),
+                    data: _sliderThemeData,
                     child: Slider(
                       value: _currentVolume,
                       onChanged: (value) {
@@ -776,19 +789,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
           clipBehavior: Clip.none,
           children: [
             SliderTheme(
-              data: SliderTheme.of(context).copyWith(
-                activeTrackColor: Colors.red,
-                inactiveTrackColor: Colors.white.withOpacity(0.3),
-                thumbColor: Colors.red,
-                trackHeight: 2.0,
-                thumbShape: const RoundSliderThumbShape(
-                  enabledThumbRadius: 6.0,
-                ),
-                overlayColor: Colors.red.withAlpha(32),
-                overlayShape: const RoundSliderOverlayShape(
-                  overlayRadius: 12.0,
-                ),
-              ),
+              data: _sliderThemeData,
               child: Slider(
                 value: position.inMilliseconds.toDouble(),
                 min: 0.0,
@@ -819,8 +820,8 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
             if (_isDragging)
               Positioned(
                 left: (position.inMilliseconds / duration.inMilliseconds) * 
-                  (MediaQuery.of(context).size.width - 64) - 30, // 调整位置以居中显示
-                bottom: 20, // 调整到滑块上方
+                  (MediaQuery.of(context).size.width - 32) - 30,
+                bottom: 25,
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
@@ -862,13 +863,13 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
           children: [
             Text(
               _formatDuration(value.position),
-              style: const TextStyle(color: Colors.white),
+              style: _timeTextStyle,
             ),
             Row(
               children: [
                 Text(
                   _formatDuration(value.duration),
-                  style: const TextStyle(color: Colors.white),
+                  style: _timeTextStyle,
                 ),
                 const SizedBox(width: 16),
                 _buildPlaybackSpeedButton(),
@@ -886,14 +887,8 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     return GestureDetector(
       onTap: _showPlaybackSpeedDialog,
       child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 8,
-          vertical: 4,
-        ),
-        decoration: BoxDecoration(
-          color: Colors.black38,
-          borderRadius: BorderRadius.circular(4),
-        ),
+        padding: _buttonPadding,
+        decoration: _buttonDecoration,
         child: Row(
           children: [
             const Icon(
@@ -904,10 +899,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
             const SizedBox(width: 4),
             Text(
               '${_playbackSpeed}x',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 14,
-              ),
+              style: _timeTextStyle,
             ),
           ],
         ),
@@ -919,14 +911,8 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     return GestureDetector(
       onTap: _toggleFullScreen,
       child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 8,
-          vertical: 4,
-        ),
-        decoration: BoxDecoration(
-          color: Colors.black38,
-          borderRadius: BorderRadius.circular(4),
-        ),
+        padding: _buttonPadding,
+        decoration: _buttonDecoration,
         child: Icon(
           _isFullScreen ? Icons.fit_screen : Icons.fullscreen,
           color: Colors.white,
@@ -1063,12 +1049,6 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     );
   }
 
-  void _clearTimers() {
-    _progressTimer?.cancel();
-    _hideControlsTimer?.cancel();
-    _seekIndicatorTimer?.cancel();
-  }
-
   void _updateDraggingState(bool isDragging) {
     setState(() {
       _showControls = true;
@@ -1079,7 +1059,6 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     });
   }
 
-  // 修改手势相关方法
   void onHorizontalDragStart(DragStartDetails details) {
     if (_controller?.value.isInitialized != true) return;
     _dragStartX = details.globalPosition.dx;
@@ -1101,6 +1080,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     
     setState(() {
       _previewPosition = Duration(milliseconds: newPosition.toInt().clamp(0, duration.inMilliseconds));
+      _showControls = true;
     });
   }
 
