@@ -79,16 +79,14 @@ class _VideoListMorePageState extends State<VideoListMorePage> {
       );
 
       final items = response['Items'] as List;
+      final totalRecordCount = response['TotalRecordCount'] as int;
       
-      if (items.isEmpty) {
-        setState(() => _hasMore = false);
-        return;
-      }
-
       setState(() {
         _videos.addAll(items);
         _startIndex += items.length;
         _isLoading = false;
+        // 如果已加载的数量达到或超过总数，则没有更多数据
+        _hasMore = _videos.length < totalRecordCount;
       });
     } catch (e) {
       if (!mounted) return;
@@ -101,6 +99,11 @@ class _VideoListMorePageState extends State<VideoListMorePage> {
 
       if (retry && mounted) {
         _loadMore();
+      } else {
+        setState(() {
+          _isLoading = false;
+          _hasMore = false;
+        });
       }
     }
   }
@@ -128,7 +131,7 @@ class _VideoListMorePageState extends State<VideoListMorePage> {
                 crossAxisSpacing: 8,
                 mainAxisSpacing: 8,
               ),
-              itemCount: _videos.length + (_hasMore ? 1 : 0),
+              itemCount: _videos.length + (_hasMore && !_isLoading ? 1 : 0),
               itemBuilder: (context, index) {
                 if (index == _videos.length) {
                   return const Center(child: CircularProgressIndicator());
