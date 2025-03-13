@@ -101,17 +101,6 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 添加刷新按钮
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8.0),
-                child: TextButton.icon(
-                  onPressed: () => _loadVideoDetails(),
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('刷新'),
-                ),
-              ),
-            ),
             // 视频封面
             if (_videoDetails!['ImageTags']?['Primary'] != null)
               Stack(
@@ -201,6 +190,12 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
       appBar: AppBar(
         title: Text(_videoDetails?['Name'] ?? '视频详情'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () => _loadVideoDetails(),
+          ),
+        ],
       ),
       body: _buildBody(),
       bottomNavigationBar: _videoDetails == null

@@ -137,18 +137,6 @@ class _VideoListPageState extends State<VideoListPage> {
         controller: _scrollController,
         slivers: [
           _buildAppBar(),
-          SliverToBoxAdapter(
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8.0),
-                child: TextButton.icon(
-                  onPressed: () => _loadAllSections(),
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('刷新'),
-                ),
-              ),
-            ),
-          ),
           if (_videoSections['continue']!.isNotEmpty)
             _buildSection('继续观看', _videoSections['continue']!),
           _buildSection('最新添加', _videoSections['latest']!),
@@ -173,6 +161,12 @@ class _VideoListPageState extends State<VideoListPage> {
         widget.server.name,
         style: const TextStyle(color: Colors.white),
       ),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.refresh, color: Colors.white),
+          onPressed: () => _loadAllSections(),
+        ),
+      ],
     );
   }
 
