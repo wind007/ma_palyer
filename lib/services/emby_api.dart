@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'package:http/io_client.dart';
 
 class EmbyApiService {
   String baseUrl;
@@ -7,12 +9,18 @@ class EmbyApiService {
   String password;
   String? accessToken;
   String? userId;
+  late http.Client _client;
 
   EmbyApiService({
     required this.baseUrl,
     required this.username,
     required this.password,
-  });
+  }) {
+    // 创建支持自签名证书的 HTTP 客户端
+    final httpClient = HttpClient()
+      ..badCertificateCallback = (X509Certificate cert, String host, int port) => true;
+    _client = IOClient(httpClient);
+  }
 
   // 统一的网络请求处理方法
   Future<dynamic> _request({
@@ -50,10 +58,10 @@ class EmbyApiService {
       http.Response response;
       switch (method.toUpperCase()) {
         case 'GET':
-          response = await http.get(uri, headers: headers);
+          response = await _client.get(uri, headers: headers);
           break;
         case 'POST':
-          response = await http.post(
+          response = await _client.post(
             uri,
             headers: headers,
             body: body != null ? json.encode(body) : null,
@@ -97,6 +105,11 @@ class EmbyApiService {
     } catch (e) {
       throw Exception('请求失败: $e');
     }
+  }
+
+  @override
+  void dispose() {
+    _client.close();
   }
 
   Future<Map<String, dynamic>> authenticate() async {
