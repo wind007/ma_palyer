@@ -25,6 +25,43 @@ class VideoPlayerPage extends StatefulWidget {
 }
 
 class _VideoPlayerPageState extends State<VideoPlayerPage> {
+  // 常量定义
+  static const _maxRetries = 3;         // 最大重试次数
+  static const _volumeStep = 0.05;      // 音量调节步长
+  static const _progressInterval = 30;   // 进度更新间隔（秒）
+  static const _controlsTimeout = 3;     // 控制栏显示时间（秒）
+  static const _indicatorTopPosition = 6.0; // 提示块位置系数（1/6）
+  static const _seekButtonSize = 40.0;   // 快进快退按钮大小
+  static const _volumeControlWidth = 80.0; // 音量控制条宽度
+
+  // 样式常量
+  static const _controlBarGradient = LinearGradient(
+    begin: Alignment.bottomCenter,
+    end: Alignment.topCenter,
+    colors: [Colors.black54, Colors.transparent],
+  );
+
+  static const _indicatorDecoration = BoxDecoration(
+    color: Colors.black54,
+    borderRadius: BorderRadius.all(Radius.circular(6)),
+  );
+
+  static const _indicatorPadding = EdgeInsets.symmetric(
+    horizontal: 12,
+    vertical: 8,
+  );
+
+  static const _indicatorTextStyle = TextStyle(
+    color: Colors.white,
+    fontSize: 16,
+  );
+
+  static const _errorMessages = {
+    'no_url': '无法获取播放地址',
+    'no_media': '无法获取媒体信息',
+    'init_failed': '初始化失败，请检查网络连接',
+  };
+
   // 播放器控制器
   VideoPlayerController? _controller;
   
@@ -35,11 +72,11 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   
   // 状态标记
   bool _isInitializing = true;  // 初始化状态
-  bool _isDragging = false;     // 是否正在拖动进度条
+  bool _isDragging = false;     // 是否正在拖动
   String? _error;               // 错误信息
   bool _showControls = false;   // 是否显示控制栏
   int _retryCount = 0;          // 重试次数
-  Duration _dragPosition = Duration.zero;   // 当前拖动位置
+  int _accumulatedSeekSeconds = 0; // 累计快进/快退时间
   
   // 播放控制
   double _currentVolume = 1.0;   // 当前音量
@@ -52,31 +89,13 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   double? _dragStartX;           // 水平拖动起始位置
   double? _dragStartY;           // 垂直拖动起始位置
   double? _dragStartProgress;    // 拖动开始时的播放进度
-  bool _isDraggingProgress = false;  // 是否正在拖动进度条
   bool _isDraggingVolume = false;    // 是否正在调节音量
   bool _isDraggingBrightness = false; // 是否正在调节亮度
   bool _showVolumeIndicator = false;  // 是否显示音量指示器
   bool _showBrightnessIndicator = false; // 是否显示亮度指示器
   bool _showSeekIndicator = false;    // 是否显示快进快退指示器
-  bool _showPreviewTime = false;      // 是否显示预览时间
   int _seekSeconds = 0;         // 快进快退秒数
   Duration _previewPosition = Duration.zero; // 预览位置
-
-  // 常量
-  static const _maxRetries = 3;         // 最大重试次数
-  static const _volumeStep = 0.05;      // 音量调节步长
-  static const _progressInterval = 30;   // 进度更新间隔（秒）
-  static const _controlsTimeout = 3;     // 控制栏显示时间（秒）
-
-  // 样式常量
-  static const _controlBarGradient = LinearGradient(
-    begin: Alignment.bottomCenter,
-    end: Alignment.topCenter,
-    colors: [
-      Colors.black54,
-      Colors.transparent,
-    ],
-  );
 
   @override
   void initState() {
@@ -243,7 +262,6 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       }
 
       _controller?.seekTo(targetPosition);
-      _updateProgress(isPaused: !(_controller?.value.isPlaying ?? false));
       _startHideControlsTimer();
     }
   }
@@ -395,8 +413,10 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
             _togglePlayPause();
           } else if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
             _seekRelative(const Duration(seconds: -10));
+            _showSeekAnimation(-10);
           } else if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
             _seekRelative(const Duration(seconds: 10));
+            _showSeekAnimation(10);
           } else if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
             _adjustVolume(_volumeStep);
           } else if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
@@ -411,51 +431,16 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         onDoubleTapDown: (details) {
           final screenWidth = MediaQuery.of(context).size.width;
           if (details.globalPosition.dx < screenWidth / 3) {
-            _showSeekAnimation(-10);
             _seekRelative(const Duration(seconds: -10));
+            _showSeekAnimation(-10);
           } else if (details.globalPosition.dx > screenWidth * 2 / 3) {
-            _showSeekAnimation(10);
             _seekRelative(const Duration(seconds: 10));
+            _showSeekAnimation(10);
           }
         },
-        onHorizontalDragStart: (details) {
-          if (_controller?.value.isInitialized != true) return;
-          _dragStartX = details.globalPosition.dx;
-          _dragStartProgress = _controller!.value.position.inMilliseconds.toDouble();
-          _isDraggingProgress = true;
-          _previewPosition = _controller!.value.position;
-          setState(() {
-            _showControls = true;
-            _isDragging = true;
-          });
-          _hideControlsTimer?.cancel();
-        },
-        onHorizontalDragUpdate: (details) {
-          if (!_isDraggingProgress || _dragStartX == null || _dragStartProgress == null) return;
-          
-          final width = MediaQuery.of(context).size.width;
-          final dx = details.globalPosition.dx - _dragStartX!;
-          final percentage = dx / width;
-          
-          final duration = _controller!.value.duration;
-          final newPosition = _dragStartProgress! + (duration.inMilliseconds * percentage);
-          
-          setState(() {
-            _previewPosition = Duration(milliseconds: newPosition.toInt().clamp(0, duration.inMilliseconds));
-          });
-        },
-        onHorizontalDragEnd: (details) {
-          if (_isDraggingProgress) {
-            _controller?.seekTo(_previewPosition);
-            setState(() {
-              _isDragging = false;
-            });
-            _isDraggingProgress = false;
-            _dragStartX = null;
-            _dragStartProgress = null;
-            _startHideControlsTimer();
-          }
-        },
+        onHorizontalDragStart: onHorizontalDragStart,
+        onHorizontalDragUpdate: onHorizontalDragUpdate,
+        onHorizontalDragEnd: onHorizontalDragEnd,
         onVerticalDragStart: (details) {
           final screenWidth = MediaQuery.of(context).size.width;
           _dragStartY = details.globalPosition.dy;
@@ -476,19 +461,16 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         onVerticalDragUpdate: (details) {
           if (_dragStartY == null) return;
           
-          // 计算垂直滑动距离相对于屏幕高度的比例
           final height = MediaQuery.of(context).size.height;
           final dy = _dragStartY! - details.globalPosition.dy;
           final percentage = dy / height;
           
           if (_isDraggingVolume) {
-            // 调节音量
             setState(() {
               _currentVolume = (_currentVolume + percentage).clamp(0.0, 1.0);
               _controller?.setVolume(_currentVolume);
             });
           } else if (_isDraggingBrightness) {
-            // 调节亮度
             setState(() {
               _brightness = (_brightness + percentage).clamp(0.0, 1.0);
               SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
@@ -504,7 +486,6 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
           _isDraggingVolume = false;
           _isDraggingBrightness = false;
           
-          // 延迟隐藏指示器
           Future.delayed(const Duration(seconds: 1), () {
             if (mounted) {
               setState(() {
@@ -537,134 +518,50 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
               Positioned(
                 left: 0,
                 right: 0,
-                top: MediaQuery.of(context).size.height / 6,
+                top: MediaQuery.of(context).size.height / _indicatorTopPosition,
                 child: Center(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.black54,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          _seekSeconds < 0 ? Icons.fast_rewind : Icons.fast_forward,
-                          color: Colors.white,
-                          size: 24,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${_seekSeconds.abs()}秒',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ],
-                    ),
+                  child: _buildIndicator(
+                    icon: _seekSeconds < 0 ? Icons.fast_rewind : Icons.fast_forward,
+                    text: '${_seekSeconds.abs()}秒',
                   ),
                 ),
               ),
-            if (_showPreviewTime)
+            if (_isDragging)
               Positioned(
                 left: 0,
                 right: 0,
-                top: MediaQuery.of(context).size.height / 6,
+                top: MediaQuery.of(context).size.height / _indicatorTopPosition,
                 child: Center(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.black54,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.access_time,
-                          color: Colors.white,
-                          size: 24,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          _formatDuration(_previewPosition),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ],
-                    ),
+                  child: _buildIndicator(
+                    icon: Icons.access_time,
+                    text: _formatDuration(_previewPosition),
                   ),
                 ),
               ),
             if (_showVolumeIndicator)
               Positioned(
                 right: MediaQuery.of(context).size.width / 4,
-                top: MediaQuery.of(context).size.height / 6,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.black54,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        _currentVolume == 0
-                            ? Icons.volume_off
-                            : _currentVolume < 0.5
-                                ? Icons.volume_down
-                                : Icons.volume_up,
-                        color: Colors.white,
-                        size: 24,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${(_currentVolume * 100).round()}%',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ],
-                  ),
+                top: MediaQuery.of(context).size.height / _indicatorTopPosition,
+                child: _buildIndicator(
+                  icon: _currentVolume == 0
+                      ? Icons.volume_off
+                      : _currentVolume < 0.5
+                          ? Icons.volume_down
+                          : Icons.volume_up,
+                  text: '${(_currentVolume * 100).round()}%',
                 ),
               ),
             if (_showBrightnessIndicator)
               Positioned(
                 left: MediaQuery.of(context).size.width / 4,
-                top: MediaQuery.of(context).size.height / 6,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.black54,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        _brightness < 0.3
-                            ? Icons.brightness_low
-                            : _brightness < 0.7
-                                ? Icons.brightness_medium
-                                : Icons.brightness_high,
-                        color: Colors.white,
-                        size: 24,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${(_brightness * 100).round()}%',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ],
-                  ),
+                top: MediaQuery.of(context).size.height / _indicatorTopPosition,
+                child: _buildIndicator(
+                  icon: _brightness < 0.3
+                      ? Icons.brightness_low
+                      : _brightness < 0.7
+                          ? Icons.brightness_medium
+                          : Icons.brightness_high,
+                  text: '${(_brightness * 100).round()}%',
                 ),
               ),
           ],
@@ -674,16 +571,29 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   }
 
   void _showSeekAnimation(int seconds) {
+    _seekIndicatorTimer?.cancel();
+    
+    // 如果新的快进/快退方向与之前相同，累加时间
+    if ((_accumulatedSeekSeconds > 0 && seconds > 0) || 
+        (_accumulatedSeekSeconds < 0 && seconds < 0)) {
+      _accumulatedSeekSeconds += seconds;
+    } else {
+      _accumulatedSeekSeconds = seconds;
+    }
+
     setState(() {
-      _seekSeconds = seconds;
+      _seekSeconds = _accumulatedSeekSeconds;
       _showSeekIndicator = true;
     });
-    _seekIndicatorTimer?.cancel();
+
     _seekIndicatorTimer = Timer(const Duration(seconds: 1), () {
       if (mounted) {
         setState(() {
           _showSeekIndicator = false;
+          _accumulatedSeekSeconds = 0; // 重置累计时间
         });
+        // 在指示器消失时更新进度
+        _updateProgress(isPaused: !(_controller?.value.isPlaying ?? false));
       }
     });
   }
@@ -816,11 +726,17 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         children: [
           IconButton(
             icon: const Icon(Icons.replay_10, color: Colors.white, size: 40),
-            onPressed: () => _seekRelative(const Duration(seconds: -10)),
+            onPressed: () {
+              _seekRelative(const Duration(seconds: -10));
+              _showSeekAnimation(-10);
+            },
           ),
           IconButton(
             icon: const Icon(Icons.forward_10, color: Colors.white, size: 40),
-            onPressed: () => _seekRelative(const Duration(seconds: 10)),
+            onPressed: () {
+              _seekRelative(const Duration(seconds: 10));
+              _showSeekAnimation(10);
+            },
           ),
         ],
       ),
@@ -1125,5 +1041,75 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       return '$hours:${twoDigits(minutes)}:${twoDigits(seconds)}';
     }
     return '${twoDigits(minutes)}:${twoDigits(seconds)}';
+  }
+
+  // 辅助方法
+  Widget _buildIndicator({
+    required IconData icon,
+    required String text,
+    EdgeInsetsGeometry? padding,
+  }) {
+    return Container(
+      padding: padding ?? _indicatorPadding,
+      decoration: _indicatorDecoration,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: Colors.white, size: 24),
+          const SizedBox(width: 4),
+          Text(text, style: _indicatorTextStyle),
+        ],
+      ),
+    );
+  }
+
+  void _clearTimers() {
+    _progressTimer?.cancel();
+    _hideControlsTimer?.cancel();
+    _seekIndicatorTimer?.cancel();
+  }
+
+  void _updateDraggingState(bool isDragging) {
+    setState(() {
+      _showControls = true;
+      _isDragging = isDragging;
+      if (!isDragging) {
+        _startHideControlsTimer();
+      }
+    });
+  }
+
+  // 修改手势相关方法
+  void onHorizontalDragStart(DragStartDetails details) {
+    if (_controller?.value.isInitialized != true) return;
+    _dragStartX = details.globalPosition.dx;
+    _dragStartProgress = _controller!.value.position.inMilliseconds.toDouble();
+    _previewPosition = _controller!.value.position;
+    _updateDraggingState(true);
+    _hideControlsTimer?.cancel();
+  }
+
+  void onHorizontalDragUpdate(DragUpdateDetails details) {
+    if (!_isDragging || _dragStartX == null || _dragStartProgress == null) return;
+    
+    final width = MediaQuery.of(context).size.width;
+    final dx = details.globalPosition.dx - _dragStartX!;
+    final percentage = dx / width;
+    
+    final duration = _controller!.value.duration;
+    final newPosition = _dragStartProgress! + (duration.inMilliseconds * percentage);
+    
+    setState(() {
+      _previewPosition = Duration(milliseconds: newPosition.toInt().clamp(0, duration.inMilliseconds));
+    });
+  }
+
+  void onHorizontalDragEnd(DragEndDetails details) {
+    if (_isDragging) {
+      _controller?.seekTo(_previewPosition);
+      _updateDraggingState(false);
+      _dragStartX = null;
+      _dragStartProgress = null;
+    }
   }
 } 
