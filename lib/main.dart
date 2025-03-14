@@ -13,8 +13,8 @@ void main() async {
   await ThemeManager().init();
   fvp.registerWith(options: {
     'player': {
-      'buffer': '20000', // 播放缓冲时间(ms)
-      'buffer.max': '160000000', // 最大缓冲大小(bytes)
+      'buffer': '30000', // 播放缓冲时间(ms)
+      'buffer.max': '16000000', // 最大缓冲大小(bytes)
       'buffer.packet': '2000', // 缓冲包数量
       'buffer.duration': '100000', // 缓冲时长(ms)
       'demux.buffer.ranges': '200', // 缓冲区间数量
