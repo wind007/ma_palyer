@@ -120,13 +120,15 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // 视频背景图
-            if (_videoDetails!['ImageTags']?['Backdrop'] != null || _videoDetails!['BackdropImageTags']?.isNotEmpty == true)
+            if (_videoDetails!['ImageTags'] != null) ...[
               Stack(
                 children: [
                   Image.network(
                     _videoDetails!['ImageTags']?['Backdrop'] != null
                         ? '${widget.server.url}/Items/${_videoDetails!['Id']}/Images/Backdrop'
-                        : '${widget.server.url}/Items/${_videoDetails!['Id']}/Images/Backdrop/0',
+                        : _videoDetails!['ImageTags']?['Primary'] != null
+                            ? '${widget.server.url}/Items/${_videoDetails!['Id']}/Images/Primary'
+                            : '${widget.server.url}/Items/${_videoDetails!['Id']}/Images/Primary/0',
                     headers: {'X-Emby-Token': widget.server.accessToken},
                     fit: BoxFit.cover,
                     width: double.infinity,
@@ -474,6 +476,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
               ),
             ),
           ],
+          ],
         ),
       ),
     );
@@ -531,9 +534,9 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
     final remainingSeconds = seconds % 60;
     
     if (hours > 0) {
-      return '${hours}:${minutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
+      return '$hours:${minutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
     } else {
-      return '${minutes}:${remainingSeconds.toString().padLeft(2, '0')}';
+      return '$minutes:${remainingSeconds.toString().padLeft(2, '0')}';
     }
   }
 }
