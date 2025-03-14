@@ -1,6 +1,7 @@
 // ignore_for_file: unused_field
 
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
@@ -33,15 +34,16 @@ class VideoPlayerPage extends StatefulWidget {
 
 class _VideoPlayerPageState extends State<VideoPlayerPage> {
   static const String _tag = "VideoPlayer";
-  
+
   // 常量定义
-  static const _maxRetries = 3;         // 最大重试次数
-  static const _volumeStep = 0.05;      // 音量调节步长
-  static const _progressInterval = 30;   // 进度更新间隔（秒）
-  static const _controlsTimeout = 3;     // 控制栏显示时间（秒）
+  static const _maxRetries = 3; // 最大重试次数
+  static const _volumeStep = 0.05; // 音量调节步长
+  static const _progressInterval = 30; // 进度更新间隔（秒）
+  static const _controlsTimeout = 5; // 控制栏显示时间（秒）
   static const _indicatorTopPosition = 6.0; // 提示块位置系数（1/6）
-  static const _seekButtonSize = 40.0;   // 快进快退按钮大小
+  static const _seekButtonSize = 40.0; // 快进快退按钮大小
   static const _volumeControlWidth = 80.0; // 音量控制条宽度
+  static const _networkSpeedUpdateInterval = 1; // 网速更新间隔（秒）
 
   // 样式常量
   static const _controlBarGradient = LinearGradient(
@@ -108,36 +110,36 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
 
   // 播放器控制器
   VideoPlayerController? _controller;
-  
+
   // 定时器
-  Timer? _progressTimer;      // 进度更新定时器
-  Timer? _hideControlsTimer;  // 控制栏隐藏定时器
+  Timer? _progressTimer; // 进度更新定时器
+  Timer? _hideControlsTimer; // 控制栏隐藏定时器
   Timer? _seekIndicatorTimer; // 快进快退指示器定时器
-  
+
   // 状态标记
-  bool _isInitializing = true;  // 初始化状态
-  bool _isDragging = false;     // 是否正在拖动
-  String? _error;               // 错误信息
-  bool _showControls = false;   // 是否显示控制栏
-  int _retryCount = 0;          // 重试次数
-    
+  bool _isInitializing = true; // 初始化状态
+  bool _isDragging = false; // 是否正在拖动
+  String? _error; // 错误信息
+  bool _showControls = false; // 是否显示控制栏
+  int _retryCount = 0; // 重试次数
+
   // 播放控制
-  double _currentVolume = 1.0;   // 当前音量
-  double _lastVolume = 1.0;      // 静音前的音量
-  bool _isFullScreen = false;    // 全屏状态
-  double _playbackSpeed = 1.0;   // 播放速度
-  double _brightness = 0.0;      // 当前亮度
+  double _currentVolume = 1.0; // 当前音量
+  double _lastVolume = 1.0; // 静音前的音量
+  bool _isFullScreen = false; // 全屏状态
+  double _playbackSpeed = 1.0; // 播放速度
+  double _brightness = 0.0; // 当前亮度
 
   // 手势控制
-  double? _dragStartX;           // 水平拖动起始位置
-  double? _dragStartY;           // 垂直拖动起始位置
-  double? _dragStartProgress;    // 拖动开始时的播放进度
-  bool _isDraggingVolume = false;    // 是否正在调节音量
+  double? _dragStartX; // 水平拖动起始位置
+  double? _dragStartY; // 垂直拖动起始位置
+  double? _dragStartProgress; // 拖动开始时的播放进度
+  bool _isDraggingVolume = false; // 是否正在调节音量
   bool _isDraggingBrightness = false; // 是否正在调节亮度
-  bool _showVolumeIndicator = false;  // 是否显示音量指示器
+  bool _showVolumeIndicator = false; // 是否显示音量指示器
   bool _showBrightnessIndicator = false; // 是否显示亮度指示器
-  bool _showSeekIndicator = false;    // 是否显示快进快退指示器
-  int _seekSeconds = 0;         // 快进快退秒数
+  bool _showSeekIndicator = false; // 是否显示快进快退指示器
+  int _seekSeconds = 0; // 快进快退秒数
   Duration _previewPosition = Duration.zero; // 预览位置
 
   // 添加新的状态变量
@@ -147,22 +149,30 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   List<dynamic>? _audioStreams;
   List<dynamic>? _subtitleStreams;
 
+  // 网速相关变量
+  Timer? _networkSpeedTimer;
+  int _lastLoadedBytes = 0;
+  double _currentNetworkSpeed = 0.0; // KB/s
+  bool _showNetworkSpeed = true;
+  DateTime? _lastSpeedUpdateTime;
+  List<double> _speedHistory = [];
+
   @override
   void initState() {
     super.initState();
     Logger.i("初始化视频播放页面 - 视频ID: ${widget.itemId}, 标题: ${widget.title}", _tag);
-    
+
     // 设置横屏
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
     ]);
     Logger.d("设置横屏模式", _tag);
-    
+
     // 设置全屏
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     Logger.d("设置全屏模式", _tag);
-    
+
     _initializePlayer();
     _initializeBrightness();
   }
@@ -184,25 +194,38 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     try {
       // 获取视频播放URL和信息
       Logger.d("获取播放地址", _tag);
-      
+
       // 获取媒体信息
       Logger.d("获取媒体信息", _tag);
       _playbackInfo = await widget.embyApi.getPlaybackInfo(widget.itemId);
-      if (_playbackInfo == null || _playbackInfo!['MediaSources'] == null || _playbackInfo!['MediaSources'].isEmpty) {
+      if (_playbackInfo == null ||
+          _playbackInfo!['MediaSources'] == null ||
+          _playbackInfo!['MediaSources'].isEmpty) {
         Logger.e("获取媒体信息失败：MediaSources为空", _tag);
         throw Exception('无法获取媒体信息');
       }
-      
+
       // 获取音频和字幕流
-      final mediaSource = _playbackInfo!['MediaSources'][widget.mediaSourceIndex ?? 0];
-      _audioStreams = mediaSource['MediaStreams']?.where((s) => s['Type'] == 'Audio')?.toList();
-      _subtitleStreams = mediaSource['MediaStreams']?.where((s) => s['Type'] == 'Subtitle')?.toList();
-      
-      _currentAudioStreamIndex = widget.initialAudioStreamIndex ?? mediaSource['DefaultAudioStreamIndex'];
-      _currentSubtitleStreamIndex = widget.initialSubtitleStreamIndex ?? mediaSource['DefaultSubtitleStreamIndex'];
-      
-      Logger.d("音频流数量: ${_audioStreams?.length}, 字幕流数量: ${_subtitleStreams?.length}", _tag);
-      Logger.d("当前音频流: $_currentAudioStreamIndex, 当前字幕流: $_currentSubtitleStreamIndex", _tag);
+      final mediaSource =
+          _playbackInfo!['MediaSources'][widget.mediaSourceIndex ?? 0];
+      _audioStreams = mediaSource['MediaStreams']
+          ?.where((s) => s['Type'] == 'Audio')
+          ?.toList();
+      _subtitleStreams = mediaSource['MediaStreams']
+          ?.where((s) => s['Type'] == 'Subtitle')
+          ?.toList();
+
+      _currentAudioStreamIndex = widget.initialAudioStreamIndex ??
+          mediaSource['DefaultAudioStreamIndex'];
+      _currentSubtitleStreamIndex = widget.initialSubtitleStreamIndex ??
+          mediaSource['DefaultSubtitleStreamIndex'];
+
+      Logger.d(
+          "音频流数量: ${_audioStreams?.length}, 字幕流数量: ${_subtitleStreams?.length}",
+          _tag);
+      Logger.d(
+          "当前音频流: $_currentAudioStreamIndex, 当前字幕流: $_currentSubtitleStreamIndex",
+          _tag);
 
       final url = await widget.embyApi.getPlaybackUrl(
         widget.itemId,
@@ -219,7 +242,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       Logger.d("获取播放位置", _tag);
       final position = await widget.embyApi.getPlaybackPosition(widget.itemId);
       Logger.d("当前播放位置: $position", _tag);
-      
+
       // 初始化播放器
       Logger.d("初始化播放器控制器", _tag);
       _controller = VideoPlayerController.networkUrl(
@@ -233,7 +256,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
 
       await _controller?.initialize();
       Logger.d("播放器控制器初始化完成", _tag);
-      
+
       if (!mounted) {
         Logger.w("页面已卸载，取消后续初始化", _tag);
         return;
@@ -244,10 +267,10 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         Logger.d("设置初始播放位置: ${position ~/ 10}微秒", _tag);
         await _controller?.seekTo(Duration(microseconds: (position ~/ 10)));
       }
-      
+
       await _controller?.play();
       Logger.i("开始播放视频", _tag);
-      
+
       setState(() {
         _isInitializing = false;
       });
@@ -255,7 +278,6 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       // 启动定时更新
       _startProgressTimer();
       Logger.d("启动进度更新定时器", _tag);
-
     } catch (e, stackTrace) {
       Logger.e("初始化播放器失败", _tag, e, stackTrace);
       if (_retryCount < _maxRetries) {
@@ -277,7 +299,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     if (_controller == null || !mounted) return;
 
     final playerValue = _controller!.value;
-    
+
     // 错误处理
     if (playerValue.hasError) {
       Logger.e("播放器错误: ${playerValue.errorDescription}", _tag);
@@ -299,6 +321,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     _progressTimer?.cancel();
     _hideControlsTimer?.cancel();
     _seekIndicatorTimer?.cancel();
+    _networkSpeedTimer?.cancel();
   }
 
   void _startProgressTimer() {
@@ -328,14 +351,13 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     );
   }
 
-
   void _showSeekAnimation(int seconds) {
     Logger.v("显示快进/快退动画: $seconds秒", _tag);
     setState(() {
       _seekSeconds = seconds;
       _showSeekIndicator = true;
     });
-    
+
     _seekIndicatorTimer?.cancel();
     _seekIndicatorTimer = Timer(const Duration(milliseconds: 500), () {
       if (mounted) {
@@ -369,8 +391,11 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       _showControls = !_showControls;
       if (_showControls) {
         _startHideControlsTimer();
+        _startNetworkSpeedTimer(); // 显示控制栏时开始计算网速
       } else {
         _hideControlsTimer?.cancel();
+        _networkSpeedTimer?.cancel(); // 隐藏控制栏时停止计算网速
+        _speedHistory.clear();
       }
     });
     Logger.d("控制栏显示状态: ${_showControls ? '显示' : '隐藏'}", _tag);
@@ -382,7 +407,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       Logger.w("播放器控制器未初始化", _tag);
       return;
     }
-    
+
     setState(() {
       _currentVolume = (_currentVolume + delta).clamp(0.0, 1.0);
       _controller!.setVolume(_currentVolume);
@@ -397,11 +422,11 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       Logger.w("播放器控制器未初始化", _tag);
       return;
     }
-    
+
     final current = _controller!.value.position;
     final duration = _controller!.value.duration;
     final targetPosition = current + offset;
-    
+
     if (targetPosition < Duration.zero) {
       _controller!.seekTo(Duration.zero);
       Logger.d("跳转到开始位置", _tag);
@@ -426,6 +451,85 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         Logger.d("退出全屏模式", _tag);
       }
     });
+  }
+
+  void _startNetworkSpeedTimer() {
+    Logger.d("启动网速监测定时器", _tag);
+    _networkSpeedTimer?.cancel();
+    _lastSpeedUpdateTime = DateTime.now();
+    _speedHistory.clear();
+    _lastLoadedBytes = 0;
+    _currentNetworkSpeed = 0.0;
+
+    if (!_showControls) return; // 如果控制栏不显示，不启动定时器
+
+    _networkSpeedTimer = Timer.periodic(
+      const Duration(seconds: _networkSpeedUpdateInterval),
+      (timer) {
+        if (!mounted || !_showControls) {
+          timer.cancel();
+          return;
+        }
+
+        if (_controller?.value.isInitialized == true) {
+          final now = DateTime.now();
+          final timeDiff =
+              now.difference(_lastSpeedUpdateTime ?? now).inMilliseconds /
+                  1000.0;
+          _lastSpeedUpdateTime = now;
+
+          if (timeDiff <= 0) return;
+
+          final currentPosition = _controller!.value.position;
+          final buffered = _controller!.value.buffered;
+
+          // 计算总缓冲大小
+          int totalBufferedBytes = 0;
+          for (var range in buffered) {
+            final duration =
+                range.end.inMilliseconds - range.start.inMilliseconds;
+            // 使用视频实际分辨率和比特率计算
+            final width = _controller!.value.size.width;
+            final height = _controller!.value.size.height;
+            final bitRate = 2000000; // 假设平均码率2Mbps
+            totalBufferedBytes += (duration * bitRate) ~/ 8000; // 转换为字节
+          }
+
+          // 计算速度
+          final bytesDiff = max(0, totalBufferedBytes - _lastLoadedBytes);
+          _lastLoadedBytes = totalBufferedBytes;
+
+          // 计算当前速度（KB/s）
+          final currentSpeed = bytesDiff / timeDiff / 1024;
+
+          // 更新速度历史，只记录有意义的速度值
+          if (currentSpeed > 0 && currentSpeed < 100000) {
+            // 添加上限以过滤异常值
+            _speedHistory.add(currentSpeed);
+            while (_speedHistory.length > 5) {
+              // 增加历史记录数量以获得更平滑的结果
+              _speedHistory.removeAt(0);
+            }
+          }
+
+          // 使用中位数计算平均速度，避免极端值的影响
+          double averageSpeed = 0.0;
+          if (_speedHistory.isNotEmpty) {
+            final sortedSpeeds = List<double>.from(_speedHistory)..sort();
+            final middle = sortedSpeeds.length ~/ 2;
+            averageSpeed = sortedSpeeds.length.isOdd
+                ? sortedSpeeds[middle]
+                : (sortedSpeeds[middle - 1] + sortedSpeeds[middle]) / 2;
+          }
+
+          if (mounted && _showControls) {
+            setState(() {
+              _currentNetworkSpeed = max(0, averageSpeed);
+            });
+          }
+        }
+      },
+    );
   }
 
   @override
@@ -603,7 +707,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         onVerticalDragStart: (details) {
           final screenWidth = MediaQuery.of(context).size.width;
           _dragStartY = details.globalPosition.dy;
-          
+
           if (details.globalPosition.dx < screenWidth / 2) {
             _isDraggingBrightness = true;
             setState(() {
@@ -618,11 +722,11 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         },
         onVerticalDragUpdate: (details) {
           if (_dragStartY == null) return;
-          
+
           final height = MediaQuery.of(context).size.height;
           final dy = _dragStartY! - details.globalPosition.dy;
           final percentage = dy / height;
-          
+
           if (_isDraggingVolume) {
             setState(() {
               _currentVolume = (_currentVolume + percentage).clamp(0.0, 1.0);
@@ -632,18 +736,19 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
             setState(() {
               _brightness = (_brightness + percentage).clamp(0.0, 1.0);
               SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
-                statusBarBrightness: _brightness > 0.5 ? Brightness.dark : Brightness.light,
+                statusBarBrightness:
+                    _brightness > 0.5 ? Brightness.dark : Brightness.light,
               ));
             });
           }
-          
+
           _dragStartY = details.globalPosition.dy;
         },
         onVerticalDragEnd: (_) {
           _dragStartY = null;
           _isDraggingVolume = false;
           _isDraggingBrightness = false;
-          
+
           Future.delayed(const Duration(seconds: 1), () {
             if (mounted) {
               setState(() {
@@ -679,7 +784,9 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                 top: MediaQuery.of(context).size.height / _indicatorTopPosition,
                 child: Center(
                   child: _buildIndicator(
-                    icon: _seekSeconds < 0 ? Icons.fast_rewind : Icons.fast_forward,
+                    icon: _seekSeconds < 0
+                        ? Icons.fast_rewind
+                        : Icons.fast_forward,
                     text: '${_seekSeconds.abs()}秒',
                   ),
                 ),
@@ -824,14 +931,16 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
           IconButton(
-            icon: const Icon(Icons.replay_10, color: Colors.white, size: _seekButtonSize),
+            icon: const Icon(Icons.replay_10,
+                color: Colors.white, size: _seekButtonSize),
             onPressed: () {
               _seekRelative(const Duration(seconds: -10));
               _showSeekAnimation(-10);
             },
           ),
           IconButton(
-            icon: const Icon(Icons.forward_10, color: Colors.white, size: _seekButtonSize),
+            icon: const Icon(Icons.forward_10,
+                color: Colors.white, size: _seekButtonSize),
             onPressed: () {
               _seekRelative(const Duration(seconds: 10));
               _showSeekAnimation(10);
@@ -898,18 +1007,21 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                   setState(() {
                     _isDragging = false;
                   });
-                  _updateProgress(isPaused: !(_controller?.value.isPlaying ?? false));
+                  _updateProgress(
+                      isPaused: !(_controller?.value.isPlaying ?? false));
                   _startHideControlsTimer();
                 },
               ),
             ),
             if (_isDragging)
               Positioned(
-                left: (position.inMilliseconds / duration.inMilliseconds) * 
-                  (MediaQuery.of(context).size.width - 32) - 30,
+                left: (position.inMilliseconds / duration.inMilliseconds) *
+                        (MediaQuery.of(context).size.width - 32) -
+                    30,
                 bottom: 25,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                     color: Colors.black54,
                     borderRadius: BorderRadius.circular(4),
@@ -947,20 +1059,56 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         return Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              _formatDuration(value.position),
-              style: _timeTextStyle,
+            Row(
+              children: [
+                Text(
+                  _formatDuration(value.position),
+                  style: _timeTextStyle,
+                ),
+                const SizedBox(width: 8),
+                if (_currentNetworkSpeed > 0)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.black38,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.network_check,
+                          color: Colors.white,
+                          size: 14,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          _currentNetworkSpeed >= 1024
+                              ? '${(_currentNetworkSpeed / 1024).toStringAsFixed(1)} MB/s'
+                              : '${_currentNetworkSpeed.toStringAsFixed(1)} KB/s',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
             ),
             Row(
               children: [
                 if (_audioStreams != null && _audioStreams!.isNotEmpty)
                   IconButton(
-                    icon: const Icon(Icons.audiotrack, color: Colors.white, size: 20),
+                    icon: const Icon(Icons.audiotrack,
+                        color: Colors.white, size: 20),
                     onPressed: _showAudioStreamDialog,
                   ),
                 if (_subtitleStreams != null && _subtitleStreams!.isNotEmpty)
                   IconButton(
-                    icon: const Icon(Icons.subtitles, color: Colors.white, size: 20),
+                    icon: const Icon(Icons.subtitles,
+                        color: Colors.white, size: 20),
                     onPressed: _showSubtitleStreamDialog,
                   ),
                 Text(
@@ -1053,7 +1201,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       Logger.w("播放器控制器未初始化", _tag);
       return;
     }
-    
+
     if (_controller!.value.isPlaying) {
       _controller!.pause();
       _updateProgress(isPaused: true);
@@ -1063,7 +1211,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       _startProgressTimer();
       Logger.i("视频开始播放", _tag);
     }
-    
+
     setState(() {});
   }
 
@@ -1113,9 +1261,8 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                     child: Text(
                       '${speed}x',
                       style: TextStyle(
-                        color: _playbackSpeed == speed
-                            ? Colors.red
-                            : Colors.white,
+                        color:
+                            _playbackSpeed == speed ? Colors.red : Colors.white,
                         fontSize: 15,
                       ),
                       textAlign: TextAlign.center,
@@ -1134,7 +1281,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     final hours = duration.inHours;
     final minutes = duration.inMinutes.remainder(60);
     final seconds = duration.inSeconds.remainder(60);
-    
+
     if (hours > 0) {
       return '$hours:${twoDigits(minutes)}:${twoDigits(seconds)}';
     }
@@ -1183,7 +1330,8 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     _previewPosition = _controller!.value.position;
     _updateDraggingState(true);
     _hideControlsTimer?.cancel();
-    Logger.d("初始拖动位置: $_dragStartX, 当前进度: ${_formatDuration(_previewPosition)}", _tag);
+    Logger.d("初始拖动位置: $_dragStartX, 当前进度: ${_formatDuration(_previewPosition)}",
+        _tag);
   }
 
   void onHorizontalDragUpdate(DragUpdateDetails details) {
@@ -1191,19 +1339,23 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       Logger.v("拖动状态无效，忽略更新", _tag);
       return;
     }
-    
+
     final width = MediaQuery.of(context).size.width;
     final dx = details.globalPosition.dx - _dragStartX!;
     final percentage = dx / width;
-    
+
     final duration = _controller!.value.duration;
-    final newPosition = _dragStartProgress! + (duration.inMilliseconds * percentage);
-    
+    final newPosition =
+        _dragStartProgress! + (duration.inMilliseconds * percentage);
+
     setState(() {
-      _previewPosition = Duration(milliseconds: newPosition.toInt().clamp(0, duration.inMilliseconds));
+      _previewPosition = Duration(
+          milliseconds: newPosition.toInt().clamp(0, duration.inMilliseconds));
       _showControls = true;
     });
-    Logger.v("拖动更新 - 偏移: $dx, 百分比: ${(percentage * 100).toStringAsFixed(1)}%, 新位置: ${_formatDuration(_previewPosition)}", _tag);
+    Logger.v(
+        "拖动更新 - 偏移: $dx, 百分比: ${(percentage * 100).toStringAsFixed(1)}%, 新位置: ${_formatDuration(_previewPosition)}",
+        _tag);
   }
 
   void onHorizontalDragEnd(DragEndDetails details) {
@@ -1379,9 +1531,10 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                           '${stream['Language'] ?? '未知'} '
                           '(${stream['Codec']?.toString().toUpperCase() ?? '未知'})',
                           style: TextStyle(
-                            color: _currentSubtitleStreamIndex == stream['Index']
-                                ? Colors.red
-                                : Colors.white,
+                            color:
+                                _currentSubtitleStreamIndex == stream['Index']
+                                    ? Colors.red
+                                    : Colors.white,
                             fontSize: 15,
                           ),
                         ),
@@ -1401,7 +1554,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     try {
       // 保存当前播放位置
       final position = _controller!.value.position;
-      
+
       // 获取新的播放URL
       final url = await widget.embyApi.getPlaybackUrl(
         widget.itemId,
@@ -1418,23 +1571,23 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
 
       // 初始化新控制器
       await newController.initialize();
-      
+
       // 设置播放位置和状态
       await newController.seekTo(position);
       if (_controller!.value.isPlaying) {
         await newController.play();
       }
-      
+
       // 更新状态
       setState(() {
         _controller?.dispose();
         _controller = newController;
         _currentAudioStreamIndex = index;
       });
-      
+
       // 添加监听器
       _controller?.addListener(_onPlayerStateChanged);
-      
+
       Logger.i("音频流切换成功", _tag);
     } catch (e) {
       Logger.e("切换音频流失败", _tag, e);
@@ -1450,7 +1603,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     try {
       // 保存当前播放位置
       final position = _controller!.value.position;
-      
+
       // 获取新的播放URL
       final url = await widget.embyApi.getPlaybackUrl(
         widget.itemId,
@@ -1467,23 +1620,23 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
 
       // 初始化新控制器
       await newController.initialize();
-      
+
       // 设置播放位置和状态
       await newController.seekTo(position);
       if (_controller!.value.isPlaying) {
         await newController.play();
       }
-      
+
       // 更新状态
       setState(() {
         _controller?.dispose();
         _controller = newController;
         _currentSubtitleStreamIndex = index;
       });
-      
+
       // 添加监听器
       _controller?.addListener(_onPlayerStateChanged);
-      
+
       Logger.i("字幕流切换成功", _tag);
     } catch (e) {
       Logger.e("切换字幕流失败", _tag, e);
@@ -1493,4 +1646,4 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       );
     }
   }
-} 
+}
