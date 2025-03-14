@@ -66,6 +66,13 @@ class EmbyApiService {
             body: body != null ? json.encode(body) : null,
           );
           break;
+        case 'DELETE':
+          response = await _client.delete(
+            uri,
+            headers: headers,
+            body: body != null ? json.encode(body) : null,
+          );
+          break;
         default:
           throw Exception('不支持的请求方法: $method');
       }
@@ -479,5 +486,115 @@ class EmbyApiService {
       return {'Items': []};
     }
     return response as Map<String, dynamic>;
+  }
+
+  // 添加到收藏夹
+  Future<void> addToFavorites(String itemId) async {
+    try {
+      Logger.i('添加到收藏夹: $itemId', _tag);
+      await _request(
+        path: '/Users/$userId/FavoriteItems/$itemId',
+        method: 'POST',
+        allowNoContent: true,
+      );
+    } catch (e) {
+      Logger.e('添加收藏失败', _tag, e);
+      rethrow;
+    }
+  }
+
+  // 从收藏夹移除
+  Future<void> removeFromFavorites(String itemId) async {
+    try {
+      Logger.i('从收藏夹移除: $itemId', _tag);
+      await _request(
+        path: '/Users/$userId/FavoriteItems/$itemId',
+        method: 'POST',
+        queryParams: {'IsFavorite': 'false'},
+        allowNoContent: true,
+      );
+    } catch (e) {
+      Logger.e('移除收藏失败', _tag, e);
+      rethrow;
+    }
+  }
+
+  // 标记为已播放
+  Future<void> markAsPlayed(String itemId) async {
+    try {
+      Logger.i('标记为已播放: $itemId', _tag);
+      await _request(
+        path: '/Users/$userId/PlayedItems/$itemId',
+        method: 'POST',
+        allowNoContent: true,
+      );
+    } catch (e) {
+      Logger.e('标记已播放失败', _tag, e);
+      rethrow;
+    }
+  }
+
+  // 标记为未播放
+  Future<void> markAsUnplayed(String itemId) async {
+    try {
+      Logger.i('标记为未播放: $itemId', _tag);
+      await _request(
+        path: '/Users/$userId/PlayedItems/$itemId',
+        method: 'POST',
+        queryParams: {'IsPlayed': 'false'},
+        allowNoContent: true,
+      );
+    } catch (e) {
+      Logger.e('标记未播放失败', _tag, e);
+      rethrow;
+    }
+  }
+
+  // 切换收藏状态
+  Future<void> toggleFavorite(String itemId, bool isFavorite) async {
+    try {
+      if (!isFavorite) {
+        // 添加到收藏
+        await _request(
+          path: '/Users/$userId/FavoriteItems/$itemId',
+          method: 'POST',
+          allowNoContent: true,
+        );
+      } else {
+        // 从收藏中移除
+        await _request(
+          path: '/Users/$userId/FavoriteItems/$itemId',
+          method: 'DELETE',
+          allowNoContent: true,
+        );
+      }
+    } catch (e) {
+      Logger.e('切换收藏状态失败', _tag, e);
+      rethrow;
+    }
+  }
+
+  // 切换播放状态
+  Future<void> togglePlayed(String itemId, bool isPlayed) async {
+    try {
+      if (!isPlayed) {
+        // 标记为已播放
+        await _request(
+          path: '/Users/$userId/PlayedItems/$itemId',
+          method: 'POST',
+          allowNoContent: true,
+        );
+      } else {
+        // 标记为未播放
+        await _request(
+          path: '/Users/$userId/PlayedItems/$itemId',
+          method: 'DELETE',
+          allowNoContent: true,
+        );
+      }
+    } catch (e) {
+      Logger.e('切换播放状态失败', _tag, e);
+      rethrow;
+    }
   }
 }

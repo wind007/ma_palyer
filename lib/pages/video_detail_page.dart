@@ -116,22 +116,22 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
       onRefresh: _loadVideoDetails,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
             // 视频背景图
             if (_videoDetails!['ImageTags'] != null) ...[
               Stack(
                 children: [
-                  Image.network(
+            Image.network(
                     _videoDetails!['ImageTags']?['Backdrop'] != null
                         ? '${widget.server.url}/Items/${_videoDetails!['Id']}/Images/Backdrop'
                         : _videoDetails!['ImageTags']?['Primary'] != null
                             ? '${widget.server.url}/Items/${_videoDetails!['Id']}/Images/Primary'
                             : '${widget.server.url}/Items/${_videoDetails!['Id']}/Images/Primary/0',
-                    headers: {'X-Emby-Token': widget.server.accessToken},
-                    fit: BoxFit.cover,
-                    width: double.infinity,
+              headers: {'X-Emby-Token': widget.server.accessToken},
+              fit: BoxFit.cover,
+              width: double.infinity,
                     height: 400,
                   ),
                   // 添加渐变遮罩
@@ -143,34 +143,85 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                           end: Alignment.bottomCenter,
                           colors: [
                             Colors.transparent,
-                            Theme.of(context).scaffoldBackgroundColor,
+                            Colors.black.withOpacity(0.7),
                           ],
-                          stops: const [0.5, 1.0],
+                          stops: const [0.6, 1.0],
                         ),
                       ),
                     ),
                   ),
-                  // 播放按钮
-                  Positioned.fill(
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        onTap: () => _playVideo(fromStart: _playbackPosition == null || _playbackPosition == 0),
-                        child: Center(
-                          child: Container(
-                            padding: const EdgeInsets.all(20),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.5),
-                              shape: BoxShape.circle,
+                  // 收藏和播放状态按钮
+                  Positioned(
+                    right: 16,
+                    bottom: 16,
+                    child: Row(
+                      children: [
+                        // 收藏按钮
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: IconButton(
+                            icon: Icon(
+                              _videoDetails!['UserData']?['IsFavorite'] == true
+                                  ? Icons.favorite
+                                  : Icons.favorite_border,
+                              color: _videoDetails!['UserData']?['IsFavorite'] == true
+                                  ? Colors.red
+                                  : Colors.white,
                             ),
-                            child: const Icon(
-                              Icons.play_arrow,
-                              color: Colors.white,
-                              size: 64,
-                            ),
+                            onPressed: () async {
+                              try {
+                                final isFavorite = _videoDetails!['UserData']?['IsFavorite'] == true;
+                                await _api.toggleFavorite(_videoDetails!['Id'], isFavorite);
+                                setState(() {
+                                  _videoDetails!['UserData'] ??= {};
+                                  _videoDetails!['UserData']['IsFavorite'] = !isFavorite;
+                                });
+                              } catch (e) {
+                                if (!mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('操作失败: $e')),
+                                );
+                              }
+                            },
                           ),
                         ),
-                      ),
+                        const SizedBox(width: 8),
+                        // 播放状态按钮
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: IconButton(
+                            icon: Icon(
+                              _videoDetails!['UserData']?['Played'] == true
+                                  ? Icons.check_circle
+                                  : Icons.check_circle_outline,
+                              color: _videoDetails!['UserData']?['Played'] == true
+                                  ? Colors.green
+                                  : Colors.white,
+                            ),
+                            onPressed: () async {
+                              try {
+                                final isPlayed = _videoDetails!['UserData']?['Played'] == true;
+                                await _api.togglePlayed(_videoDetails!['Id'], isPlayed);
+                                setState(() {
+                                  _videoDetails!['UserData'] ??= {};
+                                  _videoDetails!['UserData']['Played'] = !isPlayed;
+                                });
+                              } catch (e) {
+                                if (!mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('操作失败: $e')),
+                                );
+                              }
+                            },
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   // 视频信息覆盖层
@@ -186,59 +237,77 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                             color: Colors.white,
                             shadows: [
-                              const Shadow(
-                                offset: Offset(1, 1),
-                                blurRadius: 2,
-                                color: Colors.black,
+                              Shadow(
+                                offset: const Offset(0, 1),
+                                blurRadius: 3,
+                                color: Colors.black.withOpacity(0.5),
                               ),
                             ],
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            if (_videoDetails!['ProductionYear'] != null) ...[
-                              Text(
-                                '${_videoDetails!['ProductionYear']}',
-                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: Colors.white,
-                                  shadows: [
-                                    const Shadow(
-                                      offset: Offset(1, 1),
-                                      blurRadius: 2,
-                                      color: Colors.black,
-                                    ),
-                                  ],
+                        if (_videoDetails!['Overview'] != null) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            _videoDetails!['Overview'],
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Colors.white,
+                              shadows: [
+                                Shadow(
+                                  offset: const Offset(0, 1),
+                                  blurRadius: 2,
+                                  color: Colors.black.withOpacity(0.5),
                                 ),
-                              ),
-                              const Text(' · ', style: TextStyle(color: Colors.white)),
-                            ],
-                            Text(
-                              '${(_videoDetails!['RunTimeTicks'] ?? 0) ~/ 10000000 ~/ 60} 分钟',
-                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: Colors.white,
-                                shadows: [
-                                  const Shadow(
-                                    offset: Offset(1, 1),
-                                    blurRadius: 2,
-                                    color: Colors.black,
-                                  ),
-                                ],
-                              ),
+                              ],
                             ),
-                          ],
-                        ),
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                       ],
+                    ),
+                  ),
+                  // 添加中央播放按钮
+                  Positioned.fill(
+                    child: Center(
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () {
+                            if (_playbackPosition != null && _playbackPosition! > 0) {
+                              _playVideo();
+                            } else {
+                              _playVideo(fromStart: true);
+                            }
+                          },
+                          customBorder: const CircleBorder(),
+                          child: Container(
+                            width: 80,
+                            height: 80,
+                            decoration: BoxDecoration(
+                              color: Colors.black54,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              _playbackPosition != null && _playbackPosition! > 0
+                                  ? Icons.play_circle_filled
+                                  : Icons.play_arrow,
+                              color: Colors.white,
+                              size: 50,
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ],
               ),
+            ],
             
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                   // 评分和类型信息
                   Row(
                     children: [
@@ -278,13 +347,13 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                   
                   // 技术信息
                   if (_videoDetails!['MediaSources'] != null && (_videoDetails!['MediaSources'] as List).isNotEmpty) ...[
-                    Text(
+                Text(
                       '技术信息',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
-                    ),
-                    const SizedBox(height: 8),
+                ),
+                const SizedBox(height: 8),
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
@@ -309,8 +378,8 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                                         '${_videoDetails!['MediaSources'][0]['Width']}x${_videoDetails!['MediaSources'][0]['Height']}',
                                       _videoDetails!['MediaSources'][0]['VideoCodec']?.toString().toUpperCase(),
                                     ].where((e) => e != null).join(' · '),
-                                    style: Theme.of(context).textTheme.bodyMedium,
-                                  ),
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
                                 ),
                               ],
                             ),
@@ -331,18 +400,18 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                                           ? '${_videoDetails!['MediaSources'][0]['AudioChannels']} 声道'
                                           : null,
                                     ].where((e) => e != null).join(' · '),
-                                    style: Theme.of(context).textTheme.bodyMedium,
-                                  ),
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
                                 ),
                               ],
-                            ),
-                            const SizedBox(height: 8),
+                  ),
+                  const SizedBox(height: 8),
                           ],
                           
                           // 文件信息
                           if (_videoDetails!['MediaSources'][0]['Size'] != null) ...[
                             Row(
-                              children: [
+                    children: [
                                 const Icon(Icons.folder_outlined, size: 16),
                                 const SizedBox(width: 8),
                                 Expanded(
@@ -470,13 +539,12 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                           );
                         },
                       ),
-                    ),
-                  ],
+                  ),
                 ],
-              ),
+              ],
             ),
-          ],
-          ],
+          ),
+        ],
         ),
       ),
     );

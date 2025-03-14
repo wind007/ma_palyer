@@ -7,6 +7,7 @@ import './tv_show_detail_page.dart';
 import '../utils/error_dialog.dart';
 import '../utils/logger.dart';
 import './video_list_more_page.dart';
+import '../widgets/video_card.dart';
 
 class VideoListPage extends StatefulWidget {
   final ServerInfo server;
@@ -242,7 +243,7 @@ class _VideoListPageState extends State<VideoListPage> {
       expandedHeight: 56,
       floating: true,
       pinned: true,
-      backgroundColor: Theme.of(context).primaryColor,
+      backgroundColor: Theme.of(context).colorScheme.inversePrimary,
       elevation: 4,
       title: Text(
         widget.server.name,
@@ -302,7 +303,7 @@ class _VideoListPageState extends State<VideoListPage> {
             ),
           ),
           SizedBox(
-            height: 220,
+            height: 240,
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -322,8 +323,11 @@ class _VideoListPageState extends State<VideoListPage> {
   }
 
   Widget _buildVideoCard(dynamic video) {
-    return GestureDetector(
-      onTap: () {
+    return VideoCard(
+      video: video,
+      api: _api,
+      server: widget.server,
+      onTap: (video) {
         Logger.i("打开视频详情: ${video['Name']}, 类型: ${video['Type']}", _tag);
         
         // 根据类型导航到不同页面
@@ -365,83 +369,6 @@ class _VideoListPageState extends State<VideoListPage> {
           );
         }
       },
-      child: SizedBox(
-        width: 130,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Stack(
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: AspectRatio(
-                      aspectRatio: 2/3,
-                      child: video['ImageTags']?['Primary'] != null
-                          ? Image.network(
-                              _api.getImageUrl(
-                                itemId: video['Id'],
-                                imageType: 'Primary',
-                              ),
-                              fit: BoxFit.cover,
-                            )
-                          : Container(
-                              color: Colors.grey[300],
-                              child: const Icon(Icons.movie, size: 32),
-                            ),
-                    ),
-                  ),
-                  if (video['UserData']?['Played'] == true)
-                    Positioned(
-                      right: 4,
-                      top: 4,
-                      child: Container(
-                        padding: const EdgeInsets.all(2),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.6),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(
-                          Icons.check,
-                          color: Colors.white,
-                          size: 16,
-                        ),
-                      ),
-                    ),
-                  if (video['UserData']?['PlaybackPositionTicks'] != null &&
-                      video['UserData']?['PlaybackPositionTicks'] > 0)
-                    Positioned(
-                      bottom: 0,
-                      left: 0,
-                      right: 0,
-                      child: LinearProgressIndicator(
-                        value: video['UserData']?['PlaybackPositionTicks'] /
-                            video['RunTimeTicks'],
-                        backgroundColor: Colors.black45,
-                        valueColor: const AlwaysStoppedAnimation<Color>(
-                          Colors.red,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Text(
-                video['Name'] ?? '未知标题',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 

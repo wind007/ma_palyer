@@ -6,6 +6,7 @@ import './video_detail_page.dart';
 import './tv_show_detail_page.dart';
 import '../utils/error_dialog.dart';
 import '../utils/logger.dart';
+import '../widgets/video_card.dart';
 
 class VideoListMorePage extends StatefulWidget {
   final ServerInfo server;
@@ -182,6 +183,7 @@ class _VideoListMorePageState extends State<VideoListMorePage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.title),
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
       ),
       body: _error != null
           ? Center(child: Text(_error!))
@@ -189,8 +191,8 @@ class _VideoListMorePageState extends State<VideoListMorePage> {
               controller: _scrollController,
               padding: const EdgeInsets.all(8),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                childAspectRatio: 0.7,
+                crossAxisCount: 5,
+                childAspectRatio: 0.55,
                 crossAxisSpacing: 8,
                 mainAxisSpacing: 8,
               ),
@@ -201,80 +203,14 @@ class _VideoListMorePageState extends State<VideoListMorePage> {
                 }
 
                 final video = _videos[index];
-                final imageUrl = _api.getImageUrl(
-                  itemId: video['Id'],
-                  imageType: 'Primary',
-                  width: 300,
-                  height: 450,
-                  quality: 90,
-                  tag: video['ImageTags']?['Primary'],
-                );
-
-                return GestureDetector(
-                  onTap: () {
-                    _onVideoTap(video);
-                  },
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.network(
-                            imageUrl,
-                            fit: BoxFit.cover,
-                            width: double.infinity,
-                            errorBuilder: (context, error, stackTrace) {
-                              Logger.w("图片加载失败: $imageUrl", _tag);
-                              return Container(
-                                width: double.infinity,
-                                color: Colors.grey[300],
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      widget.isMovieView ? Icons.movie : Icons.tv,
-                                      size: 32,
-                                      color: Colors.grey[600],
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      widget.isMovieView ? '电影' : '剧集',
-                                      style: TextStyle(
-                                        color: Colors.grey[600],
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                            loadingBuilder: (context, child, loadingProgress) {
-                              if (loadingProgress == null) return child;
-                              return Container(
-                                width: double.infinity,
-                                color: Colors.grey[200],
-                                child: Center(
-                                  child: CircularProgressIndicator(
-                                    value: loadingProgress.expectedTotalBytes != null
-                                        ? loadingProgress.cumulativeBytesLoaded /
-                                            loadingProgress.expectedTotalBytes!
-                                        : null,
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        video['Name'],
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
+                return VideoCard(
+                  video: video,
+                  api: _api,
+                  server: widget.server,
+                  onTap: _onVideoTap,
+                  width: 120,
+                  imageWidth: 160,
+                  imageHeight: 240,
                 );
               },
             ),
