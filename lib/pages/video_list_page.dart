@@ -24,7 +24,7 @@ class _VideoListPageState extends State<VideoListPage> {
   late final EmbyApiService _api;
   final ScrollController _scrollController = ScrollController();
   
-  // 不同分类的视频数据
+  // 分区数据
   final Map<String, List<dynamic>> _videoSections = {
     'latest': [], // 最新添加
     'continue': [], // 继续观看
@@ -32,7 +32,7 @@ class _VideoListPageState extends State<VideoListPage> {
     'views': [], // 媒体库视图
   };
   
-  // 分页加载状态
+  // 分区加载状态
   final Map<String, bool> _isLoadingMore = {};
   final Map<String, bool> _hasMoreData = {};
   final Map<String, int> _sectionStartIndexes = {};
@@ -40,7 +40,15 @@ class _VideoListPageState extends State<VideoListPage> {
   final Map<String, ScrollController> _sectionScrollControllers = {};
   static const int _pageSize = 10;
   
-  bool _isLoading = true;
+  // 分区加载状态
+  final Map<String, bool> _sectionLoading = {
+    'latest': true,
+    'continue': true,
+    'favorites': true,
+    'views': true,
+  };
+
+  bool _isInitializing = true;
   String? _error;
 
   @override
@@ -70,49 +78,35 @@ class _VideoListPageState extends State<VideoListPage> {
       Logger.e("API 初始化失败", _tag, e);
       setState(() {
         _error = '初始化失败: $e';
-        _isLoading = false;
+        _isInitializing = false;
       });
     }
   }
 
   Future<void> _loadAllSections() async {
-    Logger.i("开始加载所有分区数据", _tag);
-    setState(() => _isLoading = true);
+    Logger.i("开始并行加载所有分区数据", _tag);
+    
+    // 重置所有分区的加载状态
+    setState(() {
+      for (var key in _sectionLoading.keys) {
+        _sectionLoading[key] = true;
+      }
+      _isInitializing = false;
+    });
 
     try {
-      // 先加载媒体库视图
-      Logger.d("加载媒体库视图", _tag);
-      await _loadViews();
-
-      // 并行加载其他分区数据
-      Logger.d("并行加载其他分区数据", _tag);
+      // 并行加载所有分区
       await Future.wait([
+        _loadViews(),
         _loadLatestItems(),
         _loadContinueWatching(),
         _loadFavorites(),
       ]);
 
       Logger.i("所有分区数据加载完成", _tag);
-      setState(() => _isLoading = false);
     } catch (e) {
-      Logger.e("加载分区数据失败", _tag, e);
-      if (!mounted) {
-        Logger.w("页面已卸载，取消错误处理", _tag);
-        return;
-      }
-      
-      final retry = await ErrorDialog.show(
-        context: context,
-        title: '加载失败',
-        message: e.toString(),
-      );
-
-      if (retry && mounted) {
-        Logger.i("重试加载分区数据", _tag);
-        _loadAllSections();
-      } else {
-        Logger.d("取消重试加载", _tag);
-      }
+      Logger.e("部分分区加载失败", _tag, e);
+      // 错误处理移到各个加载方法中，这里不再统一处理
     }
   }
 
@@ -125,17 +119,26 @@ class _VideoListPageState extends State<VideoListPage> {
         return type != null;
       }).toList();
       
-      Logger.d("找到 ${views.length} 个媒体库视图", _tag);
-      setState(() => _videoSections['views'] = views);
+      if (!mounted) return;
       
-      // 加载每个视图的内容
-      Logger.d("开始加载各视图内容", _tag);
-      for (var view in views) {
-        await _loadViewContent(view);
-      }
+      Logger.d("找到 ${views.length} 个媒体库视图", _tag);
+      setState(() {
+        _videoSections['views'] = views;
+        _sectionLoading['views'] = false;
+      });
+      
+      // 并行加载每个视图的内容
+      Logger.d("开始并行加载各视图内容", _tag);
+      await Future.wait(
+        views.map((view) => _loadViewContent(view)).toList(),
+      );
     } catch (e) {
       Logger.e("加载媒体库视图失败", _tag, e);
-      setState(() => _videoSections['views'] = []);
+      if (!mounted) return;
+      setState(() {
+        _videoSections['views'] = [];
+        _sectionLoading['views'] = false;
+      });
     }
   }
 
@@ -188,20 +191,25 @@ class _VideoListPageState extends State<VideoListPage> {
         limit: _pageSize,
       );
       
+      if (!mounted) return;
+
       final items = response['Items'] as List;
       final totalCount = response['TotalRecordCount'] as int;
       
-      Logger.d("最新添加项目加载完成，获取到 ${items.length} 个项目，总共 $totalCount 个项目", _tag);
+      Logger.d("最新添加项目加载完成，获取到 ${items.length} 个项目", _tag);
       setState(() {
         _videoSections['latest'] = items;
         _hasMoreData['latest'] = items.length < totalCount;
         _sectionStartIndexes['latest'] = items.length;
+        _sectionLoading['latest'] = false;
       });
     } catch (e) {
       Logger.e("加载最新添加项目失败", _tag, e);
+      if (!mounted) return;
       setState(() {
         _videoSections['latest'] = [];
         _hasMoreData['latest'] = false;
+        _sectionLoading['latest'] = false;
       });
     }
   }
@@ -217,20 +225,26 @@ class _VideoListPageState extends State<VideoListPage> {
         startIndex: 0,
         limit: _pageSize,
       );
+
+      if (!mounted) return;
+
       final items = response['Items'] as List;
       final totalCount = response['TotalRecordCount'] as int? ?? items.length;
       
-      Logger.d("继续观看项目加载完成，获取到 ${items.length} 个项目，总共 $totalCount 个项目", _tag);
+      Logger.d("继续观看项目加载完成，获取到 ${items.length} 个项目", _tag);
       setState(() {
         _videoSections['continue'] = items;
         _hasMoreData['continue'] = (_sectionStartIndexes['continue'] ?? 0) + items.length < totalCount;
         _sectionStartIndexes['continue'] = _pageSize;
+        _sectionLoading['continue'] = false;
       });
     } catch (e) {
       Logger.e("加载继续观看项目失败", _tag, e);
+      if (!mounted) return;
       setState(() {
         _videoSections['continue'] = [];
         _hasMoreData['continue'] = false;
+        _sectionLoading['continue'] = false;
       });
     }
   }
@@ -252,22 +266,23 @@ class _VideoListPageState extends State<VideoListPage> {
         includeItemTypes: 'Movie,Series'
       );
       
-      if (mounted) {
-        Logger.d("收藏项目加载完成，获取到 ${(response['Items'] as List).length} 个项目", _tag);
-        setState(() {
-          _videoSections['favorites'] = response['Items'] as List;
-          _hasMoreData['favorites'] = (response['Items'] as List).length >= _pageSize;
-          _sectionStartIndexes['favorites'] = _pageSize;
-        });
-      }
+      if (!mounted) return;
+      
+      Logger.d("收藏项目加载完成，获取到 ${(response['Items'] as List).length} 个项目", _tag);
+      setState(() {
+        _videoSections['favorites'] = response['Items'] as List;
+        _hasMoreData['favorites'] = (response['Items'] as List).length >= _pageSize;
+        _sectionStartIndexes['favorites'] = _pageSize;
+        _sectionLoading['favorites'] = false;
+      });
     } catch (e) {
       Logger.e("加载收藏项目失败", _tag, e);
-      if (mounted) {
-        setState(() {
-          _videoSections['favorites'] = [];
-          _hasMoreData['favorites'] = false;
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        _videoSections['favorites'] = [];
+        _hasMoreData['favorites'] = false;
+        _sectionLoading['favorites'] = false;
+      });
     }
   }
 
@@ -385,7 +400,7 @@ class _VideoListPageState extends State<VideoListPage> {
   }
 
   Widget _buildBody() {
-    if (_isLoading) {
+    if (_isInitializing) {
       return const Center(child: CircularProgressIndicator());
     }
 
@@ -400,12 +415,14 @@ class _VideoListPageState extends State<VideoListPage> {
         controller: _scrollController,
         slivers: [
           _buildAppBar(),
-          if (_videoSections['continue']!.isNotEmpty)
+          if (!_sectionLoading['continue']! && _videoSections['continue']!.isNotEmpty)
             _buildSection('继续观看', _videoSections['continue']!),
-          _buildSection('最新添加', _videoSections['latest']!),
-          if (_videoSections['favorites']!.isNotEmpty)
+          if (!_sectionLoading['latest']!)
+            _buildSection('最新添加', _videoSections['latest']!),
+          if (!_sectionLoading['favorites']! && _videoSections['favorites']!.isNotEmpty)
             _buildSection('我的收藏', _videoSections['favorites']!),
-          ..._buildViewSections(),
+          if (!_sectionLoading['views']!)
+            ..._buildViewSections(),
           const SliverPadding(padding: EdgeInsets.only(bottom: 20)),
         ],
       ),
