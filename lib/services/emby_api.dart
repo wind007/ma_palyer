@@ -401,4 +401,50 @@ class EmbyApiService {
     
     return response;
   }
+
+  // 获取电视剧的季信息
+  Future<Map<String, dynamic>> getSeasons({
+    required String seriesId,
+    required String userId,
+    String? fields,
+  }) async {
+    final response = await _request(
+      path: '/Shows/$seriesId/Seasons',
+      method: 'GET',
+      queryParams: {
+        'UserId': userId,
+        if (fields != null) 'Fields': fields,
+      },
+    );
+    
+    if (response == null) {
+      return {'Items': []};
+    }
+    return response as Map<String, dynamic>;
+  }
+
+  // 获取季的剧集信息
+  Future<Map<String, dynamic>> getEpisodes({
+    required String seriesId,
+    required String userId,
+    String? seasonId,
+    int? seasonNumber,
+    String? fields,
+  }) async {
+    final response = await _request(
+      path: '/Shows/$seriesId/Episodes',
+      method: 'GET',
+      queryParams: {
+        'UserId': userId,
+        if (seasonId != null) 'SeasonId': seasonId,
+        if (seasonNumber != null) 'Season': seasonNumber.toString(),
+        if (fields != null) 'Fields': fields,
+      },
+    );
+    
+    if (response == null) {
+      return {'Items': []};
+    }
+    return response as Map<String, dynamic>;
+  }
 }

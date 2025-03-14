@@ -3,6 +3,7 @@ import '../services/emby_api.dart';
 import '../services/server_manager.dart';
 import '../services/api_service_manager.dart';
 import './video_detail_page.dart';
+import './tv_show_detail_page.dart';
 import '../utils/error_dialog.dart';
 import '../utils/logger.dart';
 import './video_list_more_page.dart';
@@ -323,15 +324,46 @@ class _VideoListPageState extends State<VideoListPage> {
   Widget _buildVideoCard(dynamic video) {
     return GestureDetector(
       onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => VideoDetailPage(
-              server: widget.server,
-              video: video,
+        Logger.i("打开视频详情: ${video['Name']}, 类型: ${video['Type']}", _tag);
+        
+        // 根据类型导航到不同页面
+        final type = video['Type']?.toString().toLowerCase();
+        final collectionType = video['CollectionType']?.toString().toLowerCase();
+        
+        if (type == 'series' || collectionType == 'tvshows') {
+          Logger.d("打开电视剧详情页", _tag);
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => TvShowDetailPage(
+                server: widget.server,
+                tvShow: video,
+              ),
             ),
-          ),
-        );
+          );
+        } else if (type == 'episode') {
+          Logger.d("打开剧集播放页", _tag);
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => VideoDetailPage(
+                server: widget.server,
+                video: video,
+              ),
+            ),
+          );
+        } else {
+          Logger.d("打开电影播放页", _tag);
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => VideoDetailPage(
+                server: widget.server,
+                video: video,
+              ),
+            ),
+          );
+        }
       },
       child: SizedBox(
         width: 130,
@@ -347,8 +379,10 @@ class _VideoListPageState extends State<VideoListPage> {
                       aspectRatio: 2/3,
                       child: video['ImageTags']?['Primary'] != null
                           ? Image.network(
-                              '${widget.server.url}/Items/${video['Id']}/Images/Primary',
-                              headers: {'X-Emby-Token': widget.server.accessToken},
+                              _api.getImageUrl(
+                                itemId: video['Id'],
+                                imageType: 'Primary',
+                              ),
                               fit: BoxFit.cover,
                             )
                           : Container(

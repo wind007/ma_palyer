@@ -3,6 +3,7 @@ import '../services/emby_api.dart';
 import '../services/server_manager.dart';
 import '../services/api_service_manager.dart';
 import './video_detail_page.dart';
+import './tv_show_detail_page.dart';
 import '../utils/error_dialog.dart';
 import '../utils/logger.dart';
 
@@ -134,16 +135,46 @@ class _VideoListMorePageState extends State<VideoListMorePage> {
   }
 
   void _onVideoTap(Map<String, dynamic> video) {
-    Logger.i("打开视频详情: ${video['Name']}", _tag);
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => VideoDetailPage(
-          server: widget.server,
-          video: video,
+    Logger.i("打开视频详情: ${video['Name']}, 类型: ${video['Type']}", _tag);
+    
+    // 根据类型导航到不同页面
+    final type = video['Type']?.toString().toLowerCase();
+    final collectionType = video['CollectionType']?.toString().toLowerCase();
+    
+    if (type == 'series' || collectionType == 'tvshows') {
+      Logger.d("打开电视剧详情页", _tag);
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => TvShowDetailPage(
+            server: widget.server,
+            tvShow: video,
+          ),
         ),
-      ),
-    );
+      );
+    } else if (type == 'episode') {
+      Logger.d("打开剧集播放页", _tag);
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => VideoDetailPage(
+            server: widget.server,
+            video: video,
+          ),
+        ),
+      );
+    } else {
+      Logger.d("打开电影播放页", _tag);
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => VideoDetailPage(
+            server: widget.server,
+            video: video,
+          ),
+        ),
+      );
+    }
   }
 
   @override
@@ -189,6 +220,46 @@ class _VideoListMorePageState extends State<VideoListMorePage> {
                             imageUrl,
                             fit: BoxFit.cover,
                             width: double.infinity,
+                            errorBuilder: (context, error, stackTrace) {
+                              Logger.w("图片加载失败: $imageUrl", _tag);
+                              return Container(
+                                width: double.infinity,
+                                color: Colors.grey[300],
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      widget.isMovieView ? Icons.movie : Icons.tv,
+                                      size: 32,
+                                      color: Colors.grey[600],
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      widget.isMovieView ? '电影' : '剧集',
+                                      style: TextStyle(
+                                        color: Colors.grey[600],
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                            loadingBuilder: (context, child, loadingProgress) {
+                              if (loadingProgress == null) return child;
+                              return Container(
+                                width: double.infinity,
+                                color: Colors.grey[200],
+                                child: Center(
+                                  child: CircularProgressIndicator(
+                                    value: loadingProgress.expectedTotalBytes != null
+                                        ? loadingProgress.cumulativeBytesLoaded /
+                                            loadingProgress.expectedTotalBytes!
+                                        : null,
+                                  ),
+                                ),
+                              );
+                            },
                           ),
                         ),
                       ),
