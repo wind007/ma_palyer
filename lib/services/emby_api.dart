@@ -286,20 +286,21 @@ class EmbyApiService {
     required int startIndex,
     required int limit,
     String fields = 'PrimaryImageAspectRatio,Overview',
-    String includeItemTypes= 'Movie,Series',
-    String imageTypes= 'Primary,Backdrop',
+    String includeItemTypes = 'Movie,Series',
+    String imageTypes = 'Primary,Backdrop',
     String? parentId,
     String? sortBy = 'SortName',
     String? sortOrder = 'Descending',
     String filters = '',
-
   }) async {
     final queryParams = {
       'Recursive': 'true',
       'IncludeItemTypes': includeItemTypes,
       'Fields': fields,
       'ImageTypeLimit': '1',
+      'EnableImages': 'true',
       'EnableImageTypes': imageTypes,
+      'EnableUserData': 'true',
       'StartIndex': startIndex.toString(),
       'Limit': limit.toString(),
       'EnableTotalRecordCount': 'true',
@@ -343,7 +344,9 @@ class EmbyApiService {
       queryParams: {
         'Fields': 'PrimaryImageAspectRatio,Overview',
         'ImageTypeLimit': '1',
+        'EnableImages': 'true',
         'EnableImageTypes': 'Primary',
+        'EnableUserData': 'true',
         'MediaTypes': 'Video',
         'Limit': '10',
       },
@@ -356,6 +359,14 @@ class EmbyApiService {
     final data = await _request(
       path: '/Users/$userId/Items/Latest',
       method: 'GET',
+      queryParams: {
+        'Limit': '20',
+        'EnableImages': 'true',
+        'EnableImageTypes': 'Primary',
+        'ImageTypeLimit': '1',
+        'EnableUserData': 'true',
+        'Fields': 'PrimaryImageAspectRatio,Overview',
+      },
     );
     return data is List ? data : [];
   }
@@ -368,6 +379,13 @@ class EmbyApiService {
       final response = await _request(
         path: '/Users/$userId/Views',
         method: 'GET',
+        queryParams: {
+          'EnableImages': 'true',
+          'EnableImageTypes': 'Primary,Backdrop',
+          'ImageTypeLimit': '1',
+          'EnableUserData': 'true',
+          'Fields': 'PrimaryImageAspectRatio,Overview',
+        },
       );
 
       if (response != null && response['Items'] is List) {
@@ -383,8 +401,23 @@ class EmbyApiService {
   String getImageUrl({
     required String itemId,
     required String imageType,
+    int? width,
+    int? height,
+    int? quality,
+    String? tag,
   }) {
-    return '$baseUrl/Items/$itemId/Images/$imageType?X-Emby-Token=$accessToken';
+    final params = <String, String>{
+      'X-Emby-Token': accessToken!,
+    };
+
+    if (width != null) params['Width'] = width.toString();
+    if (height != null) params['Height'] = height.toString();
+    if (quality != null) params['Quality'] = quality.toString();
+    if (tag != null) params['Tag'] = tag;
+
+    final uri = Uri.parse('$baseUrl/Items/$itemId/Images/$imageType')
+        .replace(queryParameters: params);
+    return uri.toString();
   }
 
   // 获取服务器信息

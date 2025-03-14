@@ -204,6 +204,10 @@ class _VideoListMorePageState extends State<VideoListMorePage> {
                 final imageUrl = _api.getImageUrl(
                   itemId: video['Id'],
                   imageType: 'Primary',
+                  width: 300,
+                  height: 450,
+                  quality: 90,
+                  tag: video['ImageTags']?['Primary'],
                 );
 
                 return GestureDetector(
