@@ -344,8 +344,11 @@ class EmbyApiService {
   }
 
   // 获取最近观看
-  Future<List<dynamic>> getResumeItems() async {
-    final data = await _request(
+  Future<Map<String, dynamic>> getResumeItems({
+    int? startIndex,
+    int? limit,
+  }) async {
+    return await _request(
       path: '/Users/$userId/Items/Resume',
       method: 'GET',
       queryParams: {
@@ -355,27 +358,43 @@ class EmbyApiService {
         'EnableImageTypes': 'Primary',
         'EnableUserData': 'true',
         'MediaTypes': 'Video',
-        'Limit': '10',
+        'EnableTotalRecordCount': 'true',
+        if (startIndex != null) 'StartIndex': startIndex.toString(),
+        if (limit != null) 'Limit': limit.toString(),
       },
     );
-    return data['Items'] ?? [];
   }
 
   // 获取最新添加
-  Future<List<dynamic>> getLatestItems() async {
-    final data = await _request(
+  Future<Map<String, dynamic>> getLatestItems({
+    int? startIndex,
+    int? limit,
+  }) async {
+    final response = await _request(
       path: '/Users/$userId/Items/Latest',
       method: 'GET',
       queryParams: {
-        'Limit': '20',
         'EnableImages': 'true',
         'EnableImageTypes': 'Primary',
         'ImageTypeLimit': '1',
         'EnableUserData': 'true',
         'Fields': 'PrimaryImageAspectRatio,Overview',
+        'EnableTotalRecordCount': 'true',
+        if (startIndex != null) 'StartIndex': startIndex.toString(),
+        if (limit != null) 'Limit': limit.toString(),
       },
     );
-    return data is List ? data : [];
+
+    // 处理返回的列表数据
+    if (response is List) {
+      return {
+        'Items': response,
+        'TotalRecordCount': response.length,
+      };
+    }
+    
+    // 如果已经是 Map 格式则直接返回
+    return response as Map<String, dynamic>;
   }
 
   // 获取用户视图
@@ -412,19 +431,34 @@ class EmbyApiService {
     int? height,
     int? quality,
     String? tag,
+    String? fallbackUrl,
   }) {
-    final params = <String, String>{
-      'X-Emby-Token': accessToken!,
-    };
+    try {
+      if (itemId.isEmpty) {
+        Logger.w('获取图片URL失败：无效的 itemId', _tag);
+        return fallbackUrl ?? '';
+      }
 
-    if (width != null) params['Width'] = width.toString();
-    if (height != null) params['Height'] = height.toString();
-    if (quality != null) params['Quality'] = quality.toString();
-    if (tag != null) params['Tag'] = tag;
+      // 检查是否有对应类型的图片标签
+      if (tag == null) {
+        Logger.w('获取图片URL失败：没有找到图片标签', _tag);
+        return fallbackUrl ?? '';
+      }
 
-    final uri = Uri.parse('$baseUrl/Items/$itemId/Images/$imageType')
-        .replace(queryParameters: params);
-    return uri.toString();
+      final params = <String, String>{};
+
+      if (width != null) params['Width'] = width.toString();
+      if (height != null) params['Height'] = height.toString();
+      if (quality != null) params['Quality'] = quality.toString();
+      if (tag.isNotEmpty) params['Tag'] = tag;
+
+      final uri = Uri.parse('$baseUrl/Items/$itemId/Images/$imageType')
+          .replace(queryParameters: params);
+      return uri.toString();
+    } catch (e) {
+      Logger.e('生成图片URL失败', _tag, e);
+      return fallbackUrl ?? '';
+    }
   }
 
   // 获取服务器信息

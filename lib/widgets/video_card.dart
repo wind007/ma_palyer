@@ -29,14 +29,15 @@ class VideoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final imageUrl = api.getImageUrl(
+    final primaryTag = video['ImageTags']?['Primary'];
+    final imageUrl = primaryTag != null ? api.getImageUrl(
       itemId: video['Id'],
       imageType: 'Primary',
       width: imageWidth,
       height: imageHeight,
       quality: imageQuality,
-      tag: video['ImageTags']?['Primary'],
-    );
+      tag: primaryTag,
+    ) : null;
 
     return StatefulBuilder(
       builder: (context, setState) {
@@ -58,32 +59,33 @@ class VideoCard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(8),
                         child: AspectRatio(
                           aspectRatio: 2/3,
-                          child: Image.network(
-                            imageUrl,
-                            headers: {'X-Emby-Token': server.accessToken},
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              return Container(
-                                color: Colors.grey[300],
-                                child: Center(
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(8.0),
-                                    child: Text(
-                                      video['Name'] ?? '未知标题',
-                                      style: const TextStyle(
-                                        color: Colors.black54,
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w500,
+                          child: imageUrl != null && imageUrl.isNotEmpty
+                            ? Image.network(
+                                imageUrl,
+                                headers: {
+                                  'X-Emby-Token': server.accessToken ?? '',
+                                },
+                                fit: BoxFit.cover,
+                                loadingBuilder: (context, child, loadingProgress) {
+                                  if (loadingProgress == null) return child;
+                                  return Container(
+                                    color: Colors.grey[200],
+                                    child: Center(
+                                      child: CircularProgressIndicator(
+                                        value: loadingProgress.expectedTotalBytes != null
+                                            ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                                            : null,
+                                        strokeWidth: 2,
                                       ),
-                                      textAlign: TextAlign.center,
-                                      maxLines: 3,
-                                      overflow: TextOverflow.ellipsis,
                                     ),
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
+                                  );
+                                },
+                                errorBuilder: (context, error, stackTrace) {
+                                  Logger.e('加载图片失败: $imageUrl', _tag, error);
+                                  return _buildPlaceholder();
+                                },
+                              )
+                            : _buildPlaceholder(),
                         ),
                       ),
                       // 收藏和播放状态按钮
@@ -201,6 +203,37 @@ class VideoCard extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildPlaceholder() {
+    return Container(
+      color: Colors.grey[300],
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(
+            Icons.image_not_supported_outlined,
+            size: 32,
+            color: Colors.black45,
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Text(
+              video['Name'] ?? '未知标题',
+              style: const TextStyle(
+                color: Colors.black54,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
     );
   }
 } 

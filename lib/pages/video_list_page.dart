@@ -31,6 +31,14 @@ class _VideoListPageState extends State<VideoListPage> {
     'views': [], // 媒体库视图
   };
   
+  // 分页加载状态
+  final Map<String, bool> _isLoadingMore = {};
+  final Map<String, bool> _hasMoreData = {};
+  final Map<String, int> _sectionStartIndexes = {};
+  // 为每个部分创建独立的滚动控制器
+  final Map<String, ScrollController> _sectionScrollControllers = {};
+  static const int _pageSize = 10;
+  
   bool _isLoading = true;
   String? _error;
 
@@ -45,6 +53,10 @@ class _VideoListPageState extends State<VideoListPage> {
   void dispose() {
     Logger.d("释放视频列表页面资源", _tag);
     _scrollController.dispose();
+    // 释放所有部分的滚动控制器
+    for (var controller in _sectionScrollControllers.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -130,10 +142,16 @@ class _VideoListPageState extends State<VideoListPage> {
     try {
       final viewId = view['Id'];
       Logger.d("加载视图内容: ${view['Name']}", _tag);
+      
+      // 初始化分页状态
+      _isLoadingMore[viewId] = false;
+      _hasMoreData[viewId] = true;
+      _sectionStartIndexes[viewId] = 0;
+      
       final response = await _api.getVideos(
         parentId: viewId,
         startIndex: 0,
-        limit: 20,
+        limit: _pageSize,
         sortBy: 'DateCreated',
         sortOrder: 'Descending',
       );
@@ -142,13 +160,16 @@ class _VideoListPageState extends State<VideoListPage> {
         Logger.d("视图 ${view['Name']} 加载完成，获取到 ${(response['Items'] as List).length} 个项目", _tag);
         setState(() {
           _videoSections[viewId] = response['Items'] as List;
+          _hasMoreData[viewId] = (response['Items'] as List).length >= _pageSize;
+          _sectionStartIndexes[viewId] = _pageSize;
         });
       }
     } catch (e) {
-      Logger.e("加载视图内容失败: ${view['Name']}", _tag, e);
+      Logger.e("加载视图内容失败: ${view['Name']}", _tag);
       if (mounted) {
         setState(() {
           _videoSections[view['Id']] = [];
+          _hasMoreData[view['Id']] = false;
         });
       }
     }
@@ -157,33 +178,72 @@ class _VideoListPageState extends State<VideoListPage> {
   Future<void> _loadLatestItems() async {
     try {
       Logger.d("加载最新添加项目", _tag);
-      final items = await _api.getLatestItems();
-      Logger.d("最新添加项目加载完成，获取到 ${items.length} 个项目", _tag);
-      setState(() => _videoSections['latest'] = items);
+      _isLoadingMore['latest'] = false;
+      _hasMoreData['latest'] = true;
+      _sectionStartIndexes['latest'] = 0;
+      
+      final response = await _api.getLatestItems(
+        startIndex: 0,
+        limit: _pageSize,
+      );
+      
+      final items = response['Items'] as List;
+      final totalCount = response['TotalRecordCount'] as int;
+      
+      Logger.d("最新添加项目加载完成，获取到 ${items.length} 个项目，总共 $totalCount 个项目", _tag);
+      setState(() {
+        _videoSections['latest'] = items;
+        _hasMoreData['latest'] = items.length < totalCount;
+        _sectionStartIndexes['latest'] = items.length;
+      });
     } catch (e) {
       Logger.e("加载最新添加项目失败", _tag, e);
-      setState(() => _videoSections['latest'] = []);
+      setState(() {
+        _videoSections['latest'] = [];
+        _hasMoreData['latest'] = false;
+      });
     }
   }
 
   Future<void> _loadContinueWatching() async {
     try {
       Logger.d("加载继续观看项目", _tag);
-      final items = await _api.getResumeItems();
-      Logger.d("继续观看项目加载完成，获取到 ${items.length} 个项目", _tag);
-      setState(() => _videoSections['continue'] = items);
+      _isLoadingMore['continue'] = false;
+      _hasMoreData['continue'] = true;
+      _sectionStartIndexes['continue'] = 0;
+      
+      final response = await _api.getResumeItems(
+        startIndex: 0,
+        limit: _pageSize,
+      );
+      final items = response['Items'] as List;
+      final totalCount = response['TotalRecordCount'] as int? ?? items.length;
+      
+      Logger.d("继续观看项目加载完成，获取到 ${items.length} 个项目，总共 $totalCount 个项目", _tag);
+      setState(() {
+        _videoSections['continue'] = items;
+        _hasMoreData['continue'] = (_sectionStartIndexes['continue'] ?? 0) + items.length < totalCount;
+        _sectionStartIndexes['continue'] = _pageSize;
+      });
     } catch (e) {
       Logger.e("加载继续观看项目失败", _tag, e);
-      setState(() => _videoSections['continue'] = []);
+      setState(() {
+        _videoSections['continue'] = [];
+        _hasMoreData['continue'] = false;
+      });
     }
   }
 
   Future<void> _loadFavorites() async {
     try {
       Logger.d("加载收藏项目", _tag);
+      _isLoadingMore['favorites'] = false;
+      _hasMoreData['favorites'] = true;
+      _sectionStartIndexes['favorites'] = 0;
+      
       final response = await _api.getVideos(
         startIndex: 0,
-        limit: 20,
+        limit: _pageSize,
         sortBy: 'SortName',
         sortOrder: 'Ascending',
         filters: 'Filters=IsFavorite',
@@ -193,12 +253,125 @@ class _VideoListPageState extends State<VideoListPage> {
       
       if (mounted) {
         Logger.d("收藏项目加载完成，获取到 ${(response['Items'] as List).length} 个项目", _tag);
-        setState(() => _videoSections['favorites'] = response['Items'] as List);
+        setState(() {
+          _videoSections['favorites'] = response['Items'] as List;
+          _hasMoreData['favorites'] = (response['Items'] as List).length >= _pageSize;
+          _sectionStartIndexes['favorites'] = _pageSize;
+        });
       }
     } catch (e) {
       Logger.e("加载收藏项目失败", _tag, e);
       if (mounted) {
-        setState(() => _videoSections['favorites'] = []);
+        setState(() {
+          _videoSections['favorites'] = [];
+          _hasMoreData['favorites'] = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadMoreForSection(String sectionId) async {
+    if (_isLoadingMore[sectionId] == true || _hasMoreData[sectionId] != true) {
+      Logger.d(
+        '跳过加载更多: sectionId=$sectionId, '
+        'isLoading=${_isLoadingMore[sectionId]}, '
+        'hasMore=${_hasMoreData[sectionId]}',
+        _tag
+      );
+      return;
+    }
+
+    Logger.d(
+      "开始加载更多内容: sectionId=$sectionId, "
+      "startIndex=${_sectionStartIndexes[sectionId]}, "
+      "currentItems=${_videoSections[sectionId]?.length}",
+      _tag
+    );
+
+    setState(() => _isLoadingMore[sectionId] = true);
+
+    try {
+      dynamic response;
+      List<dynamic> newItems = [];
+      int totalCount = 0;
+      final startIndex = _sectionStartIndexes[sectionId] ?? 0;
+      
+      if (sectionId == 'latest') {
+        response = await _api.getLatestItems(
+          startIndex: startIndex,
+          limit: _pageSize,
+        );
+        newItems = response['Items'] as List;
+        totalCount = response['TotalRecordCount'] as int;
+      } else if (sectionId == 'continue') {
+        response = await _api.getResumeItems(
+          startIndex: startIndex,
+          limit: _pageSize,
+        );
+        newItems = response['Items'] as List;
+        totalCount = response['TotalRecordCount'] as int;
+      } else if (sectionId == 'favorites') {
+        response = await _api.getVideos(
+          startIndex: startIndex,
+          limit: _pageSize,
+          sortBy: 'SortName',
+          sortOrder: 'Ascending',
+          filters: 'Filters=IsFavorite',
+          fields: 'BasicSyncInfo',
+          includeItemTypes: 'Movie,Series'
+        );
+        newItems = response['Items'] as List;
+        totalCount = response['TotalRecordCount'] as int;
+      } else {
+        // 视图内容加载
+        response = await _api.getVideos(
+          parentId: sectionId,
+          startIndex: startIndex,
+          limit: _pageSize,
+          sortBy: 'DateCreated',
+          sortOrder: 'Descending',
+        );
+        newItems = response['Items'] as List;
+        totalCount = response['TotalRecordCount'] as int;
+      }
+
+      if (mounted) {
+        setState(() {
+          // 添加新项目到列表
+          if (_videoSections[sectionId] != null) {
+            _videoSections[sectionId] = [..._videoSections[sectionId]!, ...newItems];
+            
+            // 更新起始索引
+            _sectionStartIndexes[sectionId] = startIndex + newItems.length;
+            
+            // 更准确地检查是否还有更多数据
+            _hasMoreData[sectionId] = _videoSections[sectionId]!.length < totalCount;
+          }
+          
+          // 重置加载状态
+          _isLoadingMore[sectionId] = false;
+
+          Logger.d(
+            '加载更多完成: sectionId=$sectionId, '
+            'newItems=${newItems.length}, '
+            'totalItems=${_videoSections[sectionId]?.length}, '
+            'totalCount=$totalCount, '
+            'hasMore=${_hasMoreData[sectionId]}, '
+            'nextStartIndex=${_sectionStartIndexes[sectionId]}',
+            _tag
+          );
+        });
+      }
+    } catch (e) {
+      Logger.e("加载更多内容失败: $sectionId", _tag, e);
+      if (mounted) {
+        setState(() => _isLoadingMore[sectionId] = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('加载更多失败: $e'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
       }
     }
   }
@@ -266,6 +439,11 @@ class _VideoListPageState extends State<VideoListPage> {
   }) {
     if (items.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
 
+    final sectionId = viewId ?? title.toLowerCase();
+    final bool isLoading = _isLoadingMore[sectionId] ?? false;
+    final bool hasMore = _hasMoreData[sectionId] ?? false;
+    final scrollController = _getScrollController(sectionId);
+
     return SliverToBoxAdapter(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -304,17 +482,91 @@ class _VideoListPageState extends State<VideoListPage> {
           ),
           SizedBox(
             height: 240,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: items.length,
-              itemBuilder: (context, index) {
-                final item = items[index];
-                return Padding(
-                  padding: const EdgeInsets.only(right: 12),
-                  child: _buildVideoCard(item),
-                );
+            child: NotificationListener<ScrollNotification>(
+              onNotification: (scrollInfo) {
+                if (scrollInfo is ScrollUpdateNotification) {
+                  // 获取滚动位置信息
+                  final maxScroll = scrollInfo.metrics.maxScrollExtent;
+                  final currentScroll = scrollInfo.metrics.pixels;
+                  
+                  // 使用固定像素作为阈值，更适合横向滚动
+                  const threshold = 100.0;
+                  
+                  // 当滚动到距离末尾 threshold 距离时触发加载
+                  if (!isLoading && 
+                      hasMore && 
+                      maxScroll > 0 &&  // 确保有可滚动内容
+                      (maxScroll - currentScroll) <= threshold) {
+                    Logger.d(
+                      '触发加载更多: sectionId=$sectionId, '
+                      'maxScroll=$maxScroll, '
+                      'currentScroll=$currentScroll, '
+                      'threshold=$threshold, '
+                      'remainingScroll=${maxScroll - currentScroll}',
+                      _tag
+                    );
+                    _loadMoreForSection(sectionId);
+                  }
+                }
+                return false;
               },
+              child: MouseRegion(
+                cursor: SystemMouseCursors.grab,
+                child: GestureDetector(
+                  onPanUpdate: (details) {
+                    // 使用当前部分的滚动控制器
+                    scrollController.position.moveTo(
+                      scrollController.position.pixels - details.delta.dx,
+                      curve: Curves.linear,
+                    );
+                  },
+                  child: ListView.builder(
+                    key: PageStorageKey<String>(sectionId),
+                    controller: scrollController, // 使用当前部分的滚动控制器
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    physics: const ClampingScrollPhysics(),
+                    itemCount: items.length + (hasMore ? 1 : 0),
+                    itemBuilder: (context, index) {
+                      if (index == items.length) {
+                        return _buildLoadingIndicator();
+                      }
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 12),
+                        child: _buildVideoCard(items[index]),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLoadingIndicator() {
+    return Container(
+      width: 160,
+      margin: const EdgeInsets.symmetric(horizontal: 8),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            '加载中...',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey,
             ),
           ),
         ],
@@ -386,5 +638,13 @@ class _VideoListPageState extends State<VideoListPage> {
         isMovieView: isMovieView,
       );
     }).toList();
+  }
+
+  // 获取或创建部分的滚动控制器
+  ScrollController _getScrollController(String sectionId) {
+    if (!_sectionScrollControllers.containsKey(sectionId)) {
+      _sectionScrollControllers[sectionId] = ScrollController();
+    }
+    return _sectionScrollControllers[sectionId]!;
   }
 }
