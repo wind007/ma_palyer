@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/emby_api.dart';
 import '../services/server_manager.dart';
 import '../utils/logger.dart';
+import '../widgets/emby_image.dart';
 import './video_player_page.dart';
 
 class VideoDetailPage extends StatefulWidget {
@@ -242,16 +243,16 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
             if (_videoDetails!['ImageTags'] != null) ...[
               Stack(
                 children: [
-            Image.network(
-                    _videoDetails!['ImageTags']?['Backdrop'] != null
+                  EmbyImage(
+                    imageUrl: _videoDetails!['ImageTags']?['Backdrop'] != null
                         ? '${widget.server.url}/Items/${_videoDetails!['Id']}/Images/Backdrop'
                         : _videoDetails!['ImageTags']?['Primary'] != null
                             ? '${widget.server.url}/Items/${_videoDetails!['Id']}/Images/Primary'
                             : '${widget.server.url}/Items/${_videoDetails!['Id']}/Images/Primary/0',
-              headers: {'X-Emby-Token': widget.server.accessToken},
-              fit: BoxFit.cover,
-              width: double.infinity,
+                    headers: {'X-Emby-Token': widget.server.accessToken ?? ''},
+                    width: double.infinity,
                     height: 400,
+                    title: _videoDetails!['Name'],
                   ),
                   // 添加渐变遮罩
                   Positioned.fill(

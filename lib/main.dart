@@ -1,8 +1,10 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'services/server_manager.dart';
 import 'services/theme_manager.dart';
 import 'pages/server_list_page.dart';
 import 'package:fvp/fvp.dart' as fvp;
+import 'utils/http_client.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -10,6 +12,9 @@ void main() async {
   await ServerManager().init();
   await ThemeManager().init();
   fvp.registerWith();
+  
+  // 设置全局 HTTPS 证书验证
+  HttpOverrides.global = TrustedHttpOverrides();
     
   runApp(const MyApp());
 }
