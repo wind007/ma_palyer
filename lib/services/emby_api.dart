@@ -106,10 +106,6 @@ class EmbyApiService {
     }
   }
 
-  @override
-  void dispose() {
-    _client.close();
-  }
 
   Future<Map<String, dynamic>> authenticate() async {
     try {
@@ -367,9 +363,7 @@ class EmbyApiService {
   // 获取用户视图
   Future<List<dynamic>> getUserViews(ServerInfo server) async {
     try {
-      if (userId == null) {
-        userId = server.userId;
-      }
+      userId ??= server.userId;
       
       final response = await _request(
         path: '/Users/$userId/Views',

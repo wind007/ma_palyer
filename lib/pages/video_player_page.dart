@@ -114,8 +114,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   String? _error;               // 错误信息
   bool _showControls = false;   // 是否显示控制栏
   int _retryCount = 0;          // 重试次数
-  int _accumulatedSeekSeconds = 0; // 累计快进/快退时间
-  
+    
   // 播放控制
   double _currentVolume = 1.0;   // 当前音量
   double _lastVolume = 1.0;      // 静音前的音量
@@ -158,6 +157,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   Future<void> _initializeBrightness() async {
     Logger.d("初始化屏幕亮度", _tag);
     try {
+      // ignore: deprecated_member_use
       final window = WidgetsBinding.instance.window;
       _brightness = window.platformBrightness == Brightness.dark ? 0.3 : 0.7;
       Logger.d("设置初始亮度: $_brightness", _tag);
@@ -298,33 +298,6 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     );
   }
 
-  void _startSeekTimer(int seconds) {
-    _seekIndicatorTimer?.cancel();
-    
-    // 如果新的快进/快退方向与之前相同，累加时间
-    if ((_accumulatedSeekSeconds > 0 && seconds > 0) || 
-        (_accumulatedSeekSeconds < 0 && seconds < 0)) {
-      _accumulatedSeekSeconds += seconds;
-    } else {
-      _accumulatedSeekSeconds = seconds;
-    }
-
-    setState(() {
-      _seekSeconds = _accumulatedSeekSeconds;
-      _showSeekIndicator = true;
-    });
-
-    _seekIndicatorTimer = Timer(const Duration(seconds: 1), () {
-      if (mounted) {
-        setState(() {
-          _showSeekIndicator = false;
-          _accumulatedSeekSeconds = 0; // 重置累计时间
-        });
-        // 在指示器消失时更新进度
-        _updateProgress(isPaused: !(_controller?.value.isPlaying ?? false));
-      }
-    });
-  }
 
   void _showSeekAnimation(int seconds) {
     Logger.v("显示快进/快退动画: $seconds秒", _tag);
@@ -720,7 +693,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       right: 0,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           gradient: _topBarGradient,
         ),
         child: Row(
@@ -846,7 +819,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       right: 0,
       child: Container(
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           gradient: _controlBarGradient,
         ),
         child: Column(

@@ -22,7 +22,7 @@ class _VideoListPageState extends State<VideoListPage> {
   final ScrollController _scrollController = ScrollController();
   
   // 不同分类的视频数据
-  Map<String, List<dynamic>> _videoSections = {
+  final Map<String, List<dynamic>> _videoSections = {
     'latest': [], // 最新添加
     'continue': [], // 继续观看
     'favorites': [], // 收藏
@@ -105,7 +105,7 @@ class _VideoListPageState extends State<VideoListPage> {
     try {
       Logger.d("获取用户媒体库视图", _tag);
       final response = await _api.getUserViews(widget.server);
-      final views = (response as List).where((view) {
+      final views = (response).where((view) {
         final type = view['CollectionType']?.toString().toLowerCase();
         return type != null;
       }).toList();

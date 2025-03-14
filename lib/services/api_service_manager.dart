@@ -40,7 +40,7 @@ class ApiServiceManager {
     _currentServer = server;
     
     // 只有当没有 accessToken 时才进行身份验证
-    if (server.accessToken == null || server.accessToken!.isEmpty) {
+    if (server.accessToken.isEmpty) {
       Logger.d("accessToken为空，进行身份验证", _tag);
       try {
         final authResult = await _embyApi!.authenticate();

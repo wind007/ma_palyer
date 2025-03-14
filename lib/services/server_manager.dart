@@ -126,7 +126,7 @@ class ServerManager {
       _servers.removeWhere((server) => server.url == url);
       await _saveServers();
       final removedCount = beforeCount - _servers.length;
-      Logger.i("成功删除${removedCount}个服务器", _tag);
+      Logger.i("成功删除$removedCount个服务器", _tag);
     } catch (e, stackTrace) {
       Logger.e("删除服务器失败", _tag, e, stackTrace);
       rethrow;
