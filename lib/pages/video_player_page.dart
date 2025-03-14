@@ -91,6 +91,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   static final _sliderThemeData = SliderThemeData(
     activeTrackColor: Colors.red,
     inactiveTrackColor: Colors.white.withOpacity(0.3),
+    secondaryActiveTrackColor: Colors.white.withOpacity(0.5),
     thumbColor: Colors.red,
     trackHeight: 2.0,
     thumbShape: const RoundSliderThumbShape(
@@ -156,6 +157,18 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   bool _showNetworkSpeed = true;
   DateTime? _lastSpeedUpdateTime;
   List<double> _speedHistory = [];
+  double _maxBufferSize = 0.0; // 最大缓冲大小
+  double _minBufferThreshold = 10.0; // 最小缓冲阈值（秒）
+  double _maxBufferThreshold = 30.0; // 最大缓冲阈值（秒）
+  bool _isActivelyBuffering = false; // 是否正在主动缓冲
+  VideoPlayerController? _preloadController; // 预加载控制器
+
+  // 添加新的变量
+  int _actualBitRate = 0; // 实际码率 (bps)
+  bool _isBuffering = false; // 是否正在缓冲
+  double _bufferHealth = 1.0; // 缓冲健康度 (0-1)
+  double _preloadThreshold = 8.0; // 预加载触发阈值（秒）
+  bool _isPreloading = false; // 是否正在预加载
 
   @override
   void initState() {
@@ -205,9 +218,13 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         throw Exception('无法获取媒体信息');
       }
 
-      // 获取音频和字幕流
+      // 获取实际码率
       final mediaSource =
           _playbackInfo!['MediaSources'][widget.mediaSourceIndex ?? 0];
+      _actualBitRate = mediaSource['Bitrate'] ?? 2000000; // 如果获取不到就使用默认值2Mbps
+      Logger.d("获取到视频码率: ${_actualBitRate}bps", _tag);
+
+      // 获取音频和字幕流
       _audioStreams = mediaSource['MediaStreams']
           ?.where((s) => s['Type'] == 'Audio')
           ?.toList();
@@ -461,7 +478,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     _lastLoadedBytes = 0;
     _currentNetworkSpeed = 0.0;
 
-    if (!_showControls) return; // 如果控制栏不显示，不启动定时器
+    if (!_showControls) return;
 
     _networkSpeedTimer = Timer.periodic(
       const Duration(seconds: _networkSpeedUpdateInterval),
@@ -483,17 +500,31 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
           final currentPosition = _controller!.value.position;
           final buffered = _controller!.value.buffered;
 
+          // 计算缓冲健康度
+          double totalBufferDuration = 0.0;
+          if (buffered.isNotEmpty) {
+            final lastRange = buffered.last;
+            totalBufferDuration =
+                (lastRange.end - currentPosition).inMilliseconds / 1000.0;
+
+            // 更新缓冲状态
+            _isActivelyBuffering = totalBufferDuration < _maxBufferThreshold;
+            _bufferHealth =
+                (totalBufferDuration / _minBufferThreshold).clamp(0.0, 1.0);
+          }
+
           // 计算总缓冲大小
           int totalBufferedBytes = 0;
           for (var range in buffered) {
             final duration =
                 range.end.inMilliseconds - range.start.inMilliseconds;
-            // 使用视频实际分辨率和比特率计算
-            final width = _controller!.value.size.width;
-            final height = _controller!.value.size.height;
-            final bitRate = 2000000; // 假设平均码率2Mbps
-            totalBufferedBytes += (duration * bitRate) ~/ 8000; // 转换为字节
+            final bytes = (duration * _actualBitRate) ~/ 8000;
+            totalBufferedBytes += bytes;
           }
+
+          // 更新最大缓冲大小
+          _maxBufferSize =
+              max(_maxBufferSize, totalBufferedBytes / 1024.0); // 转换为KB
 
           // 计算速度
           final bytesDiff = max(0, totalBufferedBytes - _lastLoadedBytes);
@@ -502,17 +533,15 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
           // 计算当前速度（KB/s）
           final currentSpeed = bytesDiff / timeDiff / 1024;
 
-          // 更新速度历史，只记录有意义的速度值
+          // 更新速度历史
           if (currentSpeed > 0 && currentSpeed < 100000) {
-            // 添加上限以过滤异常值
             _speedHistory.add(currentSpeed);
             while (_speedHistory.length > 5) {
-              // 增加历史记录数量以获得更平滑的结果
               _speedHistory.removeAt(0);
             }
           }
 
-          // 使用中位数计算平均速度，避免极端值的影响
+          // 使用中位数计算平均速度
           double averageSpeed = 0.0;
           if (_speedHistory.isNotEmpty) {
             final sortedSpeeds = List<double>.from(_speedHistory)..sort();
@@ -527,6 +556,15 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
               _currentNetworkSpeed = max(0, averageSpeed);
             });
           }
+
+          // 记录缓冲状态
+          Logger.v(
+              "缓冲状态 - 持续时间: ${totalBufferDuration.toStringAsFixed(1)}s, "
+              "大小: ${(totalBufferedBytes / 1024).toStringAsFixed(1)}KB, "
+              "健康度: ${(_bufferHealth * 100).toStringAsFixed(1)}%, "
+              "速度: ${_currentNetworkSpeed.toStringAsFixed(1)}KB/s, "
+              "是否主动缓冲: $_isActivelyBuffering",
+              _tag);
         }
       },
     );
@@ -980,6 +1018,13 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         final duration = value.duration;
         final position = _isDragging ? _previewPosition : value.position;
 
+        // 计算缓冲进度
+        double bufferedProgress = 0.0;
+        if (value.buffered.isNotEmpty) {
+          final bufferedRange = value.buffered.last;
+          bufferedProgress = bufferedRange.end.inMilliseconds.toDouble();
+        }
+
         return Stack(
           clipBehavior: Clip.none,
           children: [
@@ -987,6 +1032,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
               data: _sliderThemeData,
               child: Slider(
                 value: position.inMilliseconds.toDouble(),
+                secondaryTrackValue: bufferedProgress,
                 min: 0.0,
                 max: duration.inMilliseconds.toDouble(),
                 onChangeStart: (value) {
@@ -1077,18 +1123,17 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(
-                          Icons.network_check,
-                          color: Colors.white,
+                        Icon(
+                          _isBuffering ? Icons.warning : Icons.network_check,
+                          color: _isBuffering ? Colors.orange : Colors.white,
                           size: 14,
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          _currentNetworkSpeed >= 1024
-                              ? '${(_currentNetworkSpeed / 1024).toStringAsFixed(1)} MB/s'
-                              : '${_currentNetworkSpeed.toStringAsFixed(1)} KB/s',
-                          style: const TextStyle(
-                            color: Colors.white,
+                          '${_currentNetworkSpeed >= 1024 ? '${(_currentNetworkSpeed / 1024).toStringAsFixed(1)}MB/s' : '${_currentNetworkSpeed.toStringAsFixed(1)}KB/s'}'
+                          '${value.buffered.isNotEmpty ? ' ${(value.buffered.last.end - value.position).inSeconds}s' : ''}',
+                          style: TextStyle(
+                            color: _isBuffering ? Colors.orange : Colors.white,
                             fontSize: 12,
                           ),
                         ),
