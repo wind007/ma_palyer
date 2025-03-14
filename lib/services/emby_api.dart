@@ -644,4 +644,40 @@ class EmbyApiService {
       rethrow;
     }
   }
+
+  // 搜索项目
+  Future<Map<String, dynamic>> searchItems({
+    required String searchTerm,
+    int? startIndex,
+    int? limit,
+    String? includeItemTypes,
+    String? fields,
+  }) async {
+    try {
+      Logger.d("执行搜索: term=$searchTerm", _tag);
+      final response = await _request(
+        path: '/Users/$userId/Items',
+        method: 'GET',
+        queryParams: {
+          'SearchTerm': searchTerm,
+          'Recursive': 'true',
+          'EnableTotalRecordCount': 'true',
+          'EnableImages': 'true',
+          'ImageTypeLimit': '1',
+          'EnableImageTypes': 'Primary',
+          'EnableUserData': 'true',
+          'Fields': fields ?? 'PrimaryImageAspectRatio,Overview',
+          if (includeItemTypes != null) 'IncludeItemTypes': includeItemTypes,
+          if (startIndex != null) 'StartIndex': startIndex.toString(),
+          if (limit != null) 'Limit': limit.toString(),
+        },
+      );
+      
+      Logger.d("搜索完成，获取到 ${(response['Items'] as List).length} 个结果", _tag);
+      return response;
+    } catch (e) {
+      Logger.e("搜索失败", _tag, e);
+      rethrow;
+    }
+  }
 }

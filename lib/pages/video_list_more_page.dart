@@ -7,6 +7,7 @@ import './tv_show_detail_page.dart';
 import '../utils/error_dialog.dart';
 import '../utils/logger.dart';
 import '../widgets/video_card.dart';
+import '../widgets/video_grid.dart';
 
 class VideoListMorePage extends StatefulWidget {
   final ServerInfo server;
@@ -187,32 +188,14 @@ class _VideoListMorePageState extends State<VideoListMorePage> {
       ),
       body: _error != null
           ? Center(child: Text(_error!))
-          : GridView.builder(
-              controller: _scrollController,
-              padding: const EdgeInsets.all(8),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 5,
-                childAspectRatio: 0.55,
-                crossAxisSpacing: 8,
-                mainAxisSpacing: 8,
-              ),
-              itemCount: _videos.length + (_hasMore && !_isLoading ? 1 : 0),
-              itemBuilder: (context, index) {
-                if (index == _videos.length) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                final video = _videos[index];
-                return VideoCard(
-                  video: video,
-                  api: _api,
-                  server: widget.server,
-                  onTap: _onVideoTap,
-                  width: 120,
-                  imageWidth: 160,
-                  imageHeight: 240,
-                );
-              },
+          : VideoGrid(
+              videos: _videos,
+              api: _api,
+              server: widget.server,
+              onVideoTap: _onVideoTap,
+              hasMore: _hasMore,
+              isLoading: _isLoading,
+              scrollController: _scrollController,
             ),
     );
   }

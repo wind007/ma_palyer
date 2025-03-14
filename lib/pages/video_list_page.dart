@@ -4,6 +4,7 @@ import '../services/server_manager.dart';
 import '../services/api_service_manager.dart';
 import './video_detail_page.dart';
 import './tv_show_detail_page.dart';
+import './video_search_page.dart';
 import '../utils/error_dialog.dart';
 import '../utils/logger.dart';
 import './video_list_more_page.dart';
@@ -423,6 +424,20 @@ class _VideoListPageState extends State<VideoListPage> {
         style: const TextStyle(color: Colors.white),
       ),
       actions: [
+        IconButton(
+          icon: const Icon(Icons.search, color: Colors.white),
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => VideoSearchPage(
+                  server: widget.server,
+                  api: _api,
+                ),
+              ),
+            );
+          },
+        ),
         IconButton(
           icon: const Icon(Icons.refresh, color: Colors.white),
           onPressed: () => _loadAllSections(),
