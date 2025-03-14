@@ -75,13 +75,26 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
     }
   }
 
-  void _playVideo({bool fromStart = false}) {
+  void _playVideo({
+    bool fromStart = false,
+    int? mediaSourceIndex,
+    int? audioStreamIndex,
+    int? subtitleStreamIndex,
+  }) {
     if (_videoDetails == null) {
       Logger.w("无法播放视频：视频详情未加载", _tag);
       return;
     }
     
-    Logger.i("开始播放视频: ${_videoDetails!['Name']}, ${fromStart ? '从头开始' : '继续播放'}", _tag);
+    Logger.i(
+      "开始播放视频: ${_videoDetails!['Name']}, "
+      "${fromStart ? '从头开始' : '继续播放'}, "
+      "版本: $mediaSourceIndex, "
+      "音频: $audioStreamIndex, "
+      "字幕: $subtitleStreamIndex",
+      _tag,
+    );
+
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -90,12 +103,118 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
           title: _videoDetails!['Name'],
           embyApi: _api,
           fromStart: fromStart,
+          mediaSourceIndex: mediaSourceIndex,
+          initialAudioStreamIndex: audioStreamIndex,
+          initialSubtitleStreamIndex: subtitleStreamIndex,
         ),
       ),
     ).then((_) {
       // 返回时重新加载视频详情和播放进度
       Logger.d("播放结束，重新加载视频详情", _tag);
       _loadVideoDetails();
+    });
+  }
+
+  // 添加音频和字幕流选择对话框
+  void _showStreamSelectionDialog(Map<String, dynamic> mediaSource) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        final audioStreams = mediaSource['MediaStreams']
+            ?.where((s) => s['Type'] == 'Audio')
+            ?.toList() as List?;
+        final subtitleStreams = mediaSource['MediaStreams']
+            ?.where((s) => s['Type'] == 'Subtitle')
+            ?.toList() as List?;
+
+        return Dialog(
+          backgroundColor: Theme.of(context).colorScheme.surface,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '选择音频和字幕',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 16),
+                if (audioStreams != null && audioStreams.isNotEmpty) ...[
+                  Text(
+                    '音频',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (var stream in audioStreams)
+                        ChoiceChip(
+                          label: Text(
+                            '${stream['Language'] ?? '未知'} '
+                            '(${stream['Codec']?.toString().toUpperCase() ?? '未知'})',
+                          ),
+                          selected: stream['Index'] == mediaSource['DefaultAudioStreamIndex'],
+                          onSelected: (selected) {
+                            Navigator.pop(context, {
+                              'audioIndex': selected ? stream['Index'] : null,
+                            });
+                          },
+                        ),
+                    ],
+                  ),
+                ],
+                if (subtitleStreams != null && subtitleStreams.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Text(
+                    '字幕',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      ChoiceChip(
+                        label: const Text('关闭字幕'),
+                        selected: mediaSource['DefaultSubtitleStreamIndex'] == null,
+                        onSelected: (selected) {
+                          Navigator.pop(context, {
+                            'subtitleIndex': null,
+                          });
+                        },
+                      ),
+                      for (var stream in subtitleStreams)
+                        ChoiceChip(
+                          label: Text(
+                            '${stream['Language'] ?? '未知'} '
+                            '(${stream['Codec']?.toString().toUpperCase() ?? '未知'})',
+                          ),
+                          selected: stream['Index'] == mediaSource['DefaultSubtitleStreamIndex'],
+                          onSelected: (selected) {
+                            Navigator.pop(context, {
+                              'subtitleIndex': selected ? stream['Index'] : null,
+                            });
+                          },
+                        ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    ).then((value) {
+      if (value != null) {
+        _playVideo(
+          mediaSourceIndex: mediaSource['Index'],
+          audioStreamIndex: value['audioIndex'],
+          subtitleStreamIndex: value['subtitleIndex'],
+        );
+      }
     });
   }
 
@@ -347,84 +466,96 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                   
                   // 技术信息
                   if (_videoDetails!['MediaSources'] != null && (_videoDetails!['MediaSources'] as List).isNotEmpty) ...[
-                Text(
-                      '技术信息',
+                    Text(
+                      '可用版本',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
-                ),
-                const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).cardColor,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // 视频信息
-                          if (_videoDetails!['MediaSources'][0]['Container'] != null ||
-                              _videoDetails!['MediaSources'][0]['Width'] != null) ...[
-                            Row(
-                              children: [
-                                const Icon(Icons.videocam_outlined, size: 16),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    [
-                                      _videoDetails!['MediaSources'][0]['Container']?.toString().toUpperCase(),
-                                      if (_videoDetails!['MediaSources'][0]['Width'] != null)
-                                        '${_videoDetails!['MediaSources'][0]['Width']}x${_videoDetails!['MediaSources'][0]['Height']}',
-                                      _videoDetails!['MediaSources'][0]['VideoCodec']?.toString().toUpperCase(),
-                                    ].where((e) => e != null).join(' · '),
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                          ],
-                          
-                          // 音频信息
-                          if (_videoDetails!['MediaSources'][0]['AudioCodec'] != null) ...[
-                            Row(
-                              children: [
-                                const Icon(Icons.audiotrack_outlined, size: 16),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    [
-                                      _videoDetails!['MediaSources'][0]['AudioCodec']?.toString().toUpperCase(),
-                                      _videoDetails!['MediaSources'][0]['AudioChannels'] != null
-                                          ? '${_videoDetails!['MediaSources'][0]['AudioChannels']} 声道'
-                                          : null,
-                                    ].where((e) => e != null).join(' · '),
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-                                ),
-                              ],
-                  ),
-                  const SizedBox(height: 8),
-                          ],
-                          
-                          // 文件信息
-                          if (_videoDetails!['MediaSources'][0]['Size'] != null) ...[
-                            Row(
-                    children: [
-                                const Icon(Icons.folder_outlined, size: 16),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    '${(_videoDetails!['MediaSources'][0]['Size'] / 1024 / 1024 / 1024).toStringAsFixed(2)} GB',
-                                    style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: (_videoDetails!['MediaSources'] as List).length,
+                      itemBuilder: (context, index) {
+                        final source = _videoDetails!['MediaSources'][index];
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          child: InkWell(
+                            onTap: () => _showStreamSelectionDialog(source),
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        Icons.video_file,
+                                        size: 20,
+                                        color: Theme.of(context).colorScheme.primary,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          source['Name'] ?? '默认版本',
+                                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                      if (source['DefaultAudioStreamIndex'] != null) ...[
+                                        const Icon(Icons.audiotrack, size: 16),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          '${source['MediaStreams']?.where((s) => s['Type'] == 'Audio')?.length ?? 0} 音轨',
+                                          style: Theme.of(context).textTheme.bodySmall,
+                                        ),
+                                      ],
+                                      if (source['DefaultSubtitleStreamIndex'] != null) ...[
+                                        const SizedBox(width: 8),
+                                        const Icon(Icons.subtitles, size: 16),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          '${source['MediaStreams']?.where((s) => s['Type'] == 'Subtitle')?.length ?? 0} 字幕',
+                                          style: Theme.of(context).textTheme.bodySmall,
+                                        ),
+                                      ],
+                                    ],
                                   ),
-                                ),
-                              ],
+                                  const SizedBox(height: 8),
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    children: [
+                                      if (source['Container'] != null)
+                                        _buildInfoChip(
+                                          icon: Icons.folder,
+                                          label: source['Container'].toString().toUpperCase(),
+                                        ),
+                                      if (source['VideoCodec'] != null)
+                                        _buildInfoChip(
+                                          icon: Icons.video_file,
+                                          label: source['VideoCodec'].toString().toUpperCase(),
+                                        ),
+                                      if (source['Width'] != null)
+                                        _buildInfoChip(
+                                          icon: Icons.high_quality,
+                                          label: '${source['Width']}x${source['Height']}',
+                                        ),
+                                      if (source['Size'] != null)
+                                        _buildInfoChip(
+                                          icon: Icons.data_usage,
+                                          label: '${(source['Size'] / 1024 / 1024 / 1024).toStringAsFixed(2)} GB',
+                                        ),
+                                    ],
+                                  ),
+                                ],
+                              ),
                             ),
-                          ],
-                        ],
-                      ),
+                          ),
+                        );
+                      },
                     ),
                     const SizedBox(height: 24),
                   ],
@@ -606,5 +737,29 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
     } else {
       return '$minutes:${remainingSeconds.toString().padLeft(2, '0')}';
     }
+  }
+
+  Widget _buildInfoChip({
+    required IconData icon,
+    required String label,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceVariant,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      ),
+    );
   }
 }

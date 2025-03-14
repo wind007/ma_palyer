@@ -192,14 +192,19 @@ class EmbyApiService {
   }
 
   // 获取视频播放地址
-  Future<String> getPlaybackUrl(String itemId) async {
+  Future<String> getPlaybackUrl(
+    String itemId, {
+    int? mediaSourceIndex,
+    int? audioStreamIndex,
+    int? subtitleStreamIndex,
+  }) async {
     final info = await getPlaybackInfo(itemId);
     final mediaSources = info['MediaSources'] as List;
     if (mediaSources.isEmpty) {
       throw Exception('没有可用的播放源');
     }
     
-    final mediaSource = mediaSources[0];
+    final mediaSource = mediaSources[mediaSourceIndex ?? 0];
     final sourceId = mediaSource['Id'];
     final container = mediaSource['Container'];
     
@@ -214,6 +219,14 @@ class EmbyApiService {
       'VideoCodec': 'h264,hevc,h265',
       'SubtitleMethod': 'Embed',
     };
+
+    if (audioStreamIndex != null) {
+      params['AudioStreamIndex'] = audioStreamIndex.toString();
+    }
+
+    if (subtitleStreamIndex != null) {
+      params['SubtitleStreamIndex'] = subtitleStreamIndex.toString();
+    }
     
     final uri = Uri.parse(streamUrl).replace(queryParameters: params);
     Logger.d('最终播放URL: ${uri.toString()}', _tag);
