@@ -48,6 +48,7 @@ class ServerManager {
   static const _serversKey = 'emby_servers';
   late SharedPreferences _prefs;
   List<ServerInfo> _servers = [];
+  bool _initialized = false;
 
   // 单例模式
   static final ServerManager _instance = ServerManager._internal();
@@ -59,12 +60,19 @@ class ServerManager {
   // 初始化
   Future<void> init() async {
     Logger.i("初始化ServerManager", _tag);
+    if (_initialized) {
+      Logger.d("ServerManager已经初始化过", _tag);
+      return;
+    }
+    
     try {
       _prefs = await SharedPreferences.getInstance();
       await loadServers();
+      _initialized = true;
       Logger.i("ServerManager初始化完成，已加载${_servers.length}个服务器", _tag);
     } catch (e, stackTrace) {
       Logger.e("ServerManager初始化失败", _tag, e, stackTrace);
+      _initialized = false;
       rethrow;
     }
   }
@@ -86,6 +94,7 @@ class ServerManager {
       }
     } catch (e, stackTrace) {
       Logger.e("加载服务器列表失败", _tag, e, stackTrace);
+      _servers = [];
       rethrow;
     }
   }
@@ -97,7 +106,10 @@ class ServerManager {
       final serversJson = _servers
           .map((server) => jsonEncode(server.toJson()))
           .toList();
-      await _prefs.setStringList(_serversKey, serversJson);
+      final success = await _prefs.setStringList(_serversKey, serversJson);
+      if (!success) {
+        throw Exception('保存服务器列表失败');
+      }
       Logger.i("成功保存${_servers.length}个服务器信息", _tag);
     } catch (e, stackTrace) {
       Logger.e("保存服务器列表失败", _tag, e, stackTrace);
@@ -119,11 +131,11 @@ class ServerManager {
   }
 
   // 删除服务器
-  Future<void> removeServer(String url) async {
-    Logger.i("准备删除服务器: $url", _tag);
+  Future<void> removeServer(String serverName) async {
+    Logger.i("准备删除服务器: $serverName", _tag);
     try {
       final beforeCount = _servers.length;
-      _servers.removeWhere((server) => server.url == url);
+      _servers.removeWhere((server) => server.name == serverName);
       await _saveServers();
       final removedCount = beforeCount - _servers.length;
       Logger.i("成功删除$removedCount个服务器", _tag);
@@ -143,13 +155,14 @@ class ServerManager {
   Future<void> updateServer(ServerInfo updatedServer) async {
     Logger.i("更新服务器信息: ${updatedServer.toString()}", _tag);
     try {
-      final index = _servers.indexWhere((s) => s.url == updatedServer.url);
+      final index = _servers.indexWhere((s) => s.name == updatedServer.name);
       if (index != -1) {
         _servers[index] = updatedServer;
         await _saveServers();
         Logger.i("服务器信息更新成功", _tag);
       } else {
-        Logger.w("未找到要更新的服务器: ${updatedServer.url}", _tag);
+        Logger.w("未找到要更新的服务器: ${updatedServer.name}", _tag);
+        throw Exception('未找到要更新的服务器');
       }
     } catch (e, stackTrace) {
       Logger.e("更新服务器信息失败", _tag, e, stackTrace);

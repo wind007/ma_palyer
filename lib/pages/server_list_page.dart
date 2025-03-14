@@ -16,24 +16,102 @@ class ServerListPage extends StatefulWidget {
 class _ServerListPageState extends State<ServerListPage> {
   static const String _tag = "ServerList";
   final _serverManager = ServerManager();
-  List<ServerInfo> _servers = [];
+  final _listKey = GlobalKey<AnimatedListState>();
+  List<ServerInfo> _servers = <ServerInfo>[];
 
   @override
   void initState() {
     super.initState();
     Logger.i("初始化服务器列表页面", _tag);
-    _loadServers();
-  }
-
-  void _loadServers() {
-    Logger.d("加载服务器列表", _tag);
-    setState(() {
-      _servers = _serverManager.servers;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadServers();
     });
-    Logger.d("已加载 ${_servers.length} 个服务器", _tag);
   }
 
-  void _addServer() async {
+  Future<void> _loadServers() async {
+    Logger.d("加载服务器列表", _tag);
+    try {
+      await _serverManager.loadServers();
+      if (mounted) {
+        final newServers = List<ServerInfo>.from(_serverManager.servers);
+        setState(() {
+          // 清空当前列表
+          while (_servers.isNotEmpty) {
+            _servers.removeLast();
+            _listKey.currentState?.removeItem(
+              _servers.length,
+              (context, animation) => const SizedBox.shrink(),
+              duration: Duration.zero,
+            );
+          }
+          
+          // 添加新的服务器
+          for (var server in newServers) {
+            _servers.add(server);
+            _listKey.currentState?.insertItem(_servers.length - 1);
+          }
+        });
+      }
+      Logger.d("已加载 ${_servers.length} 个服务器", _tag);
+    } catch (e) {
+      Logger.e("加载服务器列表失败", _tag, e);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('加载服务器列表失败: $e')),
+        );
+      }
+    }
+  }
+
+  Widget _buildServerItem(ServerInfo server, Animation<double> animation) {
+    return SlideTransition(
+      position: animation.drive(Tween(
+        begin: const Offset(-1, 0),
+        end: Offset.zero,
+      )),
+      child: Card(
+        margin: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 8,
+        ),
+        child: ListTile(
+          leading: CircleAvatar(
+            backgroundColor: Theme.of(context).primaryColor,
+            child: const Icon(
+              Icons.computer,
+              color: Colors.white,
+            ),
+          ),
+          title: Text(
+            server.name,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          subtitle: Text(server.url),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.edit),
+                onPressed: () => _editServer(server),
+                tooltip: '编辑服务器',
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete),
+                color: Colors.red[300],
+                onPressed: () => _deleteServer(server),
+                tooltip: '删除服务器',
+              ),
+            ],
+          ),
+          onTap: () => _onServerTap(server),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _addServer() async {
     Logger.i("打开添加服务器页面", _tag);
     final result = await Navigator.push<Map<String, dynamic>>(
       context,
@@ -42,17 +120,30 @@ class _ServerListPageState extends State<ServerListPage> {
 
     if (result != null && mounted) {
       Logger.d("添加新服务器: ${result['name']}", _tag);
-      final serverInfo = ServerInfo(
-        url: result['url']!,
-        username: result['username']!,
-        password: result['password']!,
-        name: result['name']!,
-        accessToken: result['accessToken']!,
-        userId: result['userId']!,
-      );
-      await _serverManager.addServer(serverInfo);
-      Logger.i("服务器添加成功: ${serverInfo.name}", _tag);
-      _loadServers();
+      try {
+        final serverInfo = ServerInfo(
+          url: result['url']!,
+          username: result['username']!,
+          password: result['password']!,
+          name: result['name']!,
+          accessToken: result['accessToken']!,
+          userId: result['userId']!,
+        );
+        await _serverManager.addServer(serverInfo);
+        Logger.i("服务器添加成功: ${serverInfo.name}", _tag);
+        
+        setState(() {
+          _servers.add(serverInfo);
+          _listKey.currentState?.insertItem(_servers.length - 1);
+        });
+      } catch (e) {
+        Logger.e("添加服务器失败", _tag, e);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('添加服务器失败: $e')),
+          );
+        }
+      }
     } else {
       Logger.d("取消添加服务器", _tag);
     }
@@ -68,7 +159,7 @@ class _ServerListPageState extends State<ServerListPage> {
     );
   }
 
-  void _editServer(ServerInfo server) async {
+  Future<void> _editServer(ServerInfo server) async {
     Logger.i("编辑服务器: ${server.name}", _tag);
     final result = await Navigator.push<Map<String, dynamic>>(
       context,
@@ -77,23 +168,38 @@ class _ServerListPageState extends State<ServerListPage> {
 
     if (result != null && mounted) {
       Logger.d("更新服务器信息: ${result['name']}", _tag);
-      final updatedServer = ServerInfo(
-        url: result['url']!,
-        username: result['username']!,
-        password: result['password']!,
-        name: result['name']!,
-        accessToken: result['accessToken']!,
-        userId: result['userId']!,
-      );
-      await _serverManager.updateServer(updatedServer);
-      Logger.i("服务器更新成功: ${updatedServer.name}", _tag);
-      _loadServers();
+      try {
+        final updatedServer = ServerInfo(
+          url: result['url']!,
+          username: result['username']!,
+          password: result['password']!,
+          name: result['name']!,
+          accessToken: result['accessToken']!,
+          userId: result['userId']!,
+        );
+        await _serverManager.updateServer(updatedServer);
+        Logger.i("服务器更新成功: ${updatedServer.name}", _tag);
+        
+        final index = _servers.indexWhere((s) => s.name == server.name);
+        if (index != -1) {
+          setState(() {
+            _servers[index] = updatedServer;
+          });
+        }
+      } catch (e) {
+        Logger.e("更新服务器失败", _tag, e);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('更新服务器失败: $e')),
+          );
+        }
+      }
     } else {
       Logger.d("取消编辑服务器", _tag);
     }
   }
 
-  void _deleteServer(ServerInfo server) async {
+  Future<void> _deleteServer(ServerInfo server) async {
     Logger.i("准备删除服务器: ${server.name}", _tag);
     final confirmed = await showDialog<bool>(
       context: context,
@@ -120,9 +226,28 @@ class _ServerListPageState extends State<ServerListPage> {
     );
 
     if (confirmed == true && mounted) {
-      await _serverManager.removeServer(server.url);
-      Logger.i("服务器删除成功: ${server.name}", _tag);
-      _loadServers();
+      try {
+        final index = _servers.indexOf(server);
+        if (index != -1) {
+          await _serverManager.removeServer(server.name);
+          Logger.i("服务器删除成功: ${server.name}", _tag);
+          
+          setState(() {
+            _servers.removeAt(index);
+            _listKey.currentState?.removeItem(
+              index,
+              (context, animation) => _buildServerItem(server, animation),
+            );
+          });
+        }
+      } catch (e) {
+        Logger.e("删除服务器失败", _tag, e);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('删除服务器失败: $e')),
+          );
+        }
+      }
     }
   }
 
@@ -163,7 +288,7 @@ class _ServerListPageState extends State<ServerListPage> {
                   ),
                   const SizedBox(height: 24),
                   ElevatedButton.icon(
-                    onPressed: _addServer,
+                    onPressed: () => _addServer(),
                     icon: const Icon(Icons.add),
                     label: const Text('添加服务器'),
                   ),
@@ -171,58 +296,14 @@ class _ServerListPageState extends State<ServerListPage> {
               ),
             )
           : AnimatedList(
+              key: _listKey,
               initialItemCount: _servers.length,
               itemBuilder: (context, index, animation) {
-                final server = _servers[index];
-                return SlideTransition(
-                  position: animation.drive(Tween(
-                    begin: const Offset(-1, 0),
-                    end: Offset.zero,
-                  )),
-                  child: Card(
-                    margin: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    child: ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: Theme.of(context).primaryColor,
-                        child: const Icon(
-                          Icons.computer,
-                          color: Colors.white,
-                        ),
-                      ),
-                      title: Text(
-                        server.name,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      subtitle: Text(server.url),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.edit),
-                            onPressed: () => _editServer(server),
-                            tooltip: '编辑服务器',
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.delete),
-                            color: Colors.red[300],
-                            onPressed: () => _deleteServer(server),
-                            tooltip: '删除服务器',
-                          ),
-                        ],
-                      ),
-                      onTap: () => _onServerTap(server),
-                    ),
-                  ),
-                );
+                return _buildServerItem(_servers[index], animation);
               },
             ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _addServer,
+        onPressed: () => _addServer(),
         tooltip: '添加服务器',
         child: const Icon(Icons.add),
       ),
