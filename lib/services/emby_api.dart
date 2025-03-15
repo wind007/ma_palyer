@@ -19,10 +19,8 @@ class EmbyApiService {
     required this.username,
     required this.password,
   }) {
-    // 创建支持自签名证书的 HTTP 客户端
-    final httpClient = HttpClient()
-      ..badCertificateCallback = (X509Certificate cert, String host, int port) => true;
-    _client = IOClient(httpClient);
+    // 使用普通的 HTTP 客户端
+    _client = IOClient();
   }
 
   // 统一的网络请求处理方法
