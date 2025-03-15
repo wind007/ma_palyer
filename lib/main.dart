@@ -12,28 +12,27 @@ void main() async {
   await ServerManager().init();
   await ThemeManager().init();
   fvp.registerWith(options: {
-    'player': {
-      'buffer': '30000', // 播放缓冲时间(ms)
-      'buffer.max': '16000000', // 最大缓冲大小(bytes)
-      'buffer.packet': '2000', // 缓冲包数量
-      'buffer.duration': '100000', // 缓冲时长(ms)
-      'demux.buffer.ranges': '200', // 缓冲区间数量
-      'preload': '1', // 启用预加载
-      'lowLatency': '0', // 关闭低延迟以优化预加载
-    },
-
-    // 'buffer': 10000, // 5秒缓冲
-    // 'timeout': 10000, // 10秒超时
-    // 'network_timeout': 30000, // 30秒网络超时
-    // 'reconnect': 3, // 断线重连3次
-    // 'demux.buffer.ranges': '10', // 增加缓冲区间数量
-    // //'lowLatency': 0, // 关闭低延迟模式以增加预加载
-    // 'preload': 1, // 启用预加载
-    // // 启用低延迟模式
-    // 'lowLatency': 1,
-
-    // // 配置视频解码器优先级
-    // 'video.decoders': ['D3D11', 'NVDEC', 'FFmpeg'],
+    // 'player': {
+    //   'buffer': '10000',
+    //   'buffer.range': '2000,60000', // 最小2秒，最大60秒的缓冲
+    //   'buffer.max': '536870912', // 512MB 缓冲上限
+    //   'buffer.packet': '8000', // 缓存包数量
+    //   'timeout': '30000',
+    //   'demux.buffer': '1', // 启用 demuxer 缓存
+    //   'demux.buffer.ranges': '20', // 增加到20个缓存区间以提升预加载效果
+    //   'demux.buffer.size': '33554432', // 32MB demuxer缓存大小
+    //   'demux.buffer.protocols': 'http,https', // 指定启用缓存的协议
+    //   'event': 'cache.ranges,buffer.progress,buffer.time', // 启用缓存相关事件
+    //   'buffer.drop': '0', // 禁止丢弃过时的数据包
+    // },
+    // 'global': {
+    //   'avformat.fflags': 'nobuffer', // 禁用 FFmpeg 内部缓冲
+    //   'avformat.analyzeduration': '100000000',
+    //   'avformat.probesize': '100000000',
+    //   'avformat.thread_queue_size': '102400',
+    //   'video.decoders': ['D3D11', 'DXVA', 'FFmpeg'],
+    //   'demuxer.max_errors': '100', // 允许更多错误继续播放
+    // },
   });
 
   // 设置全局 HTTPS 证书验证

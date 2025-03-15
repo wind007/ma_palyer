@@ -33,17 +33,19 @@ class VideoPlayerPage extends StatefulWidget {
 }
 
 class _VideoPlayerPageState extends State<VideoPlayerPage> {
-  static const String _tag = "VideoPlayer";
+  static const _tag = 'VideoPlayerPage';
+  static const _hideControlsDelay = 3; // 控制栏自动隐藏延迟（秒）
+  static const _seekIndicatorTimeout = 500; // 拖动指示器超时（毫秒）
+  static const _progressUpdateInterval = 200; // 进度更新间隔（毫秒）
+  static const _networkSpeedUpdateInterval = 1; // 网速更新间隔（秒）
 
   // 常量定义
   static const _maxRetries = 3; // 最大重试次数
   static const _volumeStep = 0.05; // 音量调节步长
-  static const _progressInterval = 30; // 进度更新间隔（秒）
   static const _controlsTimeout = 5; // 控制栏显示时间（秒）
   static const _indicatorTopPosition = 6.0; // 提示块位置系数（1/6）
   static const _seekButtonSize = 40.0; // 快进快退按钮大小
   static const _volumeControlWidth = 80.0; // 音量控制条宽度
-  static const _networkSpeedUpdateInterval = 1; // 网速更新间隔（秒）
 
   // 样式常量
   static const _controlBarGradient = LinearGradient(
@@ -150,25 +152,9 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   List<dynamic>? _audioStreams;
   List<dynamic>? _subtitleStreams;
 
-  // 网速相关变量
-  Timer? _networkSpeedTimer;
-  int _lastLoadedBytes = 0;
-  double _currentNetworkSpeed = 0.0; // KB/s
-  bool _showNetworkSpeed = true;
-  DateTime? _lastSpeedUpdateTime;
-  List<double> _speedHistory = [];
-  double _maxBufferSize = 0.0; // 最大缓冲大小
-  double _minBufferThreshold = 10.0; // 最小缓冲阈值（秒）
-  double _maxBufferThreshold = 30.0; // 最大缓冲阈值（秒）
-  bool _isActivelyBuffering = false; // 是否正在主动缓冲
-  VideoPlayerController? _preloadController; // 预加载控制器
-
-  // 添加新的变量
-  int _actualBitRate = 0; // 实际码率 (bps)
-  bool _isBuffering = false; // 是否正在缓冲
-  double _bufferHealth = 1.0; // 缓冲健康度 (0-1)
-  double _preloadThreshold = 8.0; // 预加载触发阈值（秒）
-  bool _isPreloading = false; // 是否正在预加载
+  // 只保留缓冲状态变量
+  bool _isBuffering = false;
+  double _bufferProgress = 0.0;
 
   @override
   void initState() {
@@ -221,8 +207,9 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       // 获取实际码率
       final mediaSource =
           _playbackInfo!['MediaSources'][widget.mediaSourceIndex ?? 0];
-      _actualBitRate = mediaSource['Bitrate'] ?? 2000000; // 如果获取不到就使用默认值2Mbps
-      Logger.d("获取到视频码率: ${_actualBitRate}bps", _tag);
+      final actualBitRate =
+          mediaSource['Bitrate'] ?? 2000000; // 如果获取不到就使用默认值2Mbps
+      Logger.d("获取到视频码率: $actualBitRate bps", _tag);
 
       // 获取音频和字幕流
       _audioStreams = mediaSource['MediaStreams']
@@ -338,14 +325,13 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     _progressTimer?.cancel();
     _hideControlsTimer?.cancel();
     _seekIndicatorTimer?.cancel();
-    _networkSpeedTimer?.cancel();
   }
 
   void _startProgressTimer() {
     Logger.d("启动进度更新定时器", _tag);
     _progressTimer?.cancel();
     _progressTimer = Timer.periodic(
-      const Duration(seconds: _progressInterval),
+      const Duration(seconds: _progressUpdateInterval ~/ 1000),
       (timer) {
         if (_controller?.value.isPlaying == true && !_isDragging) {
           _updateProgress();
@@ -376,7 +362,8 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     });
 
     _seekIndicatorTimer?.cancel();
-    _seekIndicatorTimer = Timer(const Duration(milliseconds: 500), () {
+    _seekIndicatorTimer =
+        Timer(const Duration(milliseconds: _seekIndicatorTimeout), () {
       if (mounted) {
         setState(() {
           _showSeekIndicator = false;
@@ -408,11 +395,8 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       _showControls = !_showControls;
       if (_showControls) {
         _startHideControlsTimer();
-        _startNetworkSpeedTimer(); // 显示控制栏时开始计算网速
       } else {
         _hideControlsTimer?.cancel();
-        _networkSpeedTimer?.cancel(); // 隐藏控制栏时停止计算网速
-        _speedHistory.clear();
       }
     });
     Logger.d("控制栏显示状态: ${_showControls ? '显示' : '隐藏'}", _tag);
@@ -468,106 +452,6 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         Logger.d("退出全屏模式", _tag);
       }
     });
-  }
-
-  void _startNetworkSpeedTimer() {
-    Logger.d("启动网速监测定时器", _tag);
-    _networkSpeedTimer?.cancel();
-    _lastSpeedUpdateTime = DateTime.now();
-    _speedHistory.clear();
-    _lastLoadedBytes = 0;
-    _currentNetworkSpeed = 0.0;
-
-    if (!_showControls) return;
-
-    _networkSpeedTimer = Timer.periodic(
-      const Duration(seconds: _networkSpeedUpdateInterval),
-      (timer) {
-        if (!mounted || !_showControls) {
-          timer.cancel();
-          return;
-        }
-
-        if (_controller?.value.isInitialized == true) {
-          final now = DateTime.now();
-          final timeDiff =
-              now.difference(_lastSpeedUpdateTime ?? now).inMilliseconds /
-                  1000.0;
-          _lastSpeedUpdateTime = now;
-
-          if (timeDiff <= 0) return;
-
-          final currentPosition = _controller!.value.position;
-          final buffered = _controller!.value.buffered;
-
-          // 计算缓冲健康度
-          double totalBufferDuration = 0.0;
-          if (buffered.isNotEmpty) {
-            final lastRange = buffered.last;
-            totalBufferDuration =
-                (lastRange.end - currentPosition).inMilliseconds / 1000.0;
-
-            // 更新缓冲状态
-            _isActivelyBuffering = totalBufferDuration < _maxBufferThreshold;
-            _bufferHealth =
-                (totalBufferDuration / _minBufferThreshold).clamp(0.0, 1.0);
-          }
-
-          // 计算总缓冲大小
-          int totalBufferedBytes = 0;
-          for (var range in buffered) {
-            final duration =
-                range.end.inMilliseconds - range.start.inMilliseconds;
-            final bytes = (duration * _actualBitRate) ~/ 8000;
-            totalBufferedBytes += bytes;
-          }
-
-          // 更新最大缓冲大小
-          _maxBufferSize =
-              max(_maxBufferSize, totalBufferedBytes / 1024.0); // 转换为KB
-
-          // 计算速度
-          final bytesDiff = max(0, totalBufferedBytes - _lastLoadedBytes);
-          _lastLoadedBytes = totalBufferedBytes;
-
-          // 计算当前速度（KB/s）
-          final currentSpeed = bytesDiff / timeDiff / 1024;
-
-          // 更新速度历史
-          if (currentSpeed > 0 && currentSpeed < 100000) {
-            _speedHistory.add(currentSpeed);
-            while (_speedHistory.length > 5) {
-              _speedHistory.removeAt(0);
-            }
-          }
-
-          // 使用中位数计算平均速度
-          double averageSpeed = 0.0;
-          if (_speedHistory.isNotEmpty) {
-            final sortedSpeeds = List<double>.from(_speedHistory)..sort();
-            final middle = sortedSpeeds.length ~/ 2;
-            averageSpeed = sortedSpeeds.length.isOdd
-                ? sortedSpeeds[middle]
-                : (sortedSpeeds[middle - 1] + sortedSpeeds[middle]) / 2;
-          }
-
-          if (mounted && _showControls) {
-            setState(() {
-              _currentNetworkSpeed = max(0, averageSpeed);
-            });
-          }
-
-          // 记录缓冲状态
-          Logger.v(
-              "缓冲状态 - 持续时间: ${totalBufferDuration.toStringAsFixed(1)}s, "
-              "大小: ${(totalBufferedBytes / 1024).toStringAsFixed(1)}KB, "
-              "健康度: ${(_bufferHealth * 100).toStringAsFixed(1)}%, "
-              "速度: ${_currentNetworkSpeed.toStringAsFixed(1)}KB/s, "
-              "是否主动缓冲: $_isActivelyBuffering",
-              _tag);
-        }
-      },
-    );
   }
 
   @override
@@ -1105,65 +989,95 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         return Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
+            // 左侧时间显示
+            Text(
+              '${_formatDuration(value.position)} / ${_formatDuration(value.duration)}',
+              style: _timeTextStyle,
+            ),
+            // 右侧控件组
             Row(
               children: [
-                Text(
-                  _formatDuration(value.position),
-                  style: _timeTextStyle,
-                ),
-                const SizedBox(width: 8),
-                if (_currentNetworkSpeed > 0)
+                // 音频轨道按钮
+                if (_audioStreams != null && _audioStreams!.isNotEmpty)
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Colors.black38,
-                      borderRadius: BorderRadius.circular(4),
+                    margin: const EdgeInsets.only(right: 12),
+                    padding: _buttonPadding,
+                    decoration: _buttonDecoration,
+                    child: IconButton(
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 24,
+                        minHeight: 24,
+                      ),
+                      icon: const Icon(
+                        Icons.audiotrack,
+                        color: Colors.white,
+                        size: 16,
+                      ),
+                      onPressed: _showAudioStreamDialog,
                     ),
+                  ),
+                // 字幕按钮
+                if (_subtitleStreams != null && _subtitleStreams!.isNotEmpty)
+                  Container(
+                    margin: const EdgeInsets.only(right: 12),
+                    padding: _buttonPadding,
+                    decoration: _buttonDecoration,
+                    child: IconButton(
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 24,
+                        minHeight: 24,
+                      ),
+                      icon: const Icon(
+                        Icons.subtitles,
+                        color: Colors.white,
+                        size: 16,
+                      ),
+                      onPressed: _showSubtitleStreamDialog,
+                    ),
+                  ),
+                // 播放速度按钮
+                Container(
+                  margin: const EdgeInsets.only(right: 12),
+                  padding: _buttonPadding,
+                  decoration: _buttonDecoration,
+                  child: GestureDetector(
+                    onTap: _showPlaybackSpeedDialog,
                     child: Row(
-                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(
-                          _isBuffering ? Icons.warning : Icons.network_check,
-                          color: _isBuffering ? Colors.orange : Colors.white,
-                          size: 14,
+                        const Icon(
+                          Icons.speed,
+                          color: Colors.white,
+                          size: 16,
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          '${_currentNetworkSpeed >= 1024 ? '${(_currentNetworkSpeed / 1024).toStringAsFixed(1)}MB/s' : '${_currentNetworkSpeed.toStringAsFixed(1)}KB/s'}'
-                          '${value.buffered.isNotEmpty ? ' ${(value.buffered.last.end - value.position).inSeconds}s' : ''}',
-                          style: TextStyle(
-                            color: _isBuffering ? Colors.orange : Colors.white,
-                            fontSize: 12,
-                          ),
+                          '${_playbackSpeed}x',
+                          style: _timeTextStyle,
                         ),
                       ],
                     ),
                   ),
-              ],
-            ),
-            Row(
-              children: [
-                if (_audioStreams != null && _audioStreams!.isNotEmpty)
-                  IconButton(
-                    icon: const Icon(Icons.audiotrack,
-                        color: Colors.white, size: 20),
-                    onPressed: _showAudioStreamDialog,
-                  ),
-                if (_subtitleStreams != null && _subtitleStreams!.isNotEmpty)
-                  IconButton(
-                    icon: const Icon(Icons.subtitles,
-                        color: Colors.white, size: 20),
-                    onPressed: _showSubtitleStreamDialog,
-                  ),
-                Text(
-                  _formatDuration(value.duration),
-                  style: _timeTextStyle,
                 ),
-                const SizedBox(width: 16),
-                _buildPlaybackSpeedButton(),
-                const SizedBox(width: 8),
-                _buildFullScreenButton(),
+                // 全屏按钮
+                Container(
+                  padding: _buttonPadding,
+                  decoration: _buttonDecoration,
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 24,
+                      minHeight: 24,
+                    ),
+                    icon: Icon(
+                      _isFullScreen ? Icons.fit_screen : Icons.fullscreen,
+                      color: Colors.white,
+                      size: 16,
+                    ),
+                    onPressed: _toggleFullScreen,
+                  ),
+                ),
               ],
             ),
           ],
