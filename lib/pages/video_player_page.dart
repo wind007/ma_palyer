@@ -947,30 +947,105 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         return Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              _formatDuration(value.position),
-              style: _timeTextStyle,
+            // 左侧时间显示
+            Container(
+              padding: _buttonPadding,
+              decoration: _buttonDecoration,
+              child: Text(
+                '${_formatDuration(value.position)} / ${_formatDuration(value.duration)}',
+                style: _timeTextStyle,
+              ),
             ),
+            // 右侧控件组
             Row(
               children: [
+                // 音频轨道按钮
                 if (_audioStreams != null && _audioStreams!.isNotEmpty)
-                  IconButton(
-                    icon: const Icon(Icons.audiotrack, color: Colors.white, size: 20),
-                    onPressed: _showAudioStreamDialog,
+                  Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    padding: _buttonPadding,
+                    decoration: _buttonDecoration,
+                    child: IconButton(
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 24,
+                        minHeight: 24,
+                      ),
+                      icon: const Icon(
+                        Icons.audiotrack,
+                        color: Colors.white,
+                        size: 16,
+                      ),
+                      onPressed: _showAudioStreamDialog,
+                    ),
                   ),
+                // 字幕按钮
                 if (_subtitleStreams != null && _subtitleStreams!.isNotEmpty)
-                  IconButton(
-                    icon: const Icon(Icons.subtitles, color: Colors.white, size: 20),
-                    onPressed: _showSubtitleStreamDialog,
+                  Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    padding: _buttonPadding,
+                    decoration: _buttonDecoration,
+                    child: IconButton(
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 24,
+                        minHeight: 24,
+                      ),
+                      icon: const Icon(
+                        Icons.subtitles,
+                        color: Colors.white,
+                        size: 16,
+                      ),
+                      onPressed: _showSubtitleStreamDialog,
+                    ),
                   ),
-                Text(
-                  _formatDuration(value.duration),
-                  style: _timeTextStyle,
+                // 播放速度按钮
+                Container(
+                  margin: const EdgeInsets.only(right: 8),
+                  padding: _buttonPadding,
+                  decoration: _buttonDecoration,
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 24,
+                      minHeight: 24,
+                    ),
+                    onPressed: _showPlaybackSpeedDialog,
+                    icon: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.speed,
+                          color: Colors.white,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${_playbackSpeed}x',
+                          style: _timeTextStyle,
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-                const SizedBox(width: 16),
-                _buildPlaybackSpeedButton(),
-                const SizedBox(width: 8),
-                _buildFullScreenButton(),
+                // 全屏按钮
+                Container(
+                  padding: _buttonPadding,
+                  decoration: _buttonDecoration,
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 24,
+                      minHeight: 24,
+                    ),
+                    icon: Icon(
+                      _isFullScreen ? Icons.fit_screen : Icons.fullscreen,
+                      color: Colors.white,
+                      size: 16,
+                    ),
+                    onPressed: _toggleFullScreen,
+                  ),
+                ),
               ],
             ),
           ],
