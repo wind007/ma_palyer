@@ -107,7 +107,7 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
         }
 
         final seasonNumber = indexNumber is int ? indexNumber : int.tryParse(indexNumber.toString()) ?? 0;
-        if (seasonNumber == null || seasonNumber <= 0) {
+        if (seasonNumber <= 0) {
           Logger.w("跳过无效季数的季: ${season['Name'] ?? '未知'}", _tag);
           continue;
         }
@@ -220,7 +220,7 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
                     decoration: BoxDecoration(
                       color: isSelected 
                           ? Theme.of(context).colorScheme.primary
-                          : Theme.of(context).colorScheme.surfaceVariant,
+                          : Theme.of(context).colorScheme.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Row(
@@ -240,8 +240,8 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
                             color: isSelected 
-                                ? Theme.of(context).colorScheme.onPrimary.withOpacity(0.2)
-                                : Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.1),
+                                ? Theme.of(context).colorScheme.onPrimary.withAlpha(51)
+                                : Theme.of(context).colorScheme.onSurfaceVariant.withAlpha(26),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Text(
@@ -650,7 +650,7 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
                             child: Text(
                               (_tvShowDetails!['Genres'] as List).join(' · '),
                               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: Theme.of(context).textTheme.bodySmall?.color,
+                                color: Theme.of(context).textTheme.bodySmall?.color?.withAlpha(179),
                               ),
                             ),
                           ),
@@ -761,7 +761,7 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
                           for (var tag in _tvShowDetails!['Tags'])
                             Chip(
                               label: Text(tag),
-                              backgroundColor: Theme.of(context).colorScheme.surfaceVariant,
+                              backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                             ),
                         ],
                       ),
@@ -785,7 +785,7 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                               decoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.surfaceVariant,
+                                color: Theme.of(context).colorScheme.surfaceContainerHighest,
                                 borderRadius: BorderRadius.circular(16),
                               ),
                               child: Text(
@@ -845,7 +845,7 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
                                   Text(
                                     person['Type'] ?? person['Role'] ?? '',
                                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.7),
+                                      color: Theme.of(context).textTheme.bodySmall?.color?.withAlpha(179),
                                     ),
                                     maxLines: 1,
                                     textAlign: TextAlign.center,
@@ -876,7 +876,7 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceVariant,
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
