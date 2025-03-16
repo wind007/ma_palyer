@@ -660,7 +660,34 @@ class _VideoListPageState extends State<VideoListPage> with SingleTickerProvider
                       }
                       return Padding(
                         padding: const EdgeInsets.only(right: 12),
-                        child: _buildVideoCard(items[index]),
+                        child: FocusScope(
+                          child: Focus(
+                            onFocusChange: (focused) {
+                              if (focused) {
+                                scrollController.animateTo(
+                                  index * 142.0, // 130 宽度 + 12 右边距
+                                  duration: const Duration(milliseconds: 300),
+                                  curve: Curves.easeInOut,
+                                );
+                              }
+                            },
+                            child: Builder(
+                              builder: (context) {
+                                final focused = Focus.of(context).hasFocus;
+                                return Container(
+                                  decoration: focused ? BoxDecoration(
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: Theme.of(context).colorScheme.primary,
+                                      width: 2,
+                                    ),
+                                  ) : null,
+                                  child: _buildVideoCard(items[index]),
+                                );
+                              }
+                            ),
+                          ),
+                        ),
                       );
                     },
                   ),
