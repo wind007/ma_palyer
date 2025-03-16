@@ -5,6 +5,7 @@ import '../services/api_service_manager.dart';
 import '../utils/logger.dart';
 import './video_detail_page.dart';
 import 'package:flutter/gestures.dart';
+import '../widgets/video_card.dart';
 
 class TvShowDetailPage extends StatefulWidget {
   final ServerInfo server;
@@ -261,9 +262,9 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
           ),
         ),
         const SizedBox(height: 16),
-        // 剧集网格
+        // 剧集列表
         SizedBox(
-          height: 160,
+          height: 220,
           child: ScrollConfiguration(
             behavior: ScrollConfiguration.of(context).copyWith(
               dragDevices: {
@@ -271,210 +272,81 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
                 PointerDeviceKind.mouse,
               },
             ),
-            child: GestureDetector(
-              onPanUpdate: (details) {
-                _episodeScrollController.position.moveTo(
-                  _episodeScrollController.position.pixels - details.delta.dx,
-                  curve: Curves.linear,
-                );
-              },
-              child: ListView.builder(
-                key: const PageStorageKey('episode_list'),
-                controller: _episodeScrollController,
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: _tvShowDetails?['Seasons']?[_selectedSeasonNumber]?.length ?? 0,
-                itemBuilder: (context, index) {
-                  final episode = _tvShowDetails?['Seasons']?[_selectedSeasonNumber]?[index] ?? {};
-                  final epIndexNumber = episode['IndexNumber'];
-                  if (epIndexNumber == null) return const SizedBox.shrink();
-                  
-                  final episodeNumber = epIndexNumber is int 
-                      ? epIndexNumber 
-                      : int.tryParse(epIndexNumber.toString()) ?? 0;
-                  if (episodeNumber <= 0) return const SizedBox.shrink();
+            child: ListView.builder(
+              key: const PageStorageKey('episode_list'),
+              controller: _episodeScrollController,
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              itemCount: _tvShowDetails?['Seasons']?[_selectedSeasonNumber]?.length ?? 0,
+              itemBuilder: (context, index) {
+                final episode = _tvShowDetails?['Seasons']?[_selectedSeasonNumber]?[index] ?? {};
+                final epIndexNumber = episode['IndexNumber'];
+                if (epIndexNumber == null) return const SizedBox.shrink();
+                
+                final episodeNumber = epIndexNumber is int 
+                    ? epIndexNumber 
+                    : int.tryParse(epIndexNumber.toString()) ?? 0;
+                if (episodeNumber <= 0) return const SizedBox.shrink();
 
-                  String? imageUrl;
-                  if (episode['ImageTags']?['Primary'] != null && _api != null) {
-                    imageUrl = _api!.getImageUrl(
-                      itemId: episode['Id'],
-                      imageType: 'Primary',
-                      tag: episode['ImageTags']['Primary'],
-                    );
-                  }
-
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 12),
-                    child: FocusScope(
-                      child: Focus(
-                        onFocusChange: (focused) {
-                          if (focused) {
-                            _episodeScrollController.animateTo(
-                              index * 252.0, // 240 宽度 + 12 右边距
-                              duration: const Duration(milliseconds: 300),
-                              curve: Curves.easeInOut,
-                            );
-                          }
-                        },
-                        child: Builder(
-                          builder: (context) {
-                            final focused = Focus.of(context).hasFocus;
-                            return InkWell(
-                              onTap: () {
-                                final Map<String, dynamic> video = {
-                                  ...Map<String, dynamic>.from(episode),
-                                  'SeriesId': widget.tvShow['Id'],
-                                  'SeasonNumber': _selectedSeasonNumber,
-                                  'EpisodeNumber': episodeNumber,
-                                };
-                                
+                return Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: FocusScope(
+                    child: Focus(
+                      onFocusChange: (focused) {
+                        if (focused) {
+                          _episodeScrollController.animateTo(
+                            index * 142.0, // 130 宽度 + 12 右边距
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeInOut,
+                          );
+                        }
+                      },
+                      child: Builder(
+                        builder: (context) {
+                          final focused = Focus.of(context).hasFocus;
+                          return Container(
+                            decoration: focused ? BoxDecoration(
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: Theme.of(context).colorScheme.primary,
+                                width: 2,
+                              ),
+                            ) : null,
+                            child: VideoCard(
+                              video: {
+                                ...episode,
+                                'Name': '第 $episodeNumber 集${episode['Name'] != null ? ' · ${episode['Name']}' : ''}',
+                              },
+                              api: _api!,
+                              server: widget.server,
+                              onTap: (video) {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
                                     builder: (context) => VideoDetailPage(
                                       server: widget.server,
-                                      video: video,
+                                      video: {
+                                        ...video,
+                                        'SeriesId': widget.tvShow['Id'],
+                                        'SeasonNumber': _selectedSeasonNumber,
+                                        'EpisodeNumber': episodeNumber,
+                                      },
                                     ),
                                   ),
                                 );
                               },
-                              child: Container(
-                                width: 240,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: focused ? Border.all(
-                                    color: Theme.of(context).colorScheme.primary,
-                                    width: 2,
-                                  ) : null,
-                                ),
-                                child: Stack(
-                                  children: [
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(8),
-                                      child: imageUrl != null
-                                          ? Image.network(
-                                              imageUrl,
-                                              width: 240,
-                                              height: 160,
-                                              fit: BoxFit.cover,
-                                              errorBuilder: (context, error, stackTrace) {
-                                                return Container(
-                                                  width: 240,
-                                                  height: 160,
-                                                  color: Colors.grey[300],
-                                                  child: Center(
-                                                    child: Text(
-                                                      '第 $episodeNumber 集',
-                                                      style: const TextStyle(
-                                                        color: Colors.black54,
-                                                        fontSize: 14,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                );
-                                              },
-                                            )
-                                          : Container(
-                                              width: 240,
-                                              height: 160,
-                                              color: Colors.grey[300],
-                                              child: const Icon(Icons.movie, size: 32),
-                                            ),
-                                    ),
-                                    Positioned(
-                                      left: 0,
-                                      right: 0,
-                                      bottom: 0,
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          gradient: LinearGradient(
-                                            begin: Alignment.topCenter,
-                                            end: Alignment.bottomCenter,
-                                            colors: [
-                                              Colors.transparent,
-                                              Colors.black.withOpacity(0.8),
-                                            ],
-                                          ),
-                                          borderRadius: const BorderRadius.vertical(
-                                            bottom: Radius.circular(8),
-                                          ),
-                                        ),
-                                        padding: const EdgeInsets.all(8),
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Text(
-                                              '第 $episodeNumber 集',
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                            if (episode['Name'] != null)
-                                              Text(
-                                                episode['Name'],
-                                                style: const TextStyle(
-                                                  color: Colors.white70,
-                                                  fontSize: 12,
-                                                ),
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                    if (episode['UserData']?['Played'] == true || episode['UserData']?['IsFavorite'] == true)
-                                      Positioned(
-                                        right: 8,
-                                        top: 8,
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            if (episode['UserData']?['IsFavorite'] == true)
-                                              Container(
-                                                padding: const EdgeInsets.all(4),
-                                                decoration: BoxDecoration(
-                                                  color: Colors.black.withOpacity(0.6),
-                                                  borderRadius: BorderRadius.circular(12),
-                                                ),
-                                                child: const Icon(
-                                                  Icons.favorite,
-                                                  color: Colors.red,
-                                                  size: 16,
-                                                ),
-                                              ),
-                                            if (episode['UserData']?['IsFavorite'] == true && episode['UserData']?['Played'] == true)
-                                              const SizedBox(width: 4),
-                                            if (episode['UserData']?['Played'] == true)
-                                              Container(
-                                                padding: const EdgeInsets.all(4),
-                                                decoration: BoxDecoration(
-                                                  color: Colors.black.withOpacity(0.6),
-                                                  borderRadius: BorderRadius.circular(12),
-                                                ),
-                                                child: const Icon(
-                                                  Icons.check_circle,
-                                                  color: Colors.green,
-                                                  size: 16,
-                                                ),
-                                              ),
-                                          ],
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        ),
+                              width: 130,
+                              imageWidth: 240,
+                              imageHeight: 160,
+                              imageQuality: 80,
+                            ),
+                          );
+                        },
                       ),
                     ),
-                  );
-                },
-              ),
+                  ),
+                );
+              },
             ),
           ),
         ),

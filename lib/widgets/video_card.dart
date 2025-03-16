@@ -32,7 +32,7 @@ class VideoCard extends StatefulWidget {
 class _VideoCardState extends State<VideoCard> {
   static const String _tag = "VideoCard";
   // ignore: unused_field
-  bool _isHovering = false;
+  // bool _isHovering = false;
 
   bool get _isCollection {
     final type = widget.video['Type']?.toString().toLowerCase();
@@ -95,13 +95,14 @@ class _VideoCardState extends State<VideoCard> {
     }
 
     return MouseRegion(
-      onEnter: (_) => setState(() => _isHovering = true),
-      onExit: (_) => setState(() => _isHovering = false),
+      // onEnter: (_) => setState(() => _isHovering = true),
+      // onExit: (_) => setState(() => _isHovering = false),
       child: GestureDetector(
         onTap: () => widget.onTap(widget.video),
         child: SizedBox(
           width: widget.width,
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Stack(
