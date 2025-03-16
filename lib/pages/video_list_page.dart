@@ -18,10 +18,11 @@ class VideoListPage extends StatefulWidget {
   State<VideoListPage> createState() => _VideoListPageState();
 }
 
-class _VideoListPageState extends State<VideoListPage> {
+class _VideoListPageState extends State<VideoListPage> with SingleTickerProviderStateMixin {
   static const String _tag = "VideoList";
   late final EmbyApiService _api;
   final ScrollController _scrollController = ScrollController();
+  late AnimationController _shimmerController;
   
   // 分区数据
   final Map<String, List<dynamic>> _videoSections = {
@@ -55,12 +56,19 @@ class _VideoListPageState extends State<VideoListPage> {
     super.initState();
     Logger.i("初始化视频列表页面: ${widget.server.name}", _tag);
     _initializeApi();
+
+    // 初始化闪烁动画控制器
+    _shimmerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat();
   }
 
   @override
   void dispose() {
     Logger.d("释放视频列表页面资源", _tag);
     _scrollController.dispose();
+    _shimmerController.dispose();
     // 释放所有部分的滚动控制器
     for (var controller in _sectionScrollControllers.values) {
       controller.dispose();
@@ -468,12 +476,53 @@ class _VideoListPageState extends State<VideoListPage> {
     String? viewId,
     bool isMovieView = false,
   }) {
-    if (items.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
-
     final sectionId = viewId ?? title.toLowerCase();
     final bool isLoading = _isLoadingMore[sectionId] ?? false;
     final bool hasMore = _hasMoreData[sectionId] ?? false;
     final scrollController = _getScrollController(sectionId);
+
+    // 如果是视图内容且没有数据，显示加载动画
+    if (viewId != null && items.isEmpty && !_sectionLoading['views']!) {
+      return SliverToBoxAdapter(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(
+              height: 240,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: 5, // 显示5个骨架项
+                itemBuilder: (context, index) {
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: _buildSkeletonCard(),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (items.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
 
     return SliverToBoxAdapter(
       child: Column(
@@ -677,5 +726,107 @@ class _VideoListPageState extends State<VideoListPage> {
       _sectionScrollControllers[sectionId] = ScrollController();
     }
     return _sectionScrollControllers[sectionId]!;
+  }
+
+  Widget _buildSkeletonCard() {
+    return AnimatedBuilder(
+      animation: _shimmerController,
+      builder: (context, child) {
+        return Container(
+          width: 130,
+          decoration: BoxDecoration(
+            color: Colors.grey[200],
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 封面占位
+              Container(
+                height: 195,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Colors.grey[300]!,
+                      Colors.grey[200]!,
+                      Colors.grey[300]!,
+                    ],
+                    stops: [
+                      0.0,
+                      _shimmerController.value,
+                      1.0,
+                    ],
+                  ),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(8),
+                  ),
+                ),
+                child: Center(
+                  child: Icon(
+                    Icons.movie_outlined,
+                    size: 32,
+                    color: Colors.grey[400],
+                  ),
+                ),
+              ),
+              // 标题占位
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      height: 12,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Colors.grey[300]!,
+                            Colors.grey[200]!,
+                            Colors.grey[300]!,
+                          ],
+                          stops: [
+                            0.0,
+                            _shimmerController.value,
+                            1.0,
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Container(
+                      height: 12,
+                      width: 80,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Colors.grey[300]!,
+                            Colors.grey[200]!,
+                            Colors.grey[300]!,
+                          ],
+                          stops: [
+                            0.0,
+                            _shimmerController.value,
+                            1.0,
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 }
