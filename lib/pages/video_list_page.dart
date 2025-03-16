@@ -422,14 +422,27 @@ class _VideoListPageState extends State<VideoListPage> with SingleTickerProvider
         controller: _scrollController,
         slivers: [
           _buildAppBar(),
-          if (!_sectionLoading['continue']! && _videoSections['continue']!.isNotEmpty)
+          // 继续观看区域
+          if (_sectionLoading['continue']!)
+            _buildSkeletonSection('继续观看')
+          else if (_videoSections['continue']!.isNotEmpty)
             _buildSection('继续观看', _videoSections['continue']!),
-          if (!_sectionLoading['latest']!)
+          
+          // 最新添加区域
+          if (_sectionLoading['latest']!)
+            _buildSkeletonSection('最新添加')
+          else
             _buildSection('最新添加', _videoSections['latest']!),
-          if (!_sectionLoading['favorites']! && _videoSections['favorites']!.isNotEmpty)
+          
+          // 收藏区域
+          if (_sectionLoading['favorites']!)
+            _buildSkeletonSection('我的收藏')
+          else if (_videoSections['favorites']!.isNotEmpty)
             _buildSection('我的收藏', _videoSections['favorites']!),
-          if (!_sectionLoading['views']!)
-            ..._buildViewSections(),
+          
+          // 媒体库视图区域
+          ..._buildViewSections(),
+          
           const SliverPadding(padding: EdgeInsets.only(bottom: 20)),
         ],
       ),
@@ -705,6 +718,11 @@ class _VideoListPageState extends State<VideoListPage> with SingleTickerProvider
   }
 
   List<Widget> _buildViewSections() {
+    // 如果视图正在加载中，显示骨架屏
+    if (_sectionLoading['views']!) {
+      return List.generate(2, (index) => _buildSkeletonSection('加载中...'));
+    }
+
     return _videoSections['views']!.map((view) {
       final viewId = view['Id'];
       final viewName = view['Name'];
@@ -718,6 +736,55 @@ class _VideoListPageState extends State<VideoListPage> with SingleTickerProvider
         isMovieView: isMovieView,
       );
     }).toList();
+  }
+
+  Widget _buildSkeletonSection(String title) {
+    return SliverToBoxAdapter(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
+            child: Container(
+              height: 24,
+              width: 120,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Colors.grey[300]!,
+                    Colors.grey[200]!,
+                    Colors.grey[300]!,
+                  ],
+                  stops: [
+                    0.0,
+                    _shimmerController.value,
+                    1.0,
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+          ),
+          SizedBox(
+            height: 240,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: 5,
+              itemBuilder: (context, index) {
+                return Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: _buildSkeletonCard(),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   // 获取或创建部分的滚动控制器
