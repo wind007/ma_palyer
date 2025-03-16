@@ -172,7 +172,6 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     
     _initializePlayer();
     _initializeBrightness();
-    _loadNextEpisode();
   }
 
   Future<void> _initializeBrightness() async {
@@ -298,19 +297,66 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     // 播放完成处理
     if (playerValue.position >= playerValue.duration) {
       Logger.i("视频播放完成，当前位置: ${playerValue.position.inSeconds}秒，总时长: ${playerValue.duration.inSeconds}秒", _tag);
-      Logger.i("seriesId: ${widget.seriesId}, seasonNumber: ${widget.seasonNumber}, episodeNumber: ${widget.episodeNumber}", _tag);
       _updateProgress(isPaused: true);
       
-      // 自动播放下一集
-      if (_nextEpisode != null) {
-        Logger.i("准备播放下一集: ${_nextEpisode!['Name']}, ID: ${_nextEpisode!['Id']}", _tag);
-        _playNextEpisode();
-      } else {
-        Logger.i("没有下一集信息，返回上一页", _tag);
-        if (mounted) {
-          Navigator.of(context).pop();
+      // 等待获取下一集信息后再决定是否播放
+      _handleVideoCompletion().then((_) {
+        if (!mounted) return;
+        
+        if (_nextEpisode != null) {
+          Logger.i("准备播放下一集: ${_nextEpisode!['Name']}, ID: ${_nextEpisode!['Id']}", _tag);
+          _playNextEpisode();
+        } else {
+          Logger.i("没有下一集信息，返回上一页", _tag);
+          if (mounted) {
+            Navigator.of(context).pop();
+          }
         }
+      });
+    }
+  }
+
+  Future<void> _handleVideoCompletion() async {
+    Logger.i("处理视频播放完成", _tag);
+    if (widget.seriesId == null || widget.seasonNumber == null || widget.episodeNumber == null) {
+      Logger.w("无法加载下一集：缺少必要信息 - seriesId: ${widget.seriesId}, seasonNumber: ${widget.seasonNumber}, episodeNumber: ${widget.episodeNumber}", _tag);
+      return;
+    }
+
+    try {
+      Logger.d("开始获取下一集信息 - seriesId: ${widget.seriesId}, seasonNumber: ${widget.seasonNumber}, episodeNumber: ${widget.episodeNumber}", _tag);
+      final response = await widget.embyApi.getEpisodes(
+        seriesId: widget.seriesId!,
+        userId: widget.embyApi.userId!,
+        seasonNumber: widget.seasonNumber,
+        fields: 'Path,MediaSources,UserData',
+      );
+
+      if (response['Items'] != null) {
+        final episodes = response['Items'] as List;
+        Logger.d("获取到 ${episodes.length} 集", _tag);
+        
+        // 查找当前集的下一集
+        for (int i = 0; i < episodes.length; i++) {
+          final episode = episodes[i];
+          final indexNumber = episode['IndexNumber'];
+          if (indexNumber != null && indexNumber > widget.episodeNumber!) {
+            setState(() {
+              _nextEpisode = episode;
+            });
+            Logger.i("找到下一集: ${_nextEpisode!['Name']}, 集数: $indexNumber", _tag);
+            break;
+          }
+        }
+        
+        if (_nextEpisode == null) {
+          Logger.w("未找到下一集", _tag);
+        }
+      } else {
+        Logger.w("获取剧集列表失败：返回数据为空", _tag);
       }
+    } catch (e, stackTrace) {
+      Logger.e("获取下一集信息失败", _tag, e, stackTrace);
     }
   }
 
@@ -1564,47 +1610,6 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('切换字幕失败: $e')),
       );
-    }
-  }
-
-  Future<void> _loadNextEpisode() async {
-    if (widget.seriesId == null || widget.seasonNumber == null || widget.episodeNumber == null) {
-      Logger.w("无法加载下一集：缺少必要信息 - seriesId: ${widget.seriesId}, seasonNumber: ${widget.seasonNumber}, episodeNumber: ${widget.episodeNumber}", _tag);
-      return;
-    }
-
-    try {
-      Logger.d("开始获取下一集信息 - seriesId: ${widget.seriesId}, seasonNumber: ${widget.seasonNumber}, episodeNumber: ${widget.episodeNumber}", _tag);
-      final response = await widget.embyApi.getEpisodes(
-        seriesId: widget.seriesId!,
-        userId: widget.embyApi.userId!,
-        seasonNumber: widget.seasonNumber,
-        fields: 'Path,MediaSources,UserData',
-      );
-
-      if (response['Items'] != null) {
-        final episodes = response['Items'] as List;
-        Logger.d("获取到 ${episodes.length} 集", _tag);
-        
-        // 查找当前集的下一集
-        for (int i = 0; i < episodes.length; i++) {
-          final episode = episodes[i];
-          final indexNumber = episode['IndexNumber'];
-          if (indexNumber != null && indexNumber > widget.episodeNumber!) {
-            _nextEpisode = episode;
-            Logger.i("找到下一集: ${_nextEpisode!['Name']}, 集数: $indexNumber", _tag);
-            break;
-          }
-        }
-        
-        if (_nextEpisode == null) {
-          Logger.w("未找到下一集", _tag);
-        }
-      } else {
-        Logger.w("获取剧集列表失败：返回数据为空", _tag);
-      }
-    } catch (e, stackTrace) {
-      Logger.e("获取下一集信息失败", _tag, e, stackTrace);
     }
   }
 
