@@ -288,7 +288,12 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
                     MaterialPageRoute(
                       builder: (context) => VideoDetailPage(
                         server: widget.server,
-                        video: episode,
+                        video: {
+                          ...episode,
+                          'SeriesId': widget.tvShow['Id'],
+                          'SeasonNumber': seasonNumber,
+                          'EpisodeNumber': episodeNumber,
+                        },
                       ),
                     ),
                   );

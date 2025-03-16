@@ -124,6 +124,9 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
           mediaSourceIndex: mediaSourceIndex,
           initialAudioStreamIndex: audioStreamIndex,
           initialSubtitleStreamIndex: subtitleStreamIndex,
+          seriesId: _videoDetails!['SeriesId'],
+          seasonNumber: _videoDetails!['SeasonNumber'] != null ? (_videoDetails!['SeasonNumber'] as num).toInt() : null,
+          episodeNumber: _videoDetails!['EpisodeNumber'] != null ? (_videoDetails!['EpisodeNumber'] as num).toInt() : null,
         ),
       ),
     ).then((_) {

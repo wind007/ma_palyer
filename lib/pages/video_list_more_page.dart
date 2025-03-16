@@ -92,15 +92,37 @@ class _VideoListMorePageState extends State<VideoListMorePage> {
     setState(() => _isLoading = true);
 
     try {
-      final response = await _api!.getVideos(
-        parentId: widget.parentId ?? widget.viewId,
-        startIndex: _startIndex,
-        limit: _limit,
-        sortBy: 'SortName',
-        sortOrder: 'Ascending',
-        imageTypes: 'Primary',
-        filters: widget.isMovieView ? 'IncludeItemTypes=Movie' : 'IncludeItemTypes=Series',
-      );
+      final Map<String, dynamic> response;
+      
+      // 如果是视图或父级ID的请求
+      if (widget.parentId != null || widget.viewId != null) {
+        final String filters;
+        if (widget.parentId == null && widget.viewId != null) {
+          filters = widget.isMovieView ? 'IncludeItemTypes=Movie' : 'IncludeItemTypes=Series';
+        } else {
+          filters = '';
+        }
+          
+        response = await _api!.getVideos(
+          parentId: widget.parentId ?? widget.viewId,
+          startIndex: _startIndex,
+          limit: _limit,
+          sortBy: 'SortName',
+          sortOrder: 'Ascending',
+          imageTypes: 'Primary',
+          filters: filters,
+        );
+      } else {
+        // 如果没有父级ID和视图ID，使用默认请求
+        response = await _api!.getVideos(
+          startIndex: _startIndex,
+          limit: _limit,
+          sortBy: 'SortName',
+          sortOrder: 'Ascending',
+          imageTypes: 'Primary',
+          filters: '',
+        );
+      }
 
       final items = response['Items'] as List;
       final totalRecordCount = response['TotalRecordCount'] as int;
@@ -147,7 +169,20 @@ class _VideoListMorePageState extends State<VideoListMorePage> {
     final type = video['Type']?.toString().toLowerCase();
     final collectionType = video['CollectionType']?.toString().toLowerCase();
     
-    if (type == 'series' || collectionType == 'tvshows') {
+    if (type == 'boxset' || type == 'collection' || type == 'folder' || collectionType == 'boxsets') {
+      Logger.d("打开合集列表页", _tag);
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => VideoListMorePage(
+            server: widget.server,
+            title: video['Name'],
+            parentId: video['Id'],
+            isMovieView: collectionType == 'movies' || video['IsMovieCollection'] == true,
+          ),
+        ),
+      );
+    } else if (type == 'series' || collectionType == 'tvshows') {
       Logger.d("打开电视剧详情页", _tag);
       Navigator.push(
         context,
@@ -169,7 +204,7 @@ class _VideoListMorePageState extends State<VideoListMorePage> {
           ),
         ),
       );
-    } else {
+    } else if (type == 'movie') {
       Logger.d("打开电影播放页", _tag);
       Navigator.push(
         context,
@@ -177,6 +212,20 @@ class _VideoListMorePageState extends State<VideoListMorePage> {
           builder: (context) => VideoDetailPage(
             server: widget.server,
             video: video,
+          ),
+        ),
+      );
+    } else {
+      // 对于其他类型，默认导航到列表页
+      Logger.d("打开列表页", _tag);
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => VideoListMorePage(
+            server: widget.server,
+            title: video['Name'],
+            parentId: video['Id'],
+            isMovieView: false,
           ),
         ),
       );

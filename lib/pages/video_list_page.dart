@@ -556,18 +556,51 @@ class _VideoListPageState extends State<VideoListPage> with SingleTickerProvider
                 if (viewId != null)
                   TextButton(
                     onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => VideoListMorePage(
-                            server: widget.server,
-                            title: title,
-                            viewId: viewId,
-                            parentId: null,
-                            isMovieView: isMovieView,
-                          ),
-                        ),
+                      final view = _videoSections['views']!.firstWhere(
+                        (v) => v['Id'] == viewId,
+                        orElse: () => {},
                       );
+                      final type = view['Type']?.toString().toLowerCase();
+                      final collectionType = view['CollectionType']?.toString().toLowerCase();
+
+                      if (type == 'boxset' || collectionType == 'movies' || type == 'moviescollection') {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => VideoListMorePage(
+                              server: widget.server,
+                              title: title,
+                              parentId: viewId,
+                              isMovieView: true,
+                            ),
+                          ),
+                        );
+                      } else if (type == 'series' || collectionType == 'tvshows') {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => VideoListMorePage(
+                              server: widget.server,
+                              title: title,
+                              parentId: viewId,
+                              isMovieView: false,
+                            ),
+                          ),
+                        );
+                      } else {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => VideoListMorePage(
+                              server: widget.server,
+                              title: title,
+                              viewId: viewId,
+                              parentId: null,
+                              isMovieView: isMovieView,
+                            ),
+                          ),
+                        );
+                      }
                     },
                     child: const Text('查看更多'),
                   ),
@@ -680,8 +713,8 @@ class _VideoListPageState extends State<VideoListPage> with SingleTickerProvider
         final type = video['Type']?.toString().toLowerCase();
         final collectionType = video['CollectionType']?.toString().toLowerCase();
         
-        if (type == 'boxset' || collectionType == 'movies' || type == 'moviescollection') {
-          Logger.d("打开电影系列页", _tag);
+        if (type == 'boxset' || type == 'collection' || type == 'folder' || collectionType == 'boxsets') {
+          Logger.d("打开合集列表页", _tag);
           Navigator.push(
             context,
             MaterialPageRoute(
@@ -689,7 +722,7 @@ class _VideoListPageState extends State<VideoListPage> with SingleTickerProvider
                 server: widget.server,
                 title: video['Name'],
                 parentId: video['Id'],
-                isMovieView: true,
+                isMovieView: collectionType == 'movies' || video['IsMovieCollection'] == true,
               ),
             ),
           );
@@ -715,7 +748,7 @@ class _VideoListPageState extends State<VideoListPage> with SingleTickerProvider
               ),
             ),
           );
-        } else {
+        } else if (type == 'movie') {
           Logger.d("打开电影播放页", _tag);
           Navigator.push(
             context,
@@ -723,6 +756,20 @@ class _VideoListPageState extends State<VideoListPage> with SingleTickerProvider
               builder: (context) => VideoDetailPage(
                 server: widget.server,
                 video: video,
+              ),
+            ),
+          );
+        } else {
+          // 对于其他类型，默认导航到列表页
+          Logger.d("打开列表页", _tag);
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => VideoListMorePage(
+                server: widget.server,
+                title: video['Name'],
+                parentId: video['Id'],
+                isMovieView: false,
               ),
             ),
           );
