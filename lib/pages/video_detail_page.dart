@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/emby_api.dart';
 import '../services/server_manager.dart';
+import '../services/api_service_manager.dart';
 import '../utils/logger.dart';
 import '../widgets/emby_image.dart';
 import './video_player_page.dart';
@@ -22,11 +23,7 @@ class VideoDetailPage extends StatefulWidget {
 class _VideoDetailPageState extends State<VideoDetailPage> {
   static const String _tag = "VideoDetail";
   
-  final EmbyApiService _api = EmbyApiService(
-    baseUrl: '',
-    username: '',
-    password: '',
-  );
+  EmbyApiService? _api;
   Map<String, dynamic>? _videoDetails;
   int? _playbackPosition;
   bool _isLoading = true;
@@ -36,14 +33,26 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
   void initState() {
     super.initState();
     Logger.i("初始化视频详情页面: ${widget.video['Name']}", _tag);
-    _api
-      ..baseUrl = widget.server.url
-      ..username = widget.server.username
-      ..password = widget.server.password
-      ..accessToken = widget.server.accessToken
-      ..userId = widget.server.userId;
-    Logger.d("API服务初始化完成，userId: ${widget.server.userId}", _tag);
-    _loadVideoDetails();
+    _initializeApi();
+  }
+
+  Future<void> _initializeApi() async {
+    try {
+      Logger.d("初始化 API 服务", _tag);
+      _api = await ApiServiceManager().initializeEmbyApi(widget.server);
+      Logger.d("API 服务初始化完成", _tag);
+      if (mounted) {
+        _loadVideoDetails();
+      }
+    } catch (e) {
+      Logger.e("API 初始化失败", _tag, e);
+      if (mounted) {
+        setState(() {
+          _error = '初始化失败: $e';
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -53,26 +62,35 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
   }
 
   Future<void> _loadVideoDetails() async {
+    if (_api == null) {
+      Logger.w("无法加载视频详情：API未初始化", _tag);
+      return;
+    }
+    
     Logger.i("开始加载视频详情: ${widget.video['Name']}", _tag);
     try {
       final videoId = widget.video['Id'];
       Logger.d("获取视频详情: $videoId", _tag);
-      final details = await _api.getVideoDetails(videoId);
+      final details = await _api!.getVideoDetails(videoId);
       Logger.d("获取播放进度: $videoId", _tag);
-      final position = await _api.getPlaybackPosition(videoId);
+      final position = await _api!.getPlaybackPosition(videoId);
 
       Logger.i("视频详情加载完成: ${details['Name']}", _tag);
-      setState(() {
-        _videoDetails = details;
-        _playbackPosition = position;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _videoDetails = details;
+          _playbackPosition = position;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       Logger.e("加载视频详情失败", _tag, e);
-      setState(() {
-        _error = e.toString();
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -102,7 +120,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
         builder: (context) => VideoPlayerPage(
           itemId: _videoDetails!['Id'],
           title: _videoDetails!['Name'],
-          embyApi: _api,
+          embyApi: _api!,
           fromStart: fromStart,
           mediaSourceIndex: mediaSourceIndex,
           initialAudioStreamIndex: audioStreamIndex,
@@ -294,7 +312,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                             onPressed: () async {
                               try {
                                 final isFavorite = _videoDetails!['UserData']?['IsFavorite'] == true;
-                                await _api.toggleFavorite(_videoDetails!['Id'], isFavorite);
+                                await _api!.toggleFavorite(_videoDetails!['Id'], isFavorite);
                                 setState(() {
                                   _videoDetails!['UserData'] ??= {};
                                   _videoDetails!['UserData']['IsFavorite'] = !isFavorite;
@@ -327,7 +345,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                             onPressed: () async {
                               try {
                                 final isPlayed = _videoDetails!['UserData']?['Played'] == true;
-                                await _api.togglePlayed(_videoDetails!['Id'], isPlayed);
+                                await _api!.togglePlayed(_videoDetails!['Id'], isPlayed);
                                 setState(() {
                                   _videoDetails!['UserData'] ??= {};
                                   _videoDetails!['UserData']['Played'] = !isPlayed;
@@ -341,48 +359,6 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                             },
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                  // 视频信息覆盖层
-                  Positioned(
-                    left: 16,
-                    right: 16,
-                    bottom: 16,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _videoDetails!['Name'] ?? '',
-                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                            color: Colors.white,
-                            shadows: [
-                              Shadow(
-                                offset: const Offset(0, 1),
-                                blurRadius: 3,
-                                color: Colors.black.withOpacity(0.5),
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (_videoDetails!['Overview'] != null) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            _videoDetails!['Overview'],
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: Colors.white,
-                              shadows: [
-                                Shadow(
-                                  offset: const Offset(0, 1),
-                                  blurRadius: 2,
-                                  color: Colors.black.withOpacity(0.5),
-                                ),
-                              ],
-                            ),
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
                       ],
                     ),
                   ),

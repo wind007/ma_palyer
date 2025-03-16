@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../services/emby_api.dart';
 import '../services/server_manager.dart';
 import '../services/api_service_manager.dart';
-import '../utils/error_dialog.dart';
 import '../utils/logger.dart';
 import './video_detail_page.dart';
 
@@ -22,9 +21,9 @@ class TvShowDetailPage extends StatefulWidget {
 
 class _TvShowDetailPageState extends State<TvShowDetailPage> {
   static const String _tag = "TvShowDetail";
-  late final EmbyApiService _api;
-  final Map<int, List<dynamic>> _seasonEpisodes = {};
-  final List<dynamic> _seasons = [];
+  EmbyApiService? _api;
+  Map<String, dynamic>? _tvShowDetails;
+  List<dynamic>? _seasons;
   bool _isLoading = true;
   String? _error;
 
@@ -39,78 +38,66 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
     try {
       Logger.d("初始化 API 服务", _tag);
       _api = await ApiServiceManager().initializeEmbyApi(widget.server);
-      _loadSeasons();
-    } catch (e) {
-      Logger.e("API 初始化失败", _tag, e);
-      setState(() {
-        _error = '初始化失败: $e';
-        _isLoading = false;
-      });
-    }
-  }
-
-  Future<void> _loadSeasons() async {
-    try {
-      Logger.i("加载电视剧季信息", _tag);
-      final response = await _api.getSeasons(
-        seriesId: widget.tvShow['Id'],
-        userId: _api.userId!,
-        fields: 'PrimaryImageAspectRatio',
-      );
-
-      if (!mounted) return;
-
-      setState(() {
-        _seasons.addAll(response['Items'] as List);
-        _isLoading = false;
-      });
-
-      // 加载每一季的剧集
-      for (var season in _seasons) {
-        _loadEpisodes(season);
+      Logger.d("API 服务初始化完成", _tag);
+      if (mounted) {
+        _loadTvShowDetails();
       }
     } catch (e) {
-      Logger.e("加载季信息失败", _tag, e);
-      if (!mounted) return;
-      
-      final retry = await ErrorDialog.show(
-        context: context,
-        title: '加载失败',
-        message: e.toString(),
-      );
-
-      if (retry && mounted) {
-        _loadSeasons();
-      } else {
+      Logger.e("API 初始化失败", _tag, e);
+      if (mounted) {
         setState(() {
+          _error = '初始化失败: $e';
           _isLoading = false;
-          _error = '加载失败: $e';
         });
       }
     }
   }
 
-  Future<void> _loadEpisodes(Map<String, dynamic> season) async {
+  Future<void> _loadTvShowDetails() async {
+    if (_api == null) {
+      Logger.w("无法加载电视剧详情：API未初始化", _tag);
+      return;
+    }
+    
+    Logger.i("开始加载电视剧详情: ${widget.tvShow['Name']}", _tag);
     try {
-      Logger.i("加载第 ${season['IndexNumber']} 季的剧集", _tag);
-      final response = await _api.getEpisodes(
-        seriesId: widget.tvShow['Id'],
-        seasonId: season['Id'],
-        userId: _api.userId!,
-        fields: 'Overview,PrimaryImageAspectRatio',
+      final tvShowId = widget.tvShow['Id'];
+      Logger.d("获取电视剧详情: $tvShowId", _tag);
+      final details = await _api!.getVideoDetails(tvShowId);
+      Logger.d("获取季列表: $tvShowId", _tag);
+      final seasonsResponse = await _api!.getSeasons(
+        seriesId: tvShowId,
+        userId: _api!.userId!,
+        fields: 'PrimaryImageAspectRatio',
       );
+      final seasons = seasonsResponse['Items'] as List;
 
-      if (!mounted) return;
-
-      setState(() {
-        _seasonEpisodes[season['IndexNumber']] = response['Items'] as List;
-      });
+      Logger.i("电视剧详情加载完成: ${details['Name']}", _tag);
+      if (mounted) {
+        setState(() {
+          _tvShowDetails = details;
+          _seasons = seasons;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      Logger.e("加载剧集失败", _tag, e);
+      Logger.e("加载电视剧详情失败", _tag, e);
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+          _isLoading = false;
+        });
+      }
     }
   }
 
   Widget _buildSeasonList() {
+    if (_seasons == null || _seasons!.isEmpty) {
+      return const Center(
+        child: Text('暂无剧集信息'),
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -123,9 +110,9 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
             ),
           ),
         ),
-        ..._seasons.map((season) {
+        ..._seasons!.map((season) {
           final seasonNumber = season['IndexNumber'] as int;
-          final episodes = _seasonEpisodes[seasonNumber] ?? [];
+          final episodes = _tvShowDetails?['Seasons']?[seasonNumber] ?? [];
           
           return ExpansionTile(
             title: Text('第 $seasonNumber 季'),
@@ -133,7 +120,7 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
             children: episodes.map<Widget>((episode) {
               final episodeNumber = episode['IndexNumber'] as int;
               final imageUrl = episode['ImageTags']?['Primary'] != null
-                  ? _api.getImageUrl(
+                  ? _api!.getImageUrl(
                       itemId: episode['Id'],
                       imageType: 'Primary',
                     )
@@ -244,220 +231,261 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    final imageUrl = widget.tvShow['ImageTags']?['Primary'] != null
-        ? _api.getImageUrl(
-            itemId: widget.tvShow['Id'],
+    if (_isLoading) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('加载中...'),
+          backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        ),
+        body: const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (_error != null) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('错误'),
+          backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        ),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(_error!),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: _loadTvShowDetails,
+                child: const Text('重试'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_tvShowDetails == null) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('无数据'),
+          backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        ),
+        body: const Center(
+          child: Text('暂无电视剧详情'),
+        ),
+      );
+    }
+
+    final imageUrl = _tvShowDetails!['ImageTags']?['Primary'] != null
+        ? _api?.getImageUrl(
+            itemId: _tvShowDetails!['Id'],
             imageType: 'Primary',
           )
         : null;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.tvShow['Name'] ?? '电视剧详情'),
+        title: Text(_tvShowDetails?['Name'] ?? '电视剧详情'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: () => _loadSeasons(),
+            onPressed: () => _loadTvShowDetails(),
           ),
         ],
       ),
-      body: _error != null
-          ? Center(child: Text(_error!))
-          : RefreshIndicator(
-              onRefresh: _loadSeasons,
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // 视频背景图
-                    Stack(
-                      children: [
-                        // 背景图片
-                        imageUrl != null
-                            ? Image.network(
-                                imageUrl,
-                                fit: BoxFit.cover,
-                                width: double.infinity,
-                                height: 400,
-                                errorBuilder: (context, error, stackTrace) {
-                                  return Container(
-                                    width: double.infinity,
-                                    height: 400,
-                                    color: Colors.grey[300],
-                                    child: Center(
-                                      child: Text(
-                                        widget.tvShow['Name'] ?? '未知标题',
-                                        style: const TextStyle(
-                                          color: Colors.black54,
-                                          fontSize: 24,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                },
-                              )
-                            : Container(
-                                width: double.infinity,
-                                height: 400,
-                                color: Colors.grey[300],
-                                child: Center(
-                                  child: Text(
-                                    widget.tvShow['Name'] ?? '未知标题',
-                                    style: const TextStyle(
-                                      color: Colors.black54,
-                                      fontSize: 24,
-                                      fontWeight: FontWeight.bold,
-                                    ),
+      body: RefreshIndicator(
+        onRefresh: _loadTvShowDetails,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 视频背景图
+              Stack(
+                children: [
+                  // 背景图片
+                  imageUrl != null
+                      ? Image.network(
+                          imageUrl,
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          height: 400,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              width: double.infinity,
+                              height: 400,
+                              color: Colors.grey[300],
+                              child: Center(
+                                child: Text(
+                                  _tvShowDetails?['Name'] ?? '未知标题',
+                                  style: const TextStyle(
+                                    color: Colors.black54,
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
                                   ),
                                 ),
                               ),
-                        // 渐变遮罩
-                        Positioned.fill(
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  Colors.transparent,
-                                  Colors.black.withOpacity(0.7),
-                                ],
-                                stops: const [0.6, 1.0],
+                            );
+                          },
+                        )
+                      : Container(
+                          width: double.infinity,
+                          height: 400,
+                          color: Colors.grey[300],
+                          child: Center(
+                            child: Text(
+                              _tvShowDetails?['Name'] ?? '未知标题',
+                              style: const TextStyle(
+                                color: Colors.black54,
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
                           ),
                         ),
-                        // 收藏和播放状态按钮
-                        Positioned(
-                          right: 16,
-                          bottom: 16,
-                          child: Row(
-                            children: [
-                              // 收藏按钮
-                              Container(
-                                decoration: BoxDecoration(
-                                  color: Colors.black54,
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: IconButton(
-                                  icon: Icon(
-                                    widget.tvShow['UserData']?['IsFavorite'] == true
-                                        ? Icons.favorite
-                                        : Icons.favorite_border,
-                                    color: widget.tvShow['UserData']?['IsFavorite'] == true
-                                        ? Colors.red
-                                        : Colors.white,
-                                  ),
-                                  onPressed: () async {
-                                    try {
-                                      final isFavorite = widget.tvShow['UserData']?['IsFavorite'] == true;
-                                      await _api.toggleFavorite(widget.tvShow['Id'], isFavorite);
-                                      setState(() {
-                                        widget.tvShow['UserData'] ??= {};
-                                        widget.tvShow['UserData']['IsFavorite'] = !isFavorite;
-                                      });
-                                    } catch (e) {
-                                      if (!mounted) return;
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text('操作失败: $e')),
-                                      );
-                                    }
-                                  },
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              // 播放状态按钮
-                              Container(
-                                decoration: BoxDecoration(
-                                  color: Colors.black54,
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: IconButton(
-                                  icon: Icon(
-                                    widget.tvShow['UserData']?['Played'] == true
-                                        ? Icons.check_circle
-                                        : Icons.check_circle_outline,
-                                    color: widget.tvShow['UserData']?['Played'] == true
-                                        ? Colors.green
-                                        : Colors.white,
-                                  ),
-                                  onPressed: () async {
-                                    try {
-                                      final isPlayed = widget.tvShow['UserData']?['Played'] == true;
-                                      await _api.togglePlayed(widget.tvShow['Id'], isPlayed);
-                                      setState(() {
-                                        widget.tvShow['UserData'] ??= {};
-                                        widget.tvShow['UserData']['Played'] = !isPlayed;
-                                      });
-                                    } catch (e) {
-                                      if (!mounted) return;
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text('操作失败: $e')),
-                                      );
-                                    }
-                                  },
-                                ),
-                              ),
-                            ],
+                  // 渐变遮罩
+                  Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.transparent,
+                            Colors.black.withOpacity(0.7),
+                          ],
+                          stops: const [0.6, 1.0],
+                        ),
+                      ),
+                    ),
+                  ),
+                  // 收藏和播放状态按钮
+                  Positioned(
+                    right: 16,
+                    bottom: 16,
+                    child: Row(
+                      children: [
+                        // 收藏按钮
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: IconButton(
+                            icon: Icon(
+                              _tvShowDetails?['UserData']?['IsFavorite'] == true
+                                  ? Icons.favorite
+                                  : Icons.favorite_border,
+                              color: _tvShowDetails?['UserData']?['IsFavorite'] == true
+                                  ? Colors.red
+                                  : Colors.white,
+                            ),
+                            onPressed: () async {
+                              try {
+                                final isFavorite = _tvShowDetails?['UserData']?['IsFavorite'] == true;
+                                await _api!.toggleFavorite(_tvShowDetails!['Id'], isFavorite);
+                                setState(() {
+                                  _tvShowDetails?['UserData'] ??= {};
+                                  _tvShowDetails!['UserData']['IsFavorite'] = !isFavorite;
+                                });
+                              } catch (e) {
+                                if (!mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('操作失败: $e')),
+                                );
+                              }
+                            },
                           ),
                         ),
-                        // 视频信息覆盖层
-                        Positioned(
-                          left: 16,
-                          right: 16,
-                          bottom: 16,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                widget.tvShow['Name'] ?? '',
-                                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                  color: Colors.white,
-                                  shadows: [
-                                    Shadow(
-                                      offset: const Offset(0, 1),
-                                      blurRadius: 3,
-                                      color: Colors.black.withOpacity(0.5),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              if (widget.tvShow['Overview'] != null) ...[
-                                const SizedBox(height: 8),
-                                Text(
-                                  widget.tvShow['Overview'],
-                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    color: Colors.white,
-                                    shadows: [
-                                      Shadow(
-                                        offset: const Offset(0, 1),
-                                        blurRadius: 2,
-                                        color: Colors.black.withOpacity(0.5),
-                                      ),
-                                    ],
-                                  ),
-                                  maxLines: 3,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
-                            ],
+                        const SizedBox(width: 8),
+                        // 播放状态按钮
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: IconButton(
+                            icon: Icon(
+                              _tvShowDetails?['UserData']?['Played'] == true
+                                  ? Icons.check_circle
+                                  : Icons.check_circle_outline,
+                              color: _tvShowDetails?['UserData']?['Played'] == true
+                                  ? Colors.green
+                                  : Colors.white,
+                            ),
+                            onPressed: () async {
+                              try {
+                                final isPlayed = _tvShowDetails?['UserData']?['Played'] == true;
+                                await _api!.togglePlayed(_tvShowDetails!['Id'], isPlayed);
+                                setState(() {
+                                  _tvShowDetails?['UserData'] ??= {};
+                                  _tvShowDetails!['UserData']['Played'] = !isPlayed;
+                                });
+                              } catch (e) {
+                                if (!mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('操作失败: $e')),
+                                );
+                              }
+                            },
                           ),
                         ),
                       ],
                     ),
-                    
-                    // 剧集列表
-                    if (_isLoading)
-                      const Center(child: CircularProgressIndicator())
-                    else
-                      _buildSeasonList(),
-                  ],
-                ),
+                  ),
+                  // 视频信息覆盖层
+                  Positioned(
+                    left: 16,
+                    right: 16,
+                    bottom: 16,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _tvShowDetails?['Name'] ?? '',
+                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                            color: Colors.white,
+                            shadows: [
+                              Shadow(
+                                offset: const Offset(0, 1),
+                                blurRadius: 3,
+                                color: Colors.black.withOpacity(0.5),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (_tvShowDetails?['Overview'] != null) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            _tvShowDetails!['Overview'],
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Colors.white,
+                              shadows: [
+                                Shadow(
+                                  offset: const Offset(0, 1),
+                                  blurRadius: 2,
+                                  color: Colors.black.withOpacity(0.5),
+                                ),
+                              ],
+                            ),
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            ),
+              
+              // 剧集列表
+              _buildSeasonList(),
+            ],
+          ),
+        ),
+      ),
     );
   }
 } 

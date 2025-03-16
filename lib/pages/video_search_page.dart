@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/emby_api.dart';
 import '../services/server_manager.dart';
-import '../widgets/video_card.dart';
 import '../widgets/video_grid.dart';
 import '../utils/logger.dart';
 import './video_detail_page.dart';

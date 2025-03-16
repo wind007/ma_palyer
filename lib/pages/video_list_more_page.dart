@@ -6,7 +6,6 @@ import './video_detail_page.dart';
 import './tv_show_detail_page.dart';
 import '../utils/error_dialog.dart';
 import '../utils/logger.dart';
-import '../widgets/video_card.dart';
 import '../widgets/video_grid.dart';
 
 class VideoListMorePage extends StatefulWidget {
@@ -31,7 +30,7 @@ class VideoListMorePage extends StatefulWidget {
 
 class _VideoListMorePageState extends State<VideoListMorePage> {
   static const String _tag = "VideoListMore";
-  late final EmbyApiService _api;
+  EmbyApiService? _api;
   final ScrollController _scrollController = ScrollController();
   final List<dynamic> _videos = [];
   bool _isLoading = false;
@@ -59,13 +58,18 @@ class _VideoListMorePageState extends State<VideoListMorePage> {
     try {
       Logger.d("初始化 API 服务", _tag);
       _api = await ApiServiceManager().initializeEmbyApi(widget.server);
-      _loadMore();
+      Logger.d("API 服务初始化完成", _tag);
+      if (mounted) {
+        _loadMore();
+      }
     } catch (e) {
       Logger.e("API 初始化失败", _tag, e);
-      setState(() {
-        _error = '初始化失败: $e';
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _error = '初始化失败: $e';
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -79,8 +83,8 @@ class _VideoListMorePageState extends State<VideoListMorePage> {
   }
 
   Future<void> _loadMore() async {
-    if (_isLoading || !_hasMore) {
-      Logger.v("跳过加载：${_isLoading ? '正在加载中' : '没有更多数据'}", _tag);
+    if (_api == null || _isLoading || !_hasMore) {
+      Logger.v("跳过加载：${_api == null ? 'API未初始化' : _isLoading ? '正在加载中' : '没有更多数据'}", _tag);
       return;
     }
 
@@ -88,7 +92,7 @@ class _VideoListMorePageState extends State<VideoListMorePage> {
     setState(() => _isLoading = true);
 
     try {
-      final response = await _api.getVideos(
+      final response = await _api!.getVideos(
         parentId: widget.parentId ?? widget.viewId,
         startIndex: _startIndex,
         limit: _limit,
@@ -188,15 +192,17 @@ class _VideoListMorePageState extends State<VideoListMorePage> {
       ),
       body: _error != null
           ? Center(child: Text(_error!))
-          : VideoGrid(
-              videos: _videos,
-              api: _api,
-              server: widget.server,
-              onVideoTap: _onVideoTap,
-              hasMore: _hasMore,
-              isLoading: _isLoading,
-              scrollController: _scrollController,
-            ),
+          : _api == null
+              ? const Center(child: CircularProgressIndicator())
+              : VideoGrid(
+                  videos: _videos,
+                  api: _api!,
+                  server: widget.server,
+                  onVideoTap: _onVideoTap,
+                  hasMore: _hasMore,
+                  isLoading: _isLoading,
+                  scrollController: _scrollController,
+                ),
     );
   }
 } 
