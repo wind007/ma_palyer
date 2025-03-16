@@ -19,9 +19,20 @@ class ApiServiceManager {
   Future<EmbyApiService> initializeEmbyApi(ServerInfo server) async {
     Logger.i("初始化EmbyApi - 服务器: ${server.toString()}", _tag);
     
+    // 检查并格式化服务器 URL
+    String formattedUrl = server.url;
+    if (!formattedUrl.startsWith('http')) {
+      formattedUrl = 'http://${server.url}';
+      Logger.w("服务器URL不包含协议，已自动添加: $formattedUrl", _tag);
+    }
+    if (formattedUrl.endsWith('/')) {
+      formattedUrl = formattedUrl.substring(0, formattedUrl.length - 1);
+      Logger.w("服务器URL包含结尾斜杠，已移除: $formattedUrl", _tag);
+    }
+    
     // 如果已经初始化且是同一个服务器，直接返回
     if (_embyApi != null && _currentServer != null &&
-        _currentServer!.url == server.url &&
+        _currentServer!.url == formattedUrl &&
         _currentServer!.username == server.username &&
         _currentServer!.accessToken == server.accessToken) {
       Logger.d("复用现有EmbyApi实例", _tag);
@@ -31,13 +42,20 @@ class ApiServiceManager {
     Logger.d("创建新的EmbyApi实例", _tag);
     // 创建新的 API 实例
     _embyApi = EmbyApiService(
-      baseUrl: server.url,
+      baseUrl: formattedUrl,
       username: server.username,
       password: server.password,
     );
     _embyApi!.accessToken = server.accessToken;
     _embyApi!.userId = server.userId;
-    _currentServer = server;
+    _currentServer = ServerInfo(
+      url: formattedUrl,
+      username: server.username,
+      password: server.password,
+      name: server.name,
+      accessToken: server.accessToken,
+      userId: server.userId,
+    );
     
     // 只有当没有 accessToken 时才进行身份验证
     if (server.accessToken.isEmpty) {

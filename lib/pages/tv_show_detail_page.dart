@@ -295,9 +295,7 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
                     "剧集: ${episode['Name']}, "
                     "seriesId: ${widget.tvShow['Id']}, "
                     "seasonNumber: $seasonNumber, "
-                    "episodeNumber: $episodeNumber, "
-                    "原始数据 - episode: $episode, "
-                    "合并后数据 - video: $video",
+                    "episodeNumber: $episodeNumber, ",
                     _tag,
                   );
                   
@@ -369,7 +367,7 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
 
     String? imageUrl;
     // 按优先级尝试获取不同类型的图片
-    if (_tvShowDetails!['ImageTags']?['Primary'] != null) {
+    if (_tvShowDetails!['ImageTags']?['Primary'] != null && widget.server.url.isNotEmpty) {
       imageUrl = _api?.getImageUrl(
         itemId: _tvShowDetails!['Id'],
         imageType: 'Primary',
@@ -378,7 +376,7 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
         quality: 90,
         tag: _tvShowDetails!['ImageTags']['Primary'],
       );
-    } else if (_tvShowDetails!['ImageTags']?['Thumb'] != null) {
+    } else if (_tvShowDetails!['ImageTags']?['Thumb'] != null && widget.server.url.isNotEmpty) {
       imageUrl = _api?.getImageUrl(
         itemId: _tvShowDetails!['Id'],
         imageType: 'Thumb',
@@ -388,7 +386,8 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
         tag: _tvShowDetails!['ImageTags']['Thumb'],
       );
     } else if (_tvShowDetails!['BackdropImageTags'] is List && 
-               (_tvShowDetails!['BackdropImageTags'] as List).isNotEmpty) {
+               (_tvShowDetails!['BackdropImageTags'] as List).isNotEmpty &&
+               widget.server.url.isNotEmpty) {
       imageUrl = _api?.getImageUrl(
         itemId: _tvShowDetails!['Id'],
         imageType: 'Backdrop',
@@ -421,7 +420,7 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
               Stack(
                 children: [
                   // 背景图片
-                  imageUrl != null
+                  imageUrl != null && imageUrl.startsWith('http')
                       ? Image.network(
                           imageUrl,
                           fit: BoxFit.cover,

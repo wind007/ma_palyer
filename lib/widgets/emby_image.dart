@@ -33,7 +33,7 @@ class EmbyImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (imageUrl == null || imageUrl!.isEmpty) {
+    if (imageUrl == null || imageUrl!.isEmpty || !imageUrl!.startsWith('http')) {
       return _buildPlaceholder(context);
     }
 

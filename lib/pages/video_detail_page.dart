@@ -302,14 +302,15 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                   Builder(
                     builder: (context) {
                       String? imageUrl;
-                      if (_videoDetails!['ImageTags']?['Backdrop'] != null) {
+                      if (_videoDetails!['ImageTags']?['Backdrop'] != null && widget.server.url.isNotEmpty) {
                         imageUrl = '${widget.server.url}/Items/${_videoDetails!['Id']}/Images/Backdrop?width=1920&height=1080&quality=90&tag=${_videoDetails!['ImageTags']['Backdrop']}';
-                      } else if (_videoDetails!['ImageTags']?['Primary'] != null) {
+                      } else if (_videoDetails!['ImageTags']?['Primary'] != null && widget.server.url.isNotEmpty) {
                         imageUrl = '${widget.server.url}/Items/${_videoDetails!['Id']}/Images/Primary?width=800&height=1200&quality=90&tag=${_videoDetails!['ImageTags']['Primary']}';
-                      } else if (_videoDetails!['ImageTags']?['Thumb'] != null) {
+                      } else if (_videoDetails!['ImageTags']?['Thumb'] != null && widget.server.url.isNotEmpty) {
                         imageUrl = '${widget.server.url}/Items/${_videoDetails!['Id']}/Images/Thumb?width=800&height=1200&quality=90&tag=${_videoDetails!['ImageTags']['Thumb']}';
                       } else if (_videoDetails!['BackdropImageTags'] is List && 
-                                 (_videoDetails!['BackdropImageTags'] as List).isNotEmpty) {
+                                 (_videoDetails!['BackdropImageTags'] as List).isNotEmpty &&
+                                 widget.server.url.isNotEmpty) {
                         imageUrl = _api?.getImageUrl(
                           itemId: _videoDetails!['Id'],
                           imageType: 'Backdrop',
@@ -320,7 +321,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                         );
                       }
 
-                      return imageUrl != null
+                      return imageUrl != null && imageUrl.startsWith('http')
                           ? Image.network(
                               imageUrl,
                               headers: {'X-Emby-Token': widget.server.accessToken},
@@ -706,7 +707,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                               children: [
                                 CircleAvatar(
                                   radius: 30,
-                                  backgroundImage: person['PrimaryImageTag'] != null
+                                  backgroundImage: person['PrimaryImageTag'] != null && widget.server.url.isNotEmpty
                                       ? NetworkImage(
                                           '${widget.server.url}/Items/${person['Id']}/Images/Primary?tag=${person['PrimaryImageTag']}&X-Emby-Token=${widget.server.accessToken}',
                                         )

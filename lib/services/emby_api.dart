@@ -455,6 +455,12 @@ class EmbyApiService {
         return fallbackUrl ?? '';
       }
 
+      // 检查 baseUrl 是否有效
+      if (baseUrl.isEmpty || !baseUrl.startsWith('http')) {
+        Logger.w('获取图片URL失败：无效的服务器地址 - $baseUrl', _tag);
+        return fallbackUrl ?? '';
+      }
+
       final params = <String, String>{};
 
       if (width != null) params['Width'] = width.toString();
@@ -462,9 +468,17 @@ class EmbyApiService {
       if (quality != null) params['Quality'] = quality.toString();
       if (tag.isNotEmpty) params['Tag'] = tag;
 
-      final uri = Uri.parse('$baseUrl/Items/$itemId/Images/$imageType')
+      // 确保 baseUrl 不以斜杠结尾
+      final cleanBaseUrl = baseUrl.endsWith('/')
+          ? baseUrl.substring(0, baseUrl.length - 1)
+          : baseUrl;
+
+      final uri = Uri.parse('$cleanBaseUrl/Items/$itemId/Images/$imageType')
           .replace(queryParameters: params);
-      return uri.toString();
+      
+      final url = uri.toString();
+      Logger.d('生成图片URL: $url', _tag);
+      return url;
     } catch (e) {
       Logger.e('生成图片URL失败', _tag, e);
       return fallbackUrl ?? '';

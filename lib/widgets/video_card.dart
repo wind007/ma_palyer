@@ -45,7 +45,7 @@ class _VideoCardState extends State<VideoCard> {
     String? imageUrl;
     
     // 按优先级尝试获取不同类型的图片
-    if (widget.video['ImageTags']?['Primary'] != null) {
+    if (widget.video['ImageTags']?['Primary'] != null && widget.server.url.isNotEmpty) {
       imageUrl = widget.api.getImageUrl(
         itemId: widget.video['Id'],
         imageType: 'Primary',
@@ -54,7 +54,7 @@ class _VideoCardState extends State<VideoCard> {
         quality: widget.imageQuality,
         tag: widget.video['ImageTags']['Primary'],
       );
-    } else if (widget.video['ImageTags']?['Thumb'] != null) {
+    } else if (widget.video['ImageTags']?['Thumb'] != null && widget.server.url.isNotEmpty) {
       imageUrl = widget.api.getImageUrl(
         itemId: widget.video['Id'],
         imageType: 'Thumb',
@@ -64,7 +64,8 @@ class _VideoCardState extends State<VideoCard> {
         tag: widget.video['ImageTags']['Thumb'],
       );
     } else if (widget.video['BackdropImageTags'] != null && 
-              (widget.video['BackdropImageTags'] as List).isNotEmpty) {
+              (widget.video['BackdropImageTags'] as List).isNotEmpty &&
+              widget.server.url.isNotEmpty) {
       imageUrl = widget.api.getImageUrl(
         itemId: widget.video['Id'],
         imageType: 'Backdrop',
@@ -73,7 +74,7 @@ class _VideoCardState extends State<VideoCard> {
         quality: widget.imageQuality,
         tag: widget.video['BackdropImageTags'][0],
       );
-    } else if (widget.video['ImageTags']?['Logo'] != null) {
+    } else if (widget.video['ImageTags']?['Logo'] != null && widget.server.url.isNotEmpty) {
       imageUrl = widget.api.getImageUrl(
         itemId: widget.video['Id'],
         imageType: 'Logo',
@@ -82,7 +83,7 @@ class _VideoCardState extends State<VideoCard> {
         quality: widget.imageQuality,
         tag: widget.video['ImageTags']['Logo'],
       );
-    } else if (widget.video['ImageTags']?['Banner'] != null) {
+    } else if (widget.video['ImageTags']?['Banner'] != null && widget.server.url.isNotEmpty) {
       imageUrl = widget.api.getImageUrl(
         itemId: widget.video['Id'],
         imageType: 'Banner',
@@ -113,7 +114,7 @@ class _VideoCardState extends State<VideoCard> {
                         children: [
                           // 图片
                           Positioned.fill(
-                            child: imageUrl != null && imageUrl.isNotEmpty
+                            child: imageUrl != null && imageUrl.isNotEmpty && imageUrl.startsWith('http')
                               ? Image.network(
                                   imageUrl,
                                   headers: {
