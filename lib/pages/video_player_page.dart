@@ -15,6 +15,9 @@ class VideoPlayerPage extends StatefulWidget {
   final int? mediaSourceIndex;
   final int? initialAudioStreamIndex;
   final int? initialSubtitleStreamIndex;
+  final String? seriesId;
+  final int? seasonNumber;
+  final int? episodeNumber;
 
   const VideoPlayerPage({
     super.key,
@@ -25,6 +28,9 @@ class VideoPlayerPage extends StatefulWidget {
     this.mediaSourceIndex,
     this.initialAudioStreamIndex,
     this.initialSubtitleStreamIndex,
+    this.seriesId,
+    this.seasonNumber,
+    this.episodeNumber,
   });
 
   @override
@@ -146,6 +152,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   int? _currentSubtitleStreamIndex;
   List<dynamic>? _audioStreams;
   List<dynamic>? _subtitleStreams;
+  Map<String, dynamic>? _nextEpisode;
 
   @override
   void initState() {
@@ -165,6 +172,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     
     _initializePlayer();
     _initializeBrightness();
+    _loadNextEpisode();
   }
 
   Future<void> _initializeBrightness() async {
@@ -289,8 +297,20 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
 
     // 播放完成处理
     if (playerValue.position >= playerValue.duration) {
-      Logger.i("视频播放完成", _tag);
+      Logger.i("视频播放完成，当前位置: ${playerValue.position.inSeconds}秒，总时长: ${playerValue.duration.inSeconds}秒", _tag);
+      Logger.i("seriesId: ${widget.seriesId}, seasonNumber: ${widget.seasonNumber}, episodeNumber: ${widget.episodeNumber}", _tag);
       _updateProgress(isPaused: true);
+      
+      // 自动播放下一集
+      if (_nextEpisode != null) {
+        Logger.i("准备播放下一集: ${_nextEpisode!['Name']}, ID: ${_nextEpisode!['Id']}", _tag);
+        _playNextEpisode();
+      } else {
+        Logger.i("没有下一集信息，返回上一页", _tag);
+        if (mounted) {
+          Navigator.of(context).pop();
+        }
+      }
     }
   }
 
@@ -1543,6 +1563,75 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('切换字幕失败: $e')),
+      );
+    }
+  }
+
+  Future<void> _loadNextEpisode() async {
+    if (widget.seriesId == null || widget.seasonNumber == null || widget.episodeNumber == null) {
+      Logger.w("无法加载下一集：缺少必要信息 - seriesId: ${widget.seriesId}, seasonNumber: ${widget.seasonNumber}, episodeNumber: ${widget.episodeNumber}", _tag);
+      return;
+    }
+
+    try {
+      Logger.d("开始获取下一集信息 - seriesId: ${widget.seriesId}, seasonNumber: ${widget.seasonNumber}, episodeNumber: ${widget.episodeNumber}", _tag);
+      final response = await widget.embyApi.getEpisodes(
+        seriesId: widget.seriesId!,
+        userId: widget.embyApi.userId!,
+        seasonNumber: widget.seasonNumber,
+        fields: 'Path,MediaSources,UserData',
+      );
+
+      if (response['Items'] != null) {
+        final episodes = response['Items'] as List;
+        Logger.d("获取到 ${episodes.length} 集", _tag);
+        
+        // 查找当前集的下一集
+        for (int i = 0; i < episodes.length; i++) {
+          final episode = episodes[i];
+          final indexNumber = episode['IndexNumber'];
+          if (indexNumber != null && indexNumber > widget.episodeNumber!) {
+            _nextEpisode = episode;
+            Logger.i("找到下一集: ${_nextEpisode!['Name']}, 集数: $indexNumber", _tag);
+            break;
+          }
+        }
+        
+        if (_nextEpisode == null) {
+          Logger.w("未找到下一集", _tag);
+        }
+      } else {
+        Logger.w("获取剧集列表失败：返回数据为空", _tag);
+      }
+    } catch (e, stackTrace) {
+      Logger.e("获取下一集信息失败", _tag, e, stackTrace);
+    }
+  }
+
+  Future<void> _playNextEpisode() async {
+    if (_nextEpisode == null) {
+      Logger.i("没有下一集，返回上一页", _tag);
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+      return;
+    }
+
+    Logger.i("开始播放下一集: ${_nextEpisode!['Name']}", _tag);
+    if (mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => VideoPlayerPage(
+            itemId: _nextEpisode!['Id'],
+            title: _nextEpisode!['Name'],
+            embyApi: widget.embyApi,
+            fromStart: true,
+            seriesId: widget.seriesId,
+            seasonNumber: widget.seasonNumber,
+            episodeNumber: (_nextEpisode!['IndexNumber'] as num).toInt(),
+          ),
+        ),
       );
     }
   }

@@ -283,17 +283,30 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
                       )
                     : null,
                 onTap: () {
+                  final Map<String, dynamic> video = {
+                    ...Map<String, dynamic>.from(episode),
+                    'SeriesId': widget.tvShow['Id'],
+                    'SeasonNumber': seasonNumber,
+                    'EpisodeNumber': episodeNumber,
+                  };
+                  
+                  Logger.i(
+                    "打开剧集详情页面 - "
+                    "剧集: ${episode['Name']}, "
+                    "seriesId: ${widget.tvShow['Id']}, "
+                    "seasonNumber: $seasonNumber, "
+                    "episodeNumber: $episodeNumber, "
+                    "原始数据 - episode: $episode, "
+                    "合并后数据 - video: $video",
+                    _tag,
+                  );
+                  
                   Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (context) => VideoDetailPage(
                         server: widget.server,
-                        video: {
-                          ...episode,
-                          'SeriesId': widget.tvShow['Id'],
-                          'SeasonNumber': seasonNumber,
-                          'EpisodeNumber': episodeNumber,
-                        },
+                        video: video,
                       ),
                     ),
                   );

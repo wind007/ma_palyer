@@ -67,6 +67,8 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
     }
     
     Logger.i("开始加载视频详情: ${widget.video['Name']}", _tag);
+    Logger.i("传入的参数 - seriesId: ${widget.video['SeriesId']}, seasonNumber: ${widget.video['SeasonNumber']}, episodeNumber: ${widget.video['EpisodeNumber']}", _tag);
+    
     try {
       final videoId = widget.video['Id'];
       Logger.d("获取视频详情: $videoId", _tag);
@@ -74,7 +76,20 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
       Logger.d("获取播放进度: $videoId", _tag);
       final position = await _api!.getPlaybackPosition(videoId);
 
+      // 确保从 widget.video 中的参数被正确合并到 details 中
+      if (widget.video['SeriesId'] != null) {
+        details['SeriesId'] = widget.video['SeriesId'];
+      }
+      if (widget.video['SeasonNumber'] != null) {
+        details['SeasonNumber'] = widget.video['SeasonNumber'];
+      }
+      if (widget.video['EpisodeNumber'] != null) {
+        details['EpisodeNumber'] = widget.video['EpisodeNumber'];
+      }
+
       Logger.i("视频详情加载完成: ${details['Name']}", _tag);
+      Logger.i("最终参数 - seriesId: ${details['SeriesId']}, seasonNumber: ${details['SeasonNumber']}, episodeNumber: ${details['EpisodeNumber']}", _tag);
+      
       if (mounted) {
         setState(() {
           _videoDetails = details;
@@ -104,12 +119,32 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
       return;
     }
     
+    // 确保从原始数据中获取参数
+    final seriesId = _videoDetails!['SeriesId'] ?? widget.video['SeriesId'];
+    final seasonNumber = _videoDetails!['SeasonNumber'] != null 
+        ? (_videoDetails!['SeasonNumber'] is int 
+            ? _videoDetails!['SeasonNumber'] 
+            : int.tryParse(_videoDetails!['SeasonNumber'].toString()))
+        : (widget.video['SeasonNumber'] is int 
+            ? widget.video['SeasonNumber'] 
+            : int.tryParse(widget.video['SeasonNumber'].toString()));
+    final episodeNumber = _videoDetails!['EpisodeNumber'] != null 
+        ? (_videoDetails!['EpisodeNumber'] is int 
+            ? _videoDetails!['EpisodeNumber'] 
+            : int.tryParse(_videoDetails!['EpisodeNumber'].toString()))
+        : (widget.video['EpisodeNumber'] is int 
+            ? widget.video['EpisodeNumber'] 
+            : int.tryParse(widget.video['EpisodeNumber'].toString()));
+    
     Logger.i(
       "开始播放视频: ${_videoDetails!['Name']}, "
       "${fromStart ? '从头开始' : '继续播放'}, "
       "版本: $mediaSourceIndex, "
       "音频: $audioStreamIndex, "
-      "字幕: $subtitleStreamIndex",
+      "字幕: $subtitleStreamIndex, "
+      "剧集信息 - seriesId: $seriesId, seasonNumber: $seasonNumber, episodeNumber: $episodeNumber, "
+      "原始数据 - video: ${widget.video}, "
+      "详情数据 - videoDetails: $_videoDetails",
       _tag,
     );
 
@@ -124,9 +159,9 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
           mediaSourceIndex: mediaSourceIndex,
           initialAudioStreamIndex: audioStreamIndex,
           initialSubtitleStreamIndex: subtitleStreamIndex,
-          seriesId: _videoDetails!['SeriesId'],
-          seasonNumber: _videoDetails!['SeasonNumber'] != null ? (_videoDetails!['SeasonNumber'] as num).toInt() : null,
-          episodeNumber: _videoDetails!['EpisodeNumber'] != null ? (_videoDetails!['EpisodeNumber'] as num).toInt() : null,
+          seriesId: seriesId,
+          seasonNumber: seasonNumber,
+          episodeNumber: episodeNumber,
         ),
       ),
     ).then((_) {
