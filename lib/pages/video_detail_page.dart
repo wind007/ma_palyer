@@ -3,7 +3,6 @@ import '../services/emby_api.dart';
 import '../services/server_manager.dart';
 import '../services/api_service_manager.dart';
 import '../utils/logger.dart';
-import '../widgets/emby_image.dart';
 import './video_player_page.dart';
 
 class VideoDetailPage extends StatefulWidget {

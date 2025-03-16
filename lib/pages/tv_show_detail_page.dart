@@ -68,9 +68,6 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
 
       Logger.d("获取电视剧详情: $tvShowId", _tag);
       final details = await _api!.getVideoDetails(tvShowId);
-      if (details == null) {
-        throw Exception('获取电视剧详情失败');
-      }
 
       Logger.d("获取季列表: $tvShowId", _tag);
       final seasonsResponse = await _api!.getSeasons(
@@ -78,10 +75,6 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
         userId: _api!.userId!,
         fields: 'PrimaryImageAspectRatio,Overview,Path,MediaStreams,MediaSources,IndexNumber,ParentIndexNumber,Type,Status,Genres,Tags',
       );
-      
-      if (seasonsResponse == null) {
-        throw Exception('获取季列表失败');
-      }
 
       final seasons = seasonsResponse['Items'] as List?;
       if (seasons == null) {
@@ -117,7 +110,7 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
             fields: 'PrimaryImageAspectRatio,Overview,Path,MediaStreams,MediaSources,IndexNumber,ParentIndexNumber,Type,Status,UserData',
           );
 
-          if (episodesResponse != null && episodesResponse['Items'] is List) {
+          if (episodesResponse['Items'] is List) {
             seasonEpisodes[seasonNumber] = episodesResponse['Items'] as List;
           } else {
             Logger.w("季 $seasonNumber 的剧集列表为空或格式错误", _tag);
