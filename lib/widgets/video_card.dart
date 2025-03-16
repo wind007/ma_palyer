@@ -31,6 +31,7 @@ class VideoCard extends StatefulWidget {
 
 class _VideoCardState extends State<VideoCard> {
   static const String _tag = "VideoCard";
+  // ignore: unused_field
   bool _isHovering = false;
 
   @override
@@ -255,6 +256,7 @@ class _VideoCardState extends State<VideoCard> {
                 onTap: () async {
                   Navigator.pop(context);
                   final isFavorite = widget.video['UserData']?['IsFavorite'] == true;
+                  final currentContext = context;
                   try {
                     await widget.api.toggleFavorite(widget.video['Id'], isFavorite);
                     if (!mounted) return;
@@ -264,9 +266,11 @@ class _VideoCardState extends State<VideoCard> {
                     });
                   } catch (e) {
                     if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('操作失败: $e')),
-                    );
+                    if (currentContext.mounted) {
+                      ScaffoldMessenger.of(currentContext).showSnackBar(
+                        SnackBar(content: Text('操作失败: $e')),
+                      );
+                    }
                   }
                 },
               ),
@@ -283,6 +287,7 @@ class _VideoCardState extends State<VideoCard> {
                 onTap: () async {
                   Navigator.pop(context);
                   final isPlayed = widget.video['UserData']?['Played'] == true;
+                  final currentContext = context;
                   try {
                     await widget.api.togglePlayed(widget.video['Id'], isPlayed);
                     if (!mounted) return;
@@ -292,9 +297,11 @@ class _VideoCardState extends State<VideoCard> {
                     });
                   } catch (e) {
                     if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('操作失败: $e')),
-                    );
+                    if (currentContext.mounted) {
+                      ScaffoldMessenger.of(currentContext).showSnackBar(
+                        SnackBar(content: Text('操作失败: $e')),
+                      );
+                    }
                   }
                 },
               ),
