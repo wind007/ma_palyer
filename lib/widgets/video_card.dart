@@ -34,17 +34,64 @@ class _VideoCardState extends State<VideoCard> {
   // ignore: unused_field
   bool _isHovering = false;
 
+  bool get _isCollection {
+    final type = widget.video['Type']?.toString().toLowerCase();
+    final collectionType = widget.video['CollectionType']?.toString().toLowerCase();
+    return type == 'boxset' || collectionType == 'movies' || type == 'moviescollection';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final primaryTag = widget.video['ImageTags']?['Primary'];
-    final imageUrl = primaryTag != null ? widget.api.getImageUrl(
-      itemId: widget.video['Id'],
-      imageType: 'Primary',
-      width: widget.imageWidth,
-      height: widget.imageHeight,
-      quality: widget.imageQuality,
-      tag: primaryTag,
-    ) : null;
+    String? imageUrl;
+    
+    // 按优先级尝试获取不同类型的图片
+    if (widget.video['ImageTags']?['Primary'] != null) {
+      imageUrl = widget.api.getImageUrl(
+        itemId: widget.video['Id'],
+        imageType: 'Primary',
+        width: widget.imageWidth,
+        height: widget.imageHeight,
+        quality: widget.imageQuality,
+        tag: widget.video['ImageTags']['Primary'],
+      );
+    } else if (widget.video['ImageTags']?['Thumb'] != null) {
+      imageUrl = widget.api.getImageUrl(
+        itemId: widget.video['Id'],
+        imageType: 'Thumb',
+        width: widget.imageWidth,
+        height: widget.imageHeight,
+        quality: widget.imageQuality,
+        tag: widget.video['ImageTags']['Thumb'],
+      );
+    } else if (widget.video['BackdropImageTags'] != null && 
+              (widget.video['BackdropImageTags'] as List).isNotEmpty) {
+      imageUrl = widget.api.getImageUrl(
+        itemId: widget.video['Id'],
+        imageType: 'Backdrop',
+        width: widget.imageWidth,
+        height: widget.imageHeight,
+        quality: widget.imageQuality,
+        tag: widget.video['BackdropImageTags'][0],
+      );
+    } else if (widget.video['ImageTags']?['Logo'] != null) {
+      imageUrl = widget.api.getImageUrl(
+        itemId: widget.video['Id'],
+        imageType: 'Logo',
+        width: widget.imageWidth,
+        height: widget.imageHeight,
+        quality: widget.imageQuality,
+        tag: widget.video['ImageTags']['Logo'],
+      );
+    } else if (widget.video['ImageTags']?['Banner'] != null) {
+      imageUrl = widget.api.getImageUrl(
+        itemId: widget.video['Id'],
+        imageType: 'Banner',
+        width: widget.imageWidth,
+        height: widget.imageHeight,
+        quality: widget.imageQuality,
+        tag: widget.video['ImageTags']['Banner'],
+      );
+    }
 
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovering = true),
@@ -111,8 +158,8 @@ class _VideoCardState extends State<VideoCard> {
                             ),
                           ),
                           // 状态图标
-                          if (widget.video['UserData']?['IsFavorite'] == true || 
-                              widget.video['UserData']?['Played'] == true)
+                          if (!_isCollection && (widget.video['UserData']?['IsFavorite'] == true || 
+                              widget.video['UserData']?['Played'] == true))
                             Positioned(
                               right: 4,
                               bottom: 4,
@@ -149,6 +196,40 @@ class _VideoCardState extends State<VideoCard> {
                                       ),
                                     ),
                                 ],
+                              ),
+                            ),
+                          // 系列标识
+                          if (_isCollection)
+                            Positioned(
+                              right: 4,
+                              bottom: 4,
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: Colors.black38,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(
+                                      Icons.collections,
+                                      color: Colors.white,
+                                      size: 14,
+                                    ),
+                                    if (widget.video['ChildCount'] != null) ...[
+                                      const SizedBox(width: 2),
+                                      Text(
+                                        '${widget.video['ChildCount']}',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
                               ),
                             ),
                           // 长按菜单触发区域
@@ -235,6 +316,9 @@ class _VideoCardState extends State<VideoCard> {
   }
 
   void _showOptionsDialog(BuildContext context) {
+    // 如果是系列，不显示收藏和播放状态选项
+    if (_isCollection) return;
+    
     showDialog(
       context: context,
       builder: (context) => Dialog(

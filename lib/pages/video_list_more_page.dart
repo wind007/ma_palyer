@@ -11,7 +11,7 @@ import '../widgets/video_grid.dart';
 class VideoListMorePage extends StatefulWidget {
   final ServerInfo server;
   final String title;
-  final String viewId;
+  final String? viewId;
   final String? parentId;
   final bool isMovieView;
 
@@ -19,7 +19,7 @@ class VideoListMorePage extends StatefulWidget {
     super.key,
     required this.server,
     required this.title,
-    required this.viewId,
+    this.viewId,
     this.parentId,
     required this.isMovieView,
   });

@@ -62,20 +62,80 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
     Logger.i("开始加载电视剧详情: ${widget.tvShow['Name']}", _tag);
     try {
       final tvShowId = widget.tvShow['Id'];
+      if (tvShowId == null) {
+        throw Exception('无效的电视剧ID');
+      }
+
       Logger.d("获取电视剧详情: $tvShowId", _tag);
       final details = await _api!.getVideoDetails(tvShowId);
+      if (details == null) {
+        throw Exception('获取电视剧详情失败');
+      }
+
       Logger.d("获取季列表: $tvShowId", _tag);
       final seasonsResponse = await _api!.getSeasons(
         seriesId: tvShowId,
         userId: _api!.userId!,
-        fields: 'PrimaryImageAspectRatio',
+        fields: 'PrimaryImageAspectRatio,Overview,Path,MediaStreams,MediaSources,IndexNumber,ParentIndexNumber,Type,Status,Genres,Tags',
       );
-      final seasons = seasonsResponse['Items'] as List;
+      
+      if (seasonsResponse == null) {
+        throw Exception('获取季列表失败');
+      }
+
+      final seasons = seasonsResponse['Items'] as List?;
+      if (seasons == null) {
+        throw Exception('季列表数据格式错误');
+      }
+
+      // 获取每一季的剧集列表
+      final Map<int, List<dynamic>> seasonEpisodes = {};
+      for (var season in seasons) {
+        final seasonId = season['Id'];
+        if (seasonId == null) {
+          Logger.w("跳过无效的季: ${season['Name'] ?? '未知'}", _tag);
+          continue;
+        }
+
+        final indexNumber = season['IndexNumber'];
+        if (indexNumber == null) {
+          Logger.w("跳过缺少季数的季: ${season['Name'] ?? '未知'}", _tag);
+          continue;
+        }
+
+        final seasonNumber = indexNumber is int ? indexNumber : int.tryParse(indexNumber.toString());
+        if (seasonNumber == null || seasonNumber <= 0) {
+          Logger.w("跳过无效季数的季: ${season['Name'] ?? '未知'}", _tag);
+          continue;
+        }
+
+        try {
+          final episodesResponse = await _api!.getEpisodes(
+            seriesId: tvShowId,
+            seasonId: seasonId,
+            userId: _api!.userId!,
+            fields: 'PrimaryImageAspectRatio,Overview,Path,MediaStreams,MediaSources,IndexNumber,ParentIndexNumber,Type,Status,UserData',
+          );
+
+          if (episodesResponse != null && episodesResponse['Items'] is List) {
+            seasonEpisodes[seasonNumber] = episodesResponse['Items'] as List;
+          } else {
+            Logger.w("季 $seasonNumber 的剧集列表为空或格式错误", _tag);
+            seasonEpisodes[seasonNumber] = [];
+          }
+        } catch (e) {
+          Logger.e("加载季 $seasonNumber 的剧集失败", _tag, e);
+          seasonEpisodes[seasonNumber] = [];
+        }
+      }
 
       Logger.i("电视剧详情加载完成: ${details['Name']}", _tag);
       if (mounted) {
         setState(() {
-          _tvShowDetails = details;
+          _tvShowDetails = {
+            ...details,
+            'Seasons': seasonEpisodes,
+          };
           _seasons = seasons;
           _isLoading = false;
         });
@@ -111,20 +171,39 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
           ),
         ),
         ..._seasons!.map((season) {
-          final seasonNumber = season['IndexNumber'] as int;
+          final indexNumber = season['IndexNumber'];
+          if (indexNumber == null) {
+            return const SizedBox.shrink();
+          }
+          
+          final seasonNumber = indexNumber is int ? indexNumber : int.tryParse(indexNumber.toString()) ?? 0;
+          if (seasonNumber <= 0) {
+            return const SizedBox.shrink();
+          }
+
           final episodes = _tvShowDetails?['Seasons']?[seasonNumber] ?? [];
           
           return ExpansionTile(
             title: Text('第 $seasonNumber 季'),
             subtitle: Text('${episodes.length} 集'),
             children: episodes.map<Widget>((episode) {
-              final episodeNumber = episode['IndexNumber'] as int;
-              final imageUrl = episode['ImageTags']?['Primary'] != null
-                  ? _api!.getImageUrl(
-                      itemId: episode['Id'],
-                      imageType: 'Primary',
-                    )
-                  : null;
+              final epIndexNumber = episode['IndexNumber'];
+              if (epIndexNumber == null) {
+                return const SizedBox.shrink();
+              }
+              
+              final episodeNumber = epIndexNumber is int ? epIndexNumber : int.tryParse(epIndexNumber.toString()) ?? 0;
+              if (episodeNumber <= 0) {
+                return const SizedBox.shrink();
+              }
+
+              String? imageUrl;
+              if (episode['ImageTags']?['Primary'] != null && _api != null) {
+                imageUrl = _api!.getImageUrl(
+                  itemId: episode['Id'],
+                  imageType: 'Primary',
+                );
+              }
 
               return ListTile(
                 leading: ClipRRect(
@@ -277,12 +356,37 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
       );
     }
 
-    final imageUrl = _tvShowDetails!['ImageTags']?['Primary'] != null
-        ? _api?.getImageUrl(
-            itemId: _tvShowDetails!['Id'],
-            imageType: 'Primary',
-          )
-        : null;
+    String? imageUrl;
+    // 按优先级尝试获取不同类型的图片
+    if (_tvShowDetails!['ImageTags']?['Primary'] != null) {
+      imageUrl = _api?.getImageUrl(
+        itemId: _tvShowDetails!['Id'],
+        imageType: 'Primary',
+        width: 800,
+        height: 1200,
+        quality: 90,
+        tag: _tvShowDetails!['ImageTags']['Primary'],
+      );
+    } else if (_tvShowDetails!['ImageTags']?['Thumb'] != null) {
+      imageUrl = _api?.getImageUrl(
+        itemId: _tvShowDetails!['Id'],
+        imageType: 'Thumb',
+        width: 800,
+        height: 1200,
+        quality: 90,
+        tag: _tvShowDetails!['ImageTags']['Thumb'],
+      );
+    } else if (_tvShowDetails!['BackdropImageTags'] is List && 
+               (_tvShowDetails!['BackdropImageTags'] as List).isNotEmpty) {
+      imageUrl = _api?.getImageUrl(
+        itemId: _tvShowDetails!['Id'],
+        imageType: 'Backdrop',
+        width: 1920,
+        height: 1080,
+        quality: 90,
+        tag: _tvShowDetails!['BackdropImageTags'][0],
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -439,49 +543,30 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
                       ],
                     ),
                   ),
-                  // 视频信息覆盖层
-                  Positioned(
-                    left: 16,
-                    right: 16,
-                    bottom: 16,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _tvShowDetails?['Name'] ?? '',
-                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                            color: Colors.white,
-                            shadows: [
-                              Shadow(
-                                offset: const Offset(0, 1),
-                                blurRadius: 3,
-                                color: Colors.black.withAlpha(128),
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (_tvShowDetails?['Overview'] != null) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            _tvShowDetails!['Overview'],
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: Colors.white,
-                              shadows: [
-                                Shadow(
-                                  offset: const Offset(0, 1),
-                                  blurRadius: 2,
-                                  color: Colors.black.withAlpha(128),
-                                ),
-                              ],
-                            ),
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
                 ],
+              ),
+              
+              // 视频信息
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _tvShowDetails?['Name'] ?? '',
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    if (_tvShowDetails?['Overview'] != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        _tvShowDetails!['Overview'],
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ],
+                  ],
+                ),
               ),
               
               // 剧集列表

@@ -563,6 +563,7 @@ class _VideoListPageState extends State<VideoListPage> with SingleTickerProvider
                             server: widget.server,
                             title: title,
                             viewId: viewId,
+                            parentId: null,
                             isMovieView: isMovieView,
                           ),
                         ),
@@ -679,7 +680,20 @@ class _VideoListPageState extends State<VideoListPage> with SingleTickerProvider
         final type = video['Type']?.toString().toLowerCase();
         final collectionType = video['CollectionType']?.toString().toLowerCase();
         
-        if (type == 'series' || collectionType == 'tvshows') {
+        if (type == 'boxset' || collectionType == 'movies' || type == 'moviescollection') {
+          Logger.d("打开电影系列页", _tag);
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => VideoListMorePage(
+                server: widget.server,
+                title: video['Name'],
+                parentId: video['Id'],
+                isMovieView: true,
+              ),
+            ),
+          );
+        } else if (type == 'series' || collectionType == 'tvshows') {
           Logger.d("打开电视剧详情页", _tag);
           Navigator.push(
             context,

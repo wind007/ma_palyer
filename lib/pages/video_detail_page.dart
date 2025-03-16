@@ -261,16 +261,69 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
             if (_videoDetails!['ImageTags'] != null) ...[
               Stack(
                 children: [
-                  EmbyImage(
-                    imageUrl: _videoDetails!['ImageTags']?['Backdrop'] != null
-                        ? '${widget.server.url}/Items/${_videoDetails!['Id']}/Images/Backdrop'
-                        : _videoDetails!['ImageTags']?['Primary'] != null
-                            ? '${widget.server.url}/Items/${_videoDetails!['Id']}/Images/Primary'
-                            : '${widget.server.url}/Items/${_videoDetails!['Id']}/Images/Primary/0',
-                    headers: {'X-Emby-Token': widget.server.accessToken},
-                    width: double.infinity,
-                    height: 400,
-                    title: _videoDetails!['Name'],
+                  // 尝试按优先级获取不同类型的图片
+                  Builder(
+                    builder: (context) {
+                      String? imageUrl;
+                      if (_videoDetails!['ImageTags']?['Backdrop'] != null) {
+                        imageUrl = '${widget.server.url}/Items/${_videoDetails!['Id']}/Images/Backdrop?width=1920&height=1080&quality=90&tag=${_videoDetails!['ImageTags']['Backdrop']}';
+                      } else if (_videoDetails!['ImageTags']?['Primary'] != null) {
+                        imageUrl = '${widget.server.url}/Items/${_videoDetails!['Id']}/Images/Primary?width=800&height=1200&quality=90&tag=${_videoDetails!['ImageTags']['Primary']}';
+                      } else if (_videoDetails!['ImageTags']?['Thumb'] != null) {
+                        imageUrl = '${widget.server.url}/Items/${_videoDetails!['Id']}/Images/Thumb?width=800&height=1200&quality=90&tag=${_videoDetails!['ImageTags']['Thumb']}';
+                      } else if (_videoDetails!['BackdropImageTags'] is List && 
+                                 (_videoDetails!['BackdropImageTags'] as List).isNotEmpty) {
+                        imageUrl = _api?.getImageUrl(
+                          itemId: _videoDetails!['Id'],
+                          imageType: 'Backdrop',
+                          width: 1920,
+                          height: 1080,
+                          quality: 90,
+                          tag: _videoDetails!['BackdropImageTags'][0],
+                        );
+                      }
+
+                      return imageUrl != null
+                          ? Image.network(
+                              imageUrl,
+                              headers: {'X-Emby-Token': widget.server.accessToken},
+                              width: double.infinity,
+                              height: 400,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Container(
+                                  width: double.infinity,
+                                  height: 400,
+                                  color: Colors.grey[300],
+                                  child: Center(
+                                    child: Text(
+                                      _videoDetails!['Name'] ?? '未知标题',
+                                      style: const TextStyle(
+                                        color: Colors.black54,
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            )
+                          : Container(
+                              width: double.infinity,
+                              height: 400,
+                              color: Colors.grey[300],
+                              child: Center(
+                                child: Text(
+                                  _videoDetails!['Name'] ?? '未知标题',
+                                  style: const TextStyle(
+                                    color: Colors.black54,
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            );
+                    },
                   ),
                   // 添加渐变遮罩
                   Positioned.fill(
