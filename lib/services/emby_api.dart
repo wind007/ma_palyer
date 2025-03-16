@@ -434,7 +434,7 @@ class EmbyApiService {
     }
   }
 
-  String getImageUrl({
+  String? getImageUrl({
     required String itemId,
     required String imageType,
     int? width,
@@ -446,19 +446,19 @@ class EmbyApiService {
     try {
       if (itemId.isEmpty) {
         Logger.w('获取图片URL失败：无效的 itemId', _tag);
-        return fallbackUrl ?? '';
+        return fallbackUrl;
       }
 
       // 检查是否有对应类型的图片标签
       if (tag == null) {
         Logger.w('获取图片URL失败：没有找到图片标签', _tag);
-        return fallbackUrl ?? '';
+        return fallbackUrl;
       }
 
       // 检查 baseUrl 是否有效
       if (baseUrl.isEmpty || !baseUrl.startsWith('http')) {
         Logger.w('获取图片URL失败：无效的服务器地址 - $baseUrl', _tag);
-        return fallbackUrl ?? '';
+        return fallbackUrl;
       }
 
       final params = <String, String>{};
@@ -481,7 +481,7 @@ class EmbyApiService {
       return url;
     } catch (e) {
       Logger.e('生成图片URL失败', _tag, e);
-      return fallbackUrl ?? '';
+      return fallbackUrl;
     }
   }
 

@@ -34,6 +34,7 @@ class EmbyImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (imageUrl == null || imageUrl!.isEmpty || !imageUrl!.startsWith('http')) {
+      Logger.w('无效的图片URL: $imageUrl', _tag);
       return _buildPlaceholder(context);
     }
 
@@ -52,26 +53,30 @@ class EmbyImage extends StatelessWidget {
     return Container(
       width: width,
       height: height,
-      color: backgroundColor ?? Colors.grey[900],
+      color: backgroundColor ?? Colors.grey[300],
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-            Icons.movie,
-            size: iconSize ?? 64,
-            color: iconColor ?? Colors.grey[700],
+            Icons.image_not_supported_outlined,
+            size: iconSize ?? 32,
+            color: iconColor ?? Colors.black45,
           ),
           if (title != null) ...[
-            const SizedBox(height: 16),
-            Text(
-              title!,
-              style: TextStyle(
-                color: Colors.grey[500],
-                fontSize: 16,
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Text(
+                title!,
+                style: const TextStyle(
+                  color: Colors.black54,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
               ),
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
             ),
           ],
         ],
@@ -80,34 +85,23 @@ class EmbyImage extends StatelessWidget {
   }
 
   Widget _defaultErrorBuilder(BuildContext context, Object error, StackTrace? stackTrace) {
-    Logger.w("加载图片失败: $imageUrl", _tag, error, stackTrace);
+    Logger.e('加载图片失败: $imageUrl', _tag, error, stackTrace);
     return _buildPlaceholder(context);
   }
 
   Widget _defaultLoadingBuilder(BuildContext context, Widget child, ImageChunkEvent? loadingProgress) {
-    if (loadingProgress == null) {
-      return child;
-    }
-
+    if (loadingProgress == null) return child;
     return Container(
       width: width,
       height: height,
-      color: backgroundColor ?? Colors.grey[900],
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.movie,
-            size: iconSize ?? 64,
-            color: iconColor ?? Colors.grey[700],
-          ),
-          const SizedBox(height: 16),
-          CircularProgressIndicator(
-            value: loadingProgress.expectedTotalBytes != null
-                ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                : null,
-          ),
-        ],
+      color: backgroundColor ?? Colors.grey[200],
+      child: Center(
+        child: CircularProgressIndicator(
+          value: loadingProgress.expectedTotalBytes != null
+              ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+              : null,
+          strokeWidth: 2,
+        ),
       ),
     );
   }
