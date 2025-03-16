@@ -61,119 +61,111 @@ class _VideoCardState extends State<VideoCard> {
                     borderRadius: BorderRadius.circular(8),
                     child: AspectRatio(
                       aspectRatio: 2/3,
-                      child: imageUrl != null && imageUrl.isNotEmpty
-                        ? Image.network(
-                            imageUrl,
-                            headers: {
-                              'X-Emby-Token': widget.server.accessToken,
-                            },
-                            fit: BoxFit.cover,
-                            loadingBuilder: (context, child, loadingProgress) {
-                              if (loadingProgress == null) return child;
-                              return Container(
-                                color: Colors.grey[200],
-                                child: Center(
-                                  child: CircularProgressIndicator(
-                                    value: loadingProgress.expectedTotalBytes != null
-                                        ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                                        : null,
-                                    strokeWidth: 2,
-                                  ),
-                                ),
-                              );
-                            },
-                            errorBuilder: (context, error, stackTrace) {
-                              Logger.e('加载图片失败: $imageUrl', _tag, error);
-                              return _buildPlaceholder();
-                            },
-                          )
-                        : _buildPlaceholder(),
-                    ),
-                  ),
-                  // 收藏和播放状态按钮
-                  if (_isHovering)
-                    Positioned(
-                      right: 4,
-                      bottom: 36,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
+                      child: Stack(
                         children: [
-                          Container(
-                            decoration: BoxDecoration(
-                              color: Colors.black54,
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: IconButton(
-                              iconSize: 18,
-                              padding: const EdgeInsets.all(3),
-                              constraints: const BoxConstraints(),
-                              icon: Icon(
-                                widget.video['UserData']?['IsFavorite'] == true
-                                    ? Icons.favorite
-                                    : Icons.favorite_border,
-                                color: widget.video['UserData']?['IsFavorite'] == true
-                                    ? Colors.red
-                                    : Colors.white,
+                          // 图片
+                          Positioned.fill(
+                            child: imageUrl != null && imageUrl.isNotEmpty
+                              ? Image.network(
+                                  imageUrl,
+                                  headers: {
+                                    'X-Emby-Token': widget.server.accessToken,
+                                  },
+                                  fit: BoxFit.cover,
+                                  loadingBuilder: (context, child, loadingProgress) {
+                                    if (loadingProgress == null) return child;
+                                    return Container(
+                                      color: Colors.grey[200],
+                                      child: Center(
+                                        child: CircularProgressIndicator(
+                                          value: loadingProgress.expectedTotalBytes != null
+                                              ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                                              : null,
+                                          strokeWidth: 2,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  errorBuilder: (context, error, stackTrace) {
+                                    Logger.e('加载图片失败: $imageUrl', _tag, error);
+                                    return _buildPlaceholder();
+                                  },
+                                )
+                              : _buildPlaceholder(),
+                          ),
+                          // 渐变遮罩
+                          Positioned.fill(
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    Colors.transparent,
+                                    Colors.black.withAlpha(120),
+                                  ],
+                                  stops: const [0.7, 1.0],
+                                ),
                               ),
-                              onPressed: () async {
-                                final BuildContext currentContext = context;
-                                try {
-                                  final isFavorite = widget.video['UserData']?['IsFavorite'] == true;
-                                  await widget.api.toggleFavorite(widget.video['Id'], isFavorite);
-                                  if (!mounted) return;
-                                  setState(() {
-                                    widget.video['UserData'] ??= {};
-                                    widget.video['UserData']['IsFavorite'] = !isFavorite;
-                                  });
-                                } catch (e) {
-                                  if (!currentContext.mounted) return;
-                                  ScaffoldMessenger.of(currentContext).showSnackBar(
-                                    SnackBar(content: Text('操作失败: $e')),
-                                  );
-                                }
-                              },
                             ),
                           ),
-                          const SizedBox(width: 4),
-                          Container(
-                            decoration: BoxDecoration(
-                              color: Colors.black54,
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: IconButton(
-                              iconSize: 18,
-                              padding: const EdgeInsets.all(3),
-                              constraints: const BoxConstraints(),
-                              icon: Icon(
-                                widget.video['UserData']?['Played'] == true
-                                    ? Icons.check_circle
-                                    : Icons.check_circle_outline,
-                                color: widget.video['UserData']?['Played'] == true
-                                    ? Colors.green
-                                    : Colors.white,
+                          // 状态图标
+                          if (widget.video['UserData']?['IsFavorite'] == true || 
+                              widget.video['UserData']?['Played'] == true)
+                            Positioned(
+                              right: 4,
+                              bottom: 4,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (widget.video['UserData']?['IsFavorite'] == true)
+                                    Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black38,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: const Icon(
+                                        Icons.favorite,
+                                        color: Colors.red,
+                                        size: 14,
+                                      ),
+                                    ),
+                                  if (widget.video['UserData']?['IsFavorite'] == true && 
+                                      widget.video['UserData']?['Played'] == true)
+                                    const SizedBox(width: 4),
+                                  if (widget.video['UserData']?['Played'] == true)
+                                    Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black38,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: const Icon(
+                                        Icons.check_circle,
+                                        color: Colors.green,
+                                        size: 14,
+                                      ),
+                                    ),
+                                ],
                               ),
-                              onPressed: () async {
-                                final BuildContext currentContext = context;
-                                try {
-                                  final isPlayed = widget.video['UserData']?['Played'] == true;
-                                  await widget.api.togglePlayed(widget.video['Id'], isPlayed);
-                                  if (!mounted) return;
-                                  setState(() {
-                                    widget.video['UserData'] ??= {};
-                                    widget.video['UserData']['Played'] = !isPlayed;
-                                  });
-                                } catch (e) {
-                                  if (!currentContext.mounted) return;
-                                  ScaffoldMessenger.of(currentContext).showSnackBar(
-                                    SnackBar(content: Text('操作失败: $e')),
-                                  );
-                                }
-                              },
+                            ),
+                          // 长按菜单触发区域
+                          Positioned.fill(
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: () => widget.onTap(widget.video),
+                                onLongPress: () {
+                                  _showOptionsDialog(context);
+                                },
+                              ),
                             ),
                           ),
                         ],
                       ),
                     ),
+                  ),
                   // 播放进度条
                   if (widget.video['UserData']?['PlaybackPositionTicks'] != null &&
                       widget.video['UserData']?['PlaybackPositionTicks'] > 0)
@@ -237,6 +229,78 @@ class _VideoCardState extends State<VideoCard> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showOptionsDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: Icon(
+                  widget.video['UserData']?['IsFavorite'] == true
+                      ? Icons.favorite
+                      : Icons.favorite_border,
+                  color: widget.video['UserData']?['IsFavorite'] == true
+                      ? Colors.red
+                      : null,
+                ),
+                title: const Text('收藏'),
+                onTap: () async {
+                  Navigator.pop(context);
+                  final isFavorite = widget.video['UserData']?['IsFavorite'] == true;
+                  try {
+                    await widget.api.toggleFavorite(widget.video['Id'], isFavorite);
+                    if (!mounted) return;
+                    setState(() {
+                      widget.video['UserData'] ??= {};
+                      widget.video['UserData']['IsFavorite'] = !isFavorite;
+                    });
+                  } catch (e) {
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('操作失败: $e')),
+                    );
+                  }
+                },
+              ),
+              ListTile(
+                leading: Icon(
+                  widget.video['UserData']?['Played'] == true
+                      ? Icons.check_circle
+                      : Icons.check_circle_outline,
+                  color: widget.video['UserData']?['Played'] == true
+                      ? Colors.green
+                      : null,
+                ),
+                title: const Text('标记为已播放'),
+                onTap: () async {
+                  Navigator.pop(context);
+                  final isPlayed = widget.video['UserData']?['Played'] == true;
+                  try {
+                    await widget.api.togglePlayed(widget.video['Id'], isPlayed);
+                    if (!mounted) return;
+                    setState(() {
+                      widget.video['UserData'] ??= {};
+                      widget.video['UserData']['Played'] = !isPlayed;
+                    });
+                  } catch (e) {
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('操作失败: $e')),
+                    );
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
