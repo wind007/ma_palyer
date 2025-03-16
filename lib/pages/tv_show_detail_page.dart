@@ -172,7 +172,7 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
                                 Container(
                                   padding: const EdgeInsets.all(4),
                                   decoration: BoxDecoration(
-                                    color: Colors.black54,
+                                    color: Colors.black.withAlpha(128),
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: const Icon(
@@ -187,7 +187,7 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
                                 Container(
                                   padding: const EdgeInsets.all(4),
                                   decoration: BoxDecoration(
-                                    color: Colors.black54,
+                                    color: Colors.black.withAlpha(128),
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: const Icon(
@@ -354,7 +354,7 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
                           end: Alignment.bottomCenter,
                           colors: [
                             Colors.transparent,
-                            Colors.black.withOpacity(0.7),
+                            Colors.black.withAlpha(179),
                           ],
                           stops: const [0.6, 1.0],
                         ),
@@ -370,7 +370,7 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
                         // 收藏按钮
                         Container(
                           decoration: BoxDecoration(
-                            color: Colors.black54,
+                            color: Colors.black.withAlpha(128),
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: IconButton(
@@ -383,16 +383,18 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
                                   : Colors.white,
                             ),
                             onPressed: () async {
+                              final BuildContext currentContext = context;
                               try {
                                 final isFavorite = _tvShowDetails?['UserData']?['IsFavorite'] == true;
                                 await _api!.toggleFavorite(_tvShowDetails!['Id'], isFavorite);
+                                if (!currentContext.mounted) return;
                                 setState(() {
                                   _tvShowDetails?['UserData'] ??= {};
                                   _tvShowDetails!['UserData']['IsFavorite'] = !isFavorite;
                                 });
                               } catch (e) {
-                                if (!mounted) return;
-                                ScaffoldMessenger.of(context).showSnackBar(
+                                if (!currentContext.mounted) return;
+                                ScaffoldMessenger.of(currentContext).showSnackBar(
                                   SnackBar(content: Text('操作失败: $e')),
                                 );
                               }
@@ -403,7 +405,7 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
                         // 播放状态按钮
                         Container(
                           decoration: BoxDecoration(
-                            color: Colors.black54,
+                            color: Colors.black.withAlpha(128),
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: IconButton(
@@ -416,16 +418,18 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
                                   : Colors.white,
                             ),
                             onPressed: () async {
+                              final BuildContext currentContext = context;
                               try {
                                 final isPlayed = _tvShowDetails?['UserData']?['Played'] == true;
                                 await _api!.togglePlayed(_tvShowDetails!['Id'], isPlayed);
+                                if (!currentContext.mounted) return;
                                 setState(() {
                                   _tvShowDetails?['UserData'] ??= {};
                                   _tvShowDetails!['UserData']['Played'] = !isPlayed;
                                 });
                               } catch (e) {
-                                if (!mounted) return;
-                                ScaffoldMessenger.of(context).showSnackBar(
+                                if (!currentContext.mounted) return;
+                                ScaffoldMessenger.of(currentContext).showSnackBar(
                                   SnackBar(content: Text('操作失败: $e')),
                                 );
                               }
@@ -451,7 +455,7 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
                               Shadow(
                                 offset: const Offset(0, 1),
                                 blurRadius: 3,
-                                color: Colors.black.withOpacity(0.5),
+                                color: Colors.black.withAlpha(128),
                               ),
                             ],
                           ),
@@ -466,7 +470,7 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
                                 Shadow(
                                   offset: const Offset(0, 1),
                                   blurRadius: 2,
-                                  color: Colors.black.withOpacity(0.5),
+                                  color: Colors.black.withAlpha(128),
                                 ),
                               ],
                             ),

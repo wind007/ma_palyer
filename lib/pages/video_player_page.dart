@@ -88,7 +88,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
 
   static final _sliderThemeData = SliderThemeData(
     activeTrackColor: Colors.red,
-    inactiveTrackColor: Colors.white.withOpacity(0.3),
+    inactiveTrackColor: Colors.white.withAlpha(77),
     thumbColor: Colors.red,
     trackHeight: 2.0,
     thumbShape: const RoundSliderThumbShape(
@@ -563,11 +563,11 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   }
 
   Widget _buildVideoPlayer() {
-    return RawKeyboardListener(
+    return KeyboardListener(
       focusNode: FocusNode(),
       autofocus: true,
-      onKey: (RawKeyEvent event) {
-        if (event is RawKeyDownEvent) {
+      onKeyEvent: (KeyEvent event) {
+        if (event is KeyDownEvent) {
           if (event.logicalKey == LogicalKeyboardKey.space) {
             _togglePlayPause();
           } else if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
@@ -754,7 +754,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
           decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.3),
+            color: Colors.black.withAlpha(102),
             borderRadius: BorderRadius.circular(20),
           ),
           child: Column(
@@ -911,7 +911,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Colors.black54,
+                    color: Colors.black.withAlpha(77),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Row(
@@ -1054,30 +1054,8 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     );
   }
 
-  Widget _buildPlaybackSpeedButton() {
-    return GestureDetector(
-      onTap: _showPlaybackSpeedDialog,
-      child: Container(
-        padding: _buttonPadding,
-        decoration: _buttonDecoration,
-        child: Row(
-          children: [
-            const Icon(
-              Icons.speed,
-              color: Colors.white,
-              size: 16,
-            ),
-            const SizedBox(width: 4),
-            Text(
-              '${_playbackSpeed}x',
-              style: _timeTextStyle,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
+  // ignore: unused_element
   Widget _buildFullScreenButton() {
     return GestureDetector(
       onTap: _toggleFullScreen,
@@ -1104,10 +1082,10 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
           child: Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.4),
+              color: Colors.black.withAlpha(77),
               shape: BoxShape.circle,
               border: Border.all(
-                color: Colors.white.withOpacity(0.5),
+                color: Colors.white.withAlpha(128),
                 width: 2,
               ),
             ),
@@ -1182,7 +1160,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                     ),
                     decoration: BoxDecoration(
                       color: _playbackSpeed == speed
-                          ? Colors.red.withOpacity(0.3)
+                          ? Colors.red.withAlpha(77)
                           : Colors.transparent,
                     ),
                     child: Text(
@@ -1327,7 +1305,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                     ),
                     decoration: BoxDecoration(
                       color: _currentAudioStreamIndex == stream['Index']
-                          ? Colors.red.withOpacity(0.3)
+                          ? Colors.red.withAlpha(77)
                           : Colors.transparent,
                     ),
                     child: Row(
@@ -1396,7 +1374,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                   ),
                   decoration: BoxDecoration(
                     color: _currentSubtitleStreamIndex == null
-                        ? Colors.red.withOpacity(0.3)
+                        ? Colors.red.withAlpha(77)
                         : Colors.transparent,
                   ),
                   child: Row(
@@ -1436,7 +1414,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                     ),
                     decoration: BoxDecoration(
                       color: _currentSubtitleStreamIndex == stream['Index']
-                          ? Colors.red.withOpacity(0.3)
+                          ? Colors.red.withAlpha(77)
                           : Colors.transparent,
                     ),
                     child: Row(

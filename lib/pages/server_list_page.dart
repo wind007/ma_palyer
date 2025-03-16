@@ -17,7 +17,7 @@ class _ServerListPageState extends State<ServerListPage> {
   static const String _tag = "ServerList";
   final _serverManager = ServerManager();
   final _listKey = GlobalKey<AnimatedListState>();
-  List<ServerInfo> _servers = <ServerInfo>[];
+  final List<ServerInfo> _servers = <ServerInfo>[];
 
   @override
   void initState() {

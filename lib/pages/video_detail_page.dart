@@ -267,7 +267,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                         : _videoDetails!['ImageTags']?['Primary'] != null
                             ? '${widget.server.url}/Items/${_videoDetails!['Id']}/Images/Primary'
                             : '${widget.server.url}/Items/${_videoDetails!['Id']}/Images/Primary/0',
-                    headers: {'X-Emby-Token': widget.server.accessToken ?? ''},
+                    headers: {'X-Emby-Token': widget.server.accessToken},
                     width: double.infinity,
                     height: 400,
                     title: _videoDetails!['Name'],
@@ -281,7 +281,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                           end: Alignment.bottomCenter,
                           colors: [
                             Colors.transparent,
-                            Colors.black.withOpacity(0.7),
+                            Colors.black.withAlpha(179),
                           ],
                           stops: const [0.6, 1.0],
                         ),
@@ -379,7 +379,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                           child: Container(
                             width: 80,
                             height: 80,
-                            decoration: BoxDecoration(
+                            decoration: const BoxDecoration(
                               color: Colors.black54,
                               shape: BoxShape.circle,
                             ),
@@ -636,7 +636,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                                 Text(
                                   person['Type'],
                                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.7),
+                                    color: Theme.of(context).textTheme.bodySmall?.color?.withAlpha(179),
                                   ),
                                   maxLines: 1,
                                   textAlign: TextAlign.center,
@@ -723,7 +723,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceVariant,
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(

@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import '../services/emby_api.dart';
 import '../services/server_manager.dart';
-import '../utils/logger.dart';
 import './video_card.dart';
 
 class VideoGrid extends StatelessWidget {
-  static const String _tag = "VideoGrid";
   
   final List<dynamic> videos;
   final EmbyApiService api;

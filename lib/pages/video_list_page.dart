@@ -581,10 +581,10 @@ class _VideoListPageState extends State<VideoListPage> {
     return Container(
       width: 160,
       margin: const EdgeInsets.symmetric(horizontal: 8),
-      child: Column(
+      child: const Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const SizedBox(
+          SizedBox(
             width: 24,
             height: 24,
             child: CircularProgressIndicator(
@@ -592,8 +592,8 @@ class _VideoListPageState extends State<VideoListPage> {
               valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
             ),
           ),
-          const SizedBox(height: 8),
-          const Text(
+          SizedBox(height: 8),
+          Text(
             '加载中...',
             style: TextStyle(
               fontSize: 12,
