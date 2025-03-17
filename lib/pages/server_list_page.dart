@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/server_manager.dart';
 import '../services/theme_manager.dart';
 import '../utils/logger.dart';
+import '../widgets/adaptive_app_bar.dart';
 import 'add_server_page.dart';
 import 'edit_server_page.dart';
 import 'video_list_page.dart';
@@ -254,9 +255,9 @@ class _ServerListPageState extends State<ServerListPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: const Text('服务器列表'),
+      extendBodyBehindAppBar: true,
+      appBar: AdaptiveAppBar(
+        title: '服务器列表',
         actions: [
           IconButton(
             icon: Icon(ThemeManager().isDarkMode ? Icons.light_mode : Icons.dark_mode),
@@ -297,6 +298,10 @@ class _ServerListPageState extends State<ServerListPage> {
             )
           : AnimatedList(
               key: _listKey,
+              padding: EdgeInsets.only(
+                top: MediaQuery.of(context).padding.top + kToolbarHeight + 8,
+                bottom: 8,
+              ),
               initialItemCount: _servers.length,
               itemBuilder: (context, index, animation) {
                 return _buildServerItem(_servers[index], animation);

@@ -4,6 +4,7 @@ import '../services/server_manager.dart';
 import '../services/api_service_manager.dart';
 import '../utils/logger.dart';
 import './video_player_page.dart';
+import '../widgets/adaptive_app_bar.dart';
 
 class VideoDetailPage extends StatefulWidget {
   final ServerInfo server;
@@ -41,7 +42,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
       _api = await ApiServiceManager().initializeEmbyApi(widget.server);
       Logger.d("API 服务初始化完成", _tag);
       if (mounted) {
-        _loadVideoDetails();
+    _loadVideoDetails();
       }
     } catch (e) {
       Logger.e("API 初始化失败", _tag, e);
@@ -91,21 +92,21 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
       Logger.i("最终参数 - seriesId: ${details['SeriesId']}, seasonNumber: ${details['SeasonNumber']}, episodeNumber: ${details['EpisodeNumber']}", _tag);
       
       if (mounted) {
-        setState(() {
-          _videoDetails = details;
-          _playbackPosition = position;
-          _isLoading = false;
-        });
+      setState(() {
+        _videoDetails = details;
+        _playbackPosition = position;
+        _isLoading = false;
+      });
       }
     } catch (e) {
       Logger.e("加载视频详情失败", _tag, e);
       if (mounted) {
-        setState(() {
-          _error = e.toString();
-          _isLoading = false;
-        });
-      }
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
     }
+  }
   }
 
   void _playVideo({
@@ -153,7 +154,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
       "详情数据 - videoDetails: $_videoDetails",
       _tag,
     );
-
+    
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -298,9 +299,9 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
       onRefresh: _loadVideoDetails,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             // 视频背景图
             if (_videoDetails!['ImageTags'] != null) ...[
               Stack(
@@ -352,10 +353,10 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                       return imageUrl != null && imageUrl.startsWith('http')
                           ? Image.network(
                               imageUrl,
-                              headers: {'X-Emby-Token': widget.server.accessToken},
+                    headers: {'X-Emby-Token': widget.server.accessToken},
                               width: double.infinity,
                               height: 400,
-                              fit: BoxFit.cover,
+                    fit: BoxFit.cover,
                               errorBuilder: (context, error, stackTrace) {
                                 Logger.e('加载图片失败: $imageUrl', _tag, error);
                                 return Container(
@@ -376,7 +377,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                               },
                             )
                           : Container(
-                              width: double.infinity,
+                    width: double.infinity,
                               height: 400,
                               color: Colors.grey[300],
                               child: Center(
@@ -485,9 +486,9 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                   // 添加中央播放按钮
                   Positioned.fill(
                     child: Center(
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkWell(
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
                           onTap: () {
                             if (_playbackPosition != null && _playbackPosition! > 0) {
                               _playVideo();
@@ -519,11 +520,11 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
               ),
             ],
             
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   // 评分和类型信息
                   Row(
                     children: [
@@ -539,7 +540,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                             children: [
                               const Icon(Icons.star, color: Colors.white, size: 16),
                               const SizedBox(width: 4),
-                              Text(
+                  Text(
                                 _videoDetails!['CommunityRating'].toStringAsFixed(1),
                                 style: const TextStyle(color: Colors.white),
                               ),
@@ -619,12 +620,12 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                                         ),
                                       ],
                                     ],
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Wrap(
-                                    spacing: 8,
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
                                     runSpacing: 8,
-                                    children: [
+                      children: [
                                       if (source['Container'] != null)
                                         _buildInfoChip(
                                           icon: Icons.folder,
@@ -772,11 +773,11 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                         },
                       ),
                   ),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
-        ],
+          ],
         ),
       ),
     );
@@ -785,9 +786,9 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_videoDetails?['Name'] ?? '视频详情'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+      extendBodyBehindAppBar: true,
+      appBar: AdaptiveAppBar(
+        title: _videoDetails?['Name'] ?? '视频详情',
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -795,7 +796,12 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
           ),
         ],
       ),
-      body: _buildBody(),
+      body: Column(
+        children: [
+          SizedBox(height: MediaQuery.of(context).padding.top + kToolbarHeight),
+          Expanded(child: _buildBody()),
+        ],
+      ),
       bottomNavigationBar: _videoDetails == null
           ? null
           : BottomAppBar(

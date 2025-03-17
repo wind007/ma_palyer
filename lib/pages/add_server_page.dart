@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/emby_api.dart';
 import '../utils/error_dialog.dart';
 import '../utils/logger.dart';
+import '../widgets/adaptive_app_bar.dart';
 
 class AddServerPage extends StatefulWidget {
   const AddServerPage({super.key});
@@ -109,14 +110,19 @@ class _AddServerPageState extends State<AddServerPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('添加 Emby 服务器'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+      extendBodyBehindAppBar: true,
+      appBar: AdaptiveAppBar(
+        title: '添加 Emby 服务器',
       ),
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.all(16.0),
+          padding: EdgeInsets.fromLTRB(
+            16.0,
+            MediaQuery.of(context).padding.top + kToolbarHeight + 16,
+            16.0,
+            16.0,
+          ),
           children: [
             TextFormField(
               controller: _serverUrlController,

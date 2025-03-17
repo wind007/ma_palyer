@@ -6,6 +6,7 @@ import '../utils/logger.dart';
 import './video_detail_page.dart';
 import 'package:flutter/gestures.dart';
 import '../widgets/video_card.dart';
+import '../widgets/adaptive_app_bar.dart';
 
 class TvShowDetailPage extends StatefulWidget {
   final ServerInfo server;
@@ -453,9 +454,9 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_tvShowDetails?['Name'] ?? '电视剧详情'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+      extendBodyBehindAppBar: true,
+      appBar: AdaptiveAppBar(
+        title: _tvShowDetails?['Name'] ?? '电视剧详情',
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -465,46 +466,33 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
       ),
       body: RefreshIndicator(
         onRefresh: _loadTvShowDetails,
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // 视频背景图
-                    Stack(
-                      children: [
-                        // 背景图片
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.only(
+            top: MediaQuery.of(context).padding.top + kToolbarHeight + 16,
+            bottom: 16,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 视频背景图
+              Stack(
+                children: [
+                  // 背景图片
                   imageUrl != null && imageUrl.startsWith('http')
-                            ? Image.network(
-                                imageUrl,
-                                fit: BoxFit.cover,
-                                width: double.infinity,
-                                height: 400,
-                                errorBuilder: (context, error, stackTrace) {
-                                  return Container(
-                                    width: double.infinity,
-                                    height: 400,
-                                    color: Colors.grey[300],
-                                    child: Center(
-                                      child: Text(
-                                  _tvShowDetails?['Name'] ?? '未知标题',
-                                        style: const TextStyle(
-                                          color: Colors.black54,
-                                          fontSize: 24,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                },
-                              )
-                            : Container(
+                        ? Image.network(
+                            imageUrl,
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                            height: 400,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
                                 width: double.infinity,
                                 height: 400,
                                 color: Colors.grey[300],
                                 child: Center(
                                   child: Text(
-                              _tvShowDetails?['Name'] ?? '未知标题',
+                                    _tvShowDetails?['Name'] ?? '未知标题',
                                     style: const TextStyle(
                                       color: Colors.black54,
                                       fontSize: 24,
@@ -512,114 +500,131 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
                                     ),
                                   ),
                                 ),
-                              ),
-                        // 渐变遮罩
-                        Positioned.fill(
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  Colors.transparent,
-                            Colors.black.withAlpha(179),
-                                ],
-                                stops: const [0.6, 1.0],
+                              );
+                            },
+                          )
+                        : Container(
+                            width: double.infinity,
+                            height: 400,
+                            color: Colors.grey[300],
+                            child: Center(
+                              child: Text(
+                                _tvShowDetails?['Name'] ?? '未知标题',
+                                style: const TextStyle(
+                                  color: Colors.black54,
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
                           ),
+                  // 渐变遮罩
+                  Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.transparent,
+                            Colors.black.withAlpha(179),
+                          ],
+                          stops: const [0.6, 1.0],
                         ),
-                        // 收藏和播放状态按钮
-                        Positioned(
-                          right: 16,
-                          bottom: 16,
-                          child: Row(
-                            children: [
-                              // 收藏按钮
-                              Container(
-                                decoration: BoxDecoration(
+                      ),
+                    ),
+                  ),
+                  // 收藏和播放状态按钮
+                  Positioned(
+                    right: 16,
+                    bottom: 16,
+                    child: Row(
+                      children: [
+                        // 收藏按钮
+                        Container(
+                          decoration: BoxDecoration(
                             color: Colors.black.withAlpha(128),
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: IconButton(
-                                  icon: Icon(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: IconButton(
+                            icon: Icon(
                               _tvShowDetails?['UserData']?['IsFavorite'] == true
-                                        ? Icons.favorite
-                                        : Icons.favorite_border,
+                                    ? Icons.favorite
+                                    : Icons.favorite_border,
                               color: _tvShowDetails?['UserData']?['IsFavorite'] == true
-                                        ? Colors.red
-                                        : Colors.white,
-                                  ),
-                                  onPressed: () async {
+                                    ? Colors.red
+                                    : Colors.white,
+                            ),
+                            onPressed: () async {
                               final BuildContext currentContext = context;
-                                    try {
+                              try {
                                 final isFavorite = _tvShowDetails?['UserData']?['IsFavorite'] == true;
                                 await _api!.toggleFavorite(_tvShowDetails!['Id'], isFavorite);
                                 if (!currentContext.mounted) return;
-                                      setState(() {
+                                setState(() {
                                   _tvShowDetails?['UserData'] ??= {};
                                   _tvShowDetails!['UserData']['IsFavorite'] = !isFavorite;
-                                      });
-                                    } catch (e) {
+                                });
+                              } catch (e) {
                                 if (!currentContext.mounted) return;
                                 ScaffoldMessenger.of(currentContext).showSnackBar(
-                                        SnackBar(content: Text('操作失败: $e')),
-                                      );
-                                    }
-                                  },
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              // 播放状态按钮
-                              Container(
-                                decoration: BoxDecoration(
+                                  SnackBar(content: Text('操作失败: $e')),
+                                );
+                              }
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // 播放状态按钮
+                        Container(
+                          decoration: BoxDecoration(
                             color: Colors.black.withAlpha(128),
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: IconButton(
-                                  icon: Icon(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: IconButton(
+                            icon: Icon(
                               _tvShowDetails?['UserData']?['Played'] == true
-                                        ? Icons.check_circle
-                                        : Icons.check_circle_outline,
+                                    ? Icons.check_circle
+                                    : Icons.check_circle_outline,
                               color: _tvShowDetails?['UserData']?['Played'] == true
-                                        ? Colors.green
-                                        : Colors.white,
-                                  ),
-                                  onPressed: () async {
+                                    ? Colors.green
+                                    : Colors.white,
+                            ),
+                            onPressed: () async {
                               final BuildContext currentContext = context;
-                                    try {
+                              try {
                                 final isPlayed = _tvShowDetails?['UserData']?['Played'] == true;
                                 await _api!.togglePlayed(_tvShowDetails!['Id'], isPlayed);
                                 if (!currentContext.mounted) return;
-                                      setState(() {
+                                setState(() {
                                   _tvShowDetails?['UserData'] ??= {};
                                   _tvShowDetails!['UserData']['Played'] = !isPlayed;
-                                      });
-                                    } catch (e) {
+                                });
+                              } catch (e) {
                                 if (!currentContext.mounted) return;
                                 ScaffoldMessenger.of(currentContext).showSnackBar(
-                                        SnackBar(content: Text('操作失败: $e')),
-                                      );
-                                    }
-                                  },
-                                ),
-                              ),
-                            ],
+                                  SnackBar(content: Text('操作失败: $e')),
+                                );
+                              }
+                            },
                           ),
                         ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
               
               // 视频信息
               Padding(
                 padding: const EdgeInsets.all(16.0),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     // 标题
-                              Text(
+                    Text(
                       _tvShowDetails?['Name'] ?? '',
-                                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -643,17 +648,17 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
                                 Text(
                                   _tvShowDetails!['CommunityRating'].toStringAsFixed(1),
                                   style: const TextStyle(color: Colors.white),
-                                    ),
-                                  ],
                                 ),
-                              ),
+                              ],
+                            ),
+                          ),
                           const SizedBox(width: 12),
                         ],
                         if (_tvShowDetails!['Genres'] != null && (_tvShowDetails!['Genres'] as List).isNotEmpty)
                           Expanded(
                             child: Text(
                               (_tvShowDetails!['Genres'] as List).join(' · '),
-                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                 color: Theme.of(context).textTheme.bodySmall?.color?.withAlpha(179),
                               ),
                             ),
@@ -897,7 +902,7 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
             style: Theme.of(context).textTheme.titleMedium,
           ),
         ],
-            ),
+      ),
     );
   }
 } 

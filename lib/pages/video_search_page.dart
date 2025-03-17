@@ -5,6 +5,7 @@ import '../widgets/video_grid.dart';
 import '../utils/logger.dart';
 import './video_detail_page.dart';
 import './tv_show_detail_page.dart';
+import '../widgets/adaptive_app_bar.dart';
 
 class VideoSearchPage extends StatefulWidget {
   final ServerInfo server;
@@ -146,52 +147,120 @@ class _VideoSearchPageState extends State<VideoSearchPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: TextField(
-          controller: _searchController,
-          autofocus: true,
-          decoration: InputDecoration(
-            hintText: '搜索视频、电视剧...',
-            border: InputBorder.none,
-            suffixIcon: IconButton(
-              icon: const Icon(Icons.clear),
-              onPressed: () {
-                _searchController.clear();
-                setState(() {
-                  _searchResults = [];
-                  _hasMoreData = false;
-                });
-              },
-            ),
-          ),
-          onSubmitted: (_) => _performSearch(isNewSearch: true),
-        ),
+      extendBodyBehindAppBar: true,
+      appBar: AdaptiveAppBar(
+        title: '搜索',
       ),
       body: Column(
         children: [
-          Expanded(
-            child: _searchResults.isEmpty
-                ? const Center(
-                    child: Text('输入关键词开始搜索'),
-                  )
-                : VideoGrid(
-                    videos: _searchResults,
-                    api: widget.api,
-                    server: widget.server,
-                    onVideoTap: _onVideoTap,
-                    hasMore: _hasMoreData,
-                    isLoading: _isLoading,
-                    scrollController: _scrollController,
-                    padding: const EdgeInsets.all(8),
-                    crossAxisCount: 5,
-                    childAspectRatio: 0.55,
-                    crossAxisSpacing: 8,
-                    mainAxisSpacing: 8,
-                    cardWidth: 120,
-                    imageWidth: 160,
-                    imageHeight: 240,
+          SizedBox(height: MediaQuery.of(context).padding.top + kToolbarHeight),
+          // 搜索框
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Container(
+              height: 48,
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface.withOpacity(0.9),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+                  width: 1,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Theme.of(context).colorScheme.shadow.withOpacity(0.1),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
                   ),
+                ],
+              ),
+              child: TextField(
+                controller: _searchController,
+                autofocus: true,
+                textAlignVertical: TextAlignVertical.center,
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+                decoration: InputDecoration(
+                  hintText: '搜索视频、电视剧...',
+                  hintStyle: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                  border: InputBorder.none,
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  prefixIconConstraints: const BoxConstraints(
+                    minWidth: 48,
+                    minHeight: 48,
+                  ),
+                  prefixIcon: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Icon(
+                      Icons.search_rounded,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  suffixIconConstraints: const BoxConstraints(
+                    minWidth: 48,
+                    minHeight: 48,
+                  ),
+                  suffixIcon: _searchController.text.isNotEmpty
+                      ? Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: IconButton(
+                            icon: Icon(
+                              Icons.clear_rounded,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() {
+                                _searchResults = [];
+                                _hasMoreData = false;
+                              });
+                            },
+                          ),
+                        )
+                      : null,
+                ),
+                onChanged: (value) {
+                  setState(() {}); // 刷新界面以显示/隐藏清除按钮
+                },
+                onSubmitted: (_) => _performSearch(isNewSearch: true),
+              ),
+            ),
+          ),
+          // 搜索结果
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: () async {
+                if (_searchController.text.isNotEmpty) {
+                  await _performSearch(isNewSearch: true);
+                }
+              },
+              child: _searchResults.isEmpty
+                  ? const Center(
+                      child: Text('输入关键词开始搜索'),
+                    )
+                  : VideoGrid(
+                      videos: _searchResults,
+                      api: widget.api,
+                      server: widget.server,
+                      onVideoTap: _onVideoTap,
+                      hasMore: _hasMoreData,
+                      isLoading: _isLoading,
+                      scrollController: _scrollController,
+                      padding: const EdgeInsets.all(16),
+                      crossAxisCount: 5,
+                      childAspectRatio: 0.55,
+                      crossAxisSpacing: 8,
+                      mainAxisSpacing: 8,
+                      cardWidth: 120,
+                      imageWidth: 160,
+                      imageHeight: 240,
+                    ),
+            ),
           ),
         ],
       ),

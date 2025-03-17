@@ -8,6 +8,7 @@ import './video_search_page.dart';
 import '../utils/logger.dart';
 import './video_list_more_page.dart';
 import '../widgets/video_card.dart';
+import '../widgets/adaptive_app_bar.dart';
 
 class VideoListPage extends StatefulWidget {
   final ServerInfo server;
@@ -402,6 +403,30 @@ class _VideoListPageState extends State<VideoListPage> with SingleTickerProvider
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBodyBehindAppBar: true,
+      appBar: AdaptiveAppBar(
+        title: widget.server.name,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.search),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => VideoSearchPage(
+                    server: widget.server,
+                    api: _api,
+                  ),
+                ),
+              );
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () => _loadAllSections(),
+          ),
+        ],
+      ),
       body: _buildBody(),
     );
   }
@@ -415,287 +440,150 @@ class _VideoListPageState extends State<VideoListPage> with SingleTickerProvider
       return Center(child: Text(_error!));
     }
 
-    return RefreshIndicator(
-      onRefresh: _loadAllSections,
-      child: CustomScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        controller: _scrollController,
-        slivers: [
-          _buildAppBar(),
-          // 继续观看区域
-          if (_sectionLoading['continue']!)
-            _buildSkeletonSection('继续观看')
-          else if (_videoSections['continue']!.isNotEmpty)
-            _buildSection('继续观看', _videoSections['continue']!),
-          
-          // 最新添加区域
-          if (_sectionLoading['latest']!)
-            _buildSkeletonSection('最新添加')
-          else
-            _buildSection('最新添加', _videoSections['latest']!),
-          
-          // 收藏区域
-          if (_sectionLoading['favorites']!)
-            _buildSkeletonSection('我的收藏')
-          else if (_videoSections['favorites']!.isNotEmpty)
-            _buildSection('我的收藏', _videoSections['favorites']!),
-          
-          // 媒体库视图区域
-          ..._buildViewSections(),
-          
-          const SliverPadding(padding: EdgeInsets.only(bottom: 20)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAppBar() {
-    return SliverAppBar(
-      expandedHeight: 56,
-      floating: true,
-      pinned: true,
-      backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-      elevation: 4,
-      title: Text(
-        widget.server.name,
-        style: const TextStyle(color: Colors.white),
-      ),
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.search, color: Colors.white),
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => VideoSearchPage(
-                  server: widget.server,
-                  api: _api,
-                ),
-              ),
-            );
-          },
+    return Stack(
+      children: [
+        RefreshIndicator(
+          onRefresh: _loadAllSections,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.only(
+              top: MediaQuery.of(context).padding.top + kToolbarHeight,
+              bottom: 16,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 继续观看区域
+                if (_sectionLoading['continue'] == true)
+                  _buildSkeletonSectionWidget('继续观看')
+                else if (_videoSections['continue']?.isNotEmpty ?? false)
+                  _buildSectionWidget('继续观看', _videoSections['continue']!),
+                
+                // 最新添加区域
+                if (_sectionLoading['latest'] == true)
+                  _buildSkeletonSectionWidget('最新添加')
+                else if (_videoSections['latest']?.isNotEmpty ?? false)
+                  _buildSectionWidget('最新添加', _videoSections['latest']!),
+                
+                // 收藏区域
+                if (_sectionLoading['favorites'] == true)
+                  _buildSkeletonSectionWidget('我的收藏')
+                else if (_videoSections['favorites']?.isNotEmpty ?? false)
+                  _buildSectionWidget('我的收藏', _videoSections['favorites']!),
+                
+                // 媒体库视图区域
+                ..._buildViewSectionsWidgets(),
+              ],
+            ),
+          ),
         ),
-        IconButton(
-          icon: const Icon(Icons.refresh, color: Colors.white),
-          onPressed: () => _loadAllSections(),
+        // 状态栏点击区域
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => Navigator.of(context).pop(),
+            child: SizedBox(
+              height: MediaQuery.of(context).padding.top,
+            ),
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildSection(
-    String title,
-    List<dynamic> items, {
-    String? viewId,
-    bool isMovieView = false,
-  }) {
+  Widget _buildSectionWidget(String title, List<dynamic> items, {String? viewId, bool isMovieView = false}) {
     final sectionId = viewId ?? title.toLowerCase();
     final bool isLoading = _isLoadingMore[sectionId] ?? false;
     final bool hasMore = _hasMoreData[sectionId] ?? false;
     final scrollController = _getScrollController(sectionId);
 
-    // 如果是视图内容且没有数据，显示加载动画
-    if (viewId != null && items.isEmpty && !_sectionLoading['views']!) {
-      return SliverToBoxAdapter(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(
-              height: 240,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: 5, // 显示5个骨架项
-                itemBuilder: (context, index) {
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 12),
-                    child: _buildSkeletonCard(),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      );
+    if (_sectionLoading[title.toLowerCase()] == true) {
+      return _buildSkeletonSectionWidget(title);
     }
 
-    if (items.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
-
-    return SliverToBoxAdapter(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                if (viewId != null)
-                  TextButton(
-                    onPressed: () {
-                      final view = _videoSections['views']!.firstWhere(
-                        (v) => v['Id'] == viewId,
-                        orElse: () => {},
-                      );
-                      final type = view['Type']?.toString().toLowerCase();
-                      final collectionType = view['CollectionType']?.toString().toLowerCase();
-
-                      if (type == 'boxset' || collectionType == 'movies' || type == 'moviescollection') {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => VideoListMorePage(
-                              server: widget.server,
-                              title: title,
-                              parentId: viewId,
-                              isMovieView: true,
-                            ),
-                          ),
-                        );
-                      } else if (type == 'series' || collectionType == 'tvshows') {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => VideoListMorePage(
-                              server: widget.server,
-                              title: title,
-                              parentId: viewId,
-                              isMovieView: false,
-                            ),
-                          ),
-                        );
-                      } else {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => VideoListMorePage(
-                              server: widget.server,
-                              title: title,
-                              viewId: viewId,
-                              parentId: null,
-                              isMovieView: isMovieView,
-                            ),
-                          ),
-                        );
-                      }
-                    },
-                    child: const Text('查看更多'),
-                  ),
-              ],
-            ),
-          ),
-          SizedBox(
-            height: 240,
-            child: NotificationListener<ScrollNotification>(
-              onNotification: (scrollInfo) {
-                if (scrollInfo is ScrollUpdateNotification) {
-                  // 获取滚动位置信息
-                  final maxScroll = scrollInfo.metrics.maxScrollExtent;
-                  final currentScroll = scrollInfo.metrics.pixels;
-                  
-                  // 使用固定像素作为阈值，更适合横向滚动
-                  const threshold = 100.0;
-                  
-                  // 当滚动到距离末尾 threshold 距离时触发加载
-                  if (!isLoading && 
-                      hasMore && 
-                      maxScroll > 0 &&  // 确保有可滚动内容
-                      (maxScroll - currentScroll) <= threshold) {
-                    Logger.d(
-                      '触发加载更多: sectionId=$sectionId, '
-                      'maxScroll=$maxScroll, '
-                      'currentScroll=$currentScroll, '
-                      'threshold=$threshold, '
-                      'remainingScroll=${maxScroll - currentScroll}',
-                      _tag
-                    );
-                    _loadMoreForSection(sectionId);
-                  }
-                }
-                return false;
-              },
-              child: MouseRegion(
-                cursor: SystemMouseCursors.grab,
-                child: GestureDetector(
-                  onPanUpdate: (details) {
-                    // 使用当前部分的滚动控制器
-                    scrollController.position.moveTo(
-                      scrollController.position.pixels - details.delta.dx,
-                      curve: Curves.linear,
-                    );
-                  },
-                  child: ListView.builder(
-                    key: PageStorageKey<String>(sectionId),
-                    controller: scrollController, // 使用当前部分的滚动控制器
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    physics: const ClampingScrollPhysics(),
-                    itemCount: items.length + (hasMore ? 1 : 0),
-                    itemBuilder: (context, index) {
-                      if (index == items.length) {
-                        return _buildLoadingIndicator();
-                      }
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 12),
-                        child: FocusScope(
-                          child: Focus(
-                            onFocusChange: (focused) {
-                              if (focused) {
-                                scrollController.animateTo(
-                                  index * 142.0, // 130 宽度 + 12 右边距
-                                  duration: const Duration(milliseconds: 300),
-                                  curve: Curves.easeInOut,
-                                );
-                              }
-                            },
-                            child: Builder(
-                              builder: (context) {
-                                final focused = Focus.of(context).hasFocus;
-                                return Container(
-                                  decoration: focused ? BoxDecoration(
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                      color: Theme.of(context).colorScheme.primary,
-                                      width: 2,
-                                    ),
-                                  ) : null,
-                                  child: _buildVideoCard(items[index]),
-                                );
-                              }
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
+              if (viewId != null)
+                TextButton(
+                  onPressed: () => _navigateToMorePage(viewId, title, isMovieView),
+                  child: const Text('查看更多'),
+                ),
+            ],
+          ),
+        ),
+        SizedBox(
+          height: 240,
+          child: NotificationListener<ScrollNotification>(
+            onNotification: (scrollInfo) {
+              if (scrollInfo is ScrollUpdateNotification) {
+                final maxScroll = scrollInfo.metrics.maxScrollExtent;
+                final currentScroll = scrollInfo.metrics.pixels;
+                const threshold = 100.0;
+                
+                if (!isLoading && 
+                    hasMore && 
+                    maxScroll > 0 &&
+                    (maxScroll - currentScroll) <= threshold) {
+                  _loadMoreForSection(sectionId);
+                }
+              }
+              return false;
+            },
+            child: ListView.builder(
+              controller: scrollController,
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              itemCount: items.length + (hasMore ? 1 : 0),
+              itemBuilder: (context, index) {
+                if (index == items.length) {
+                  return _buildLoadingIndicator();
+                }
+                return Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: _buildVideoCard(items[index]),
+                );
+              },
             ),
           ),
-        ],
+        ),
+      ],
+    );
+  }
+
+  void _navigateToMorePage(String viewId, String title, bool isMovieView) {
+    final view = _videoSections['views']!.firstWhere(
+      (v) => v['Id'] == viewId,
+      orElse: () => {},
+    );
+    final type = view['Type']?.toString().toLowerCase();
+    final collectionType = view['CollectionType']?.toString().toLowerCase();
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => VideoListMorePage(
+          server: widget.server,
+          title: title,
+          viewId: viewId,
+          parentId: viewId,
+          isMovieView: isMovieView || type == 'boxset' || collectionType == 'movies',
+        ),
       ),
     );
   }
@@ -725,6 +613,82 @@ class _VideoListPageState extends State<VideoListPage> with SingleTickerProvider
           ),
         ],
       ),
+    );
+  }
+
+  List<Widget> _buildViewSectionsWidgets() {
+    if (_sectionLoading['views'] == true) {
+      return List.generate(2, (index) => _buildSkeletonSectionWidget('加载中...'));
+    }
+
+    return (_videoSections['views'] ?? []).map<Widget>((view) {
+      final viewId = view['Id'];
+      if (viewId == null) return const SizedBox.shrink();
+      
+      final viewName = view['Name'] as String? ?? '未知视图';
+      final items = _videoSections[viewId] ?? [];
+      final isMovieView = view['CollectionType']?.toString().toLowerCase() == 'movies';
+      
+      if (_sectionLoading[viewId] == true) {
+        return _buildSkeletonSectionWidget(viewName);
+      }
+      
+      return _buildSectionWidget(
+        viewName,
+        items,
+        viewId: viewId,
+        isMovieView: isMovieView,
+      );
+    }).toList();
+  }
+
+  ScrollController _getScrollController(String sectionId) {
+    if (!_sectionScrollControllers.containsKey(sectionId)) {
+      _sectionScrollControllers[sectionId] = ScrollController();
+    }
+    return _sectionScrollControllers[sectionId]!;
+  }
+
+  Widget _buildSkeletonSectionWidget(String title) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
+          child: Container(
+            height: 24,
+            width: 120,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Colors.grey[300]!,
+                  Colors.grey[200]!,
+                  Colors.grey[300]!,
+                ],
+                stops: const [0.0, 0.5, 1.0],
+              ),
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+        ),
+        SizedBox(
+          height: 240,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: 5,
+            itemBuilder: (context, index) {
+              return Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: _buildSkeletonCard(),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
@@ -803,84 +767,6 @@ class _VideoListPageState extends State<VideoListPage> with SingleTickerProvider
         }
       },
     );
-  }
-
-  List<Widget> _buildViewSections() {
-    // 如果视图正在加载中，显示骨架屏
-    if (_sectionLoading['views']!) {
-      return List.generate(2, (index) => _buildSkeletonSection('加载中...'));
-    }
-
-    return _videoSections['views']!.map((view) {
-      final viewId = view['Id'];
-      final viewName = view['Name'];
-      final items = _videoSections[viewId] ?? [];
-      final isMovieView = view['CollectionType']?.toString().toLowerCase() == 'movies';
-      
-      return _buildSection(
-        viewName,
-        items,
-        viewId: viewId,
-        isMovieView: isMovieView,
-      );
-    }).toList();
-  }
-
-  Widget _buildSkeletonSection(String title) {
-    return SliverToBoxAdapter(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
-            child: Container(
-              height: 24,
-              width: 120,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Colors.grey[300]!,
-                    Colors.grey[200]!,
-                    Colors.grey[300]!,
-                  ],
-                  stops: [
-                    0.0,
-                    _shimmerController.value,
-                    1.0,
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(4),
-              ),
-            ),
-          ),
-          SizedBox(
-            height: 240,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: 5,
-              itemBuilder: (context, index) {
-                return Padding(
-                  padding: const EdgeInsets.only(right: 12),
-                  child: _buildSkeletonCard(),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // 获取或创建部分的滚动控制器
-  ScrollController _getScrollController(String sectionId) {
-    if (!_sectionScrollControllers.containsKey(sectionId)) {
-      _sectionScrollControllers[sectionId] = ScrollController();
-    }
-    return _sectionScrollControllers[sectionId]!;
   }
 
   Widget _buildSkeletonCard() {

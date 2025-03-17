@@ -7,6 +7,7 @@ import './tv_show_detail_page.dart';
 import '../utils/error_dialog.dart';
 import '../utils/logger.dart';
 import '../widgets/video_grid.dart';
+import '../widgets/adaptive_app_bar.dart';
 
 class VideoListMorePage extends StatefulWidget {
   final ServerInfo server;
@@ -235,22 +236,29 @@ class _VideoListMorePageState extends State<VideoListMorePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.title),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+      extendBodyBehindAppBar: true,
+      appBar: AdaptiveAppBar(
+        title: widget.title,
       ),
       body: _error != null
           ? Center(child: Text(_error!))
           : _api == null
               ? const Center(child: CircularProgressIndicator())
-              : VideoGrid(
-                  videos: _videos,
-                  api: _api!,
-                  server: widget.server,
-                  onVideoTap: _onVideoTap,
-                  hasMore: _hasMore,
-                  isLoading: _isLoading,
-                  scrollController: _scrollController,
+              : Column(
+                  children: [
+                    SizedBox(height: MediaQuery.of(context).padding.top + kToolbarHeight),
+                    Expanded(
+                      child: VideoGrid(
+                        videos: _videos,
+                        api: _api!,
+                        server: widget.server,
+                        onVideoTap: _onVideoTap,
+                        hasMore: _hasMore,
+                        isLoading: _isLoading,
+                        scrollController: _scrollController,
+                      ),
+                    ),
+                  ],
                 ),
     );
   }
