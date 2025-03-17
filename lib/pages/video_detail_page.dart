@@ -28,12 +28,14 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
   int? _playbackPosition;
   bool _isLoading = true;
   String? _error;
+  late ScrollController _scrollController;
 
   @override
   void initState() {
     super.initState();
     Logger.i("初始化视频详情页面: ${widget.video['Name']}", _tag);
     _initializeApi();
+    _scrollController = ScrollController();
   }
 
   Future<void> _initializeApi() async {
@@ -282,525 +284,34 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
     });
   }
 
-  Widget _buildBody() {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_error != null) {
-      return Center(child: Text('错误: $_error'));
-    }
-
-    if (_videoDetails == null) {
-      return const Center(child: Text('无法加载视频详情'));
-    }
-
-    return RefreshIndicator(
-      onRefresh: _loadVideoDetails,
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 视频背景图
-            if (_videoDetails!['ImageTags'] != null) ...[
-              Stack(
-                children: [
-                  // 尝试按优先级获取不同类型的图片
-                  Builder(
-                    builder: (context) {
-                      String? imageUrl;
-                      if (_videoDetails!['ImageTags']?['Backdrop'] != null && widget.server.url.isNotEmpty) {
-                        imageUrl = _api?.getImageUrl(
-                          itemId: _videoDetails!['Id'],
-                          imageType: 'Backdrop',
-                          width: 1920,
-                          height: 1080,
-                          quality: 90,
-                          tag: _videoDetails!['ImageTags']['Backdrop'],
-                        );
-                      } else if (_videoDetails!['ImageTags']?['Primary'] != null && widget.server.url.isNotEmpty) {
-                        imageUrl = _api?.getImageUrl(
-                          itemId: _videoDetails!['Id'],
-                          imageType: 'Primary',
-                          width: 800,
-                          height: 1200,
-                          quality: 90,
-                          tag: _videoDetails!['ImageTags']['Primary'],
-                        );
-                      } else if (_videoDetails!['ImageTags']?['Thumb'] != null && widget.server.url.isNotEmpty) {
-                        imageUrl = _api?.getImageUrl(
-                          itemId: _videoDetails!['Id'],
-                          imageType: 'Thumb',
-                          width: 800,
-                          height: 1200,
-                          quality: 90,
-                          tag: _videoDetails!['ImageTags']['Thumb'],
-                        );
-                      } else if (_videoDetails!['BackdropImageTags'] is List && 
-                                 (_videoDetails!['BackdropImageTags'] as List).isNotEmpty &&
-                                 widget.server.url.isNotEmpty) {
-                        imageUrl = _api?.getImageUrl(
-                          itemId: _videoDetails!['Id'],
-                          imageType: 'Backdrop',
-                          width: 1920,
-                          height: 1080,
-                          quality: 90,
-                          tag: _videoDetails!['BackdropImageTags'][0],
-                        );
-                      }
-
-                      return imageUrl != null && imageUrl.startsWith('http')
-                          ? Image.network(
-                              imageUrl,
-                    headers: {'X-Emby-Token': widget.server.accessToken},
-                              width: double.infinity,
-                              height: 400,
-                    fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) {
-                                Logger.e('加载图片失败: $imageUrl', _tag, error);
-                                return Container(
-                                  width: double.infinity,
-                                  height: 400,
-                                  color: Colors.grey[300],
-                                  child: Center(
-                                    child: Text(
-                                      _videoDetails!['Name'] ?? '未知标题',
-                                      style: const TextStyle(
-                                        color: Colors.black54,
-                                        fontSize: 24,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              },
-                            )
-                          : Container(
-                    width: double.infinity,
-                              height: 400,
-                              color: Colors.grey[300],
-                              child: Center(
-                                child: Text(
-                                  _videoDetails!['Name'] ?? '未知标题',
-                                  style: const TextStyle(
-                                    color: Colors.black54,
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            );
-                    },
-                  ),
-                  // 添加渐变遮罩
-                  Positioned.fill(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.transparent,
-                            Colors.black.withAlpha(179),
-                          ],
-                          stops: const [0.6, 1.0],
-                        ),
-                      ),
-                    ),
-                  ),
-                  // 收藏和播放状态按钮
-                  Positioned(
-                    right: 16,
-                    bottom: 16,
-                    child: Row(
-                      children: [
-                        // 收藏按钮
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Colors.black54,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: IconButton(
-                            icon: Icon(
-                              _videoDetails!['UserData']?['IsFavorite'] == true
-                                  ? Icons.favorite
-                                  : Icons.favorite_border,
-                              color: _videoDetails!['UserData']?['IsFavorite'] == true
-                                  ? Colors.red
-                                  : Colors.white,
-                            ),
-                            onPressed: () async {
-                              try {
-                                final isFavorite = _videoDetails!['UserData']?['IsFavorite'] == true;
-                                await _api!.toggleFavorite(_videoDetails!['Id'], isFavorite);
-                                setState(() {
-                                  _videoDetails!['UserData'] ??= {};
-                                  _videoDetails!['UserData']['IsFavorite'] = !isFavorite;
-                                });
-                              } catch (e) {
-                                if (!mounted) return;
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('操作失败: $e')),
-                                );
-                              }
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        // 播放状态按钮
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Colors.black54,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: IconButton(
-                            icon: Icon(
-                              _videoDetails!['UserData']?['Played'] == true
-                                  ? Icons.check_circle
-                                  : Icons.check_circle_outline,
-                              color: _videoDetails!['UserData']?['Played'] == true
-                                  ? Colors.green
-                                  : Colors.white,
-                            ),
-                            onPressed: () async {
-                              try {
-                                final isPlayed = _videoDetails!['UserData']?['Played'] == true;
-                                await _api!.togglePlayed(_videoDetails!['Id'], isPlayed);
-                                setState(() {
-                                  _videoDetails!['UserData'] ??= {};
-                                  _videoDetails!['UserData']['Played'] = !isPlayed;
-                                });
-                              } catch (e) {
-                                if (!mounted) return;
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('操作失败: $e')),
-                                );
-                              }
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  // 添加中央播放按钮
-                  Positioned.fill(
-                    child: Center(
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                          onTap: () {
-                            if (_playbackPosition != null && _playbackPosition! > 0) {
-                              _playVideo();
-                            } else {
-                              _playVideo(fromStart: true);
-                            }
-                          },
-                          customBorder: const CircleBorder(),
-                          child: Container(
-                            width: 80,
-                            height: 80,
-                            decoration: const BoxDecoration(
-                              color: Colors.black54,
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              _playbackPosition != null && _playbackPosition! > 0
-                                  ? Icons.play_circle_filled
-                                  : Icons.play_arrow,
-                              color: Colors.white,
-                              size: 50,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-            
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // 评分和类型信息
-                  Row(
-                    children: [
-                      if (_videoDetails!['CommunityRating'] != null) ...[
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).primaryColor,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.star, color: Colors.white, size: 16),
-                              const SizedBox(width: 4),
-                  Text(
-                                _videoDetails!['CommunityRating'].toStringAsFixed(1),
-                                style: const TextStyle(color: Colors.white),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                      ],
-                      if (_videoDetails!['Genres'] != null && (_videoDetails!['Genres'] as List).isNotEmpty)
-                        Expanded(
-                          child: Text(
-                            (_videoDetails!['Genres'] as List).join(' · '),
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: Theme.of(context).textTheme.bodySmall?.color,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  
-                  // 技术信息
-                  if (_videoDetails!['MediaSources'] != null && (_videoDetails!['MediaSources'] as List).isNotEmpty) ...[
-                    Text(
-                      '可用版本',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    ListView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: (_videoDetails!['MediaSources'] as List).length,
-                      itemBuilder: (context, index) {
-                        final source = _videoDetails!['MediaSources'][index];
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          child: InkWell(
-                            onTap: () => _showStreamSelectionDialog(source),
-                            child: Padding(
-                              padding: const EdgeInsets.all(12),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        Icons.video_file,
-                                        size: 20,
-                                        color: Theme.of(context).colorScheme.primary,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          source['Name'] ?? '默认版本',
-                                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ),
-                                      if (source['DefaultAudioStreamIndex'] != null) ...[
-                                        const Icon(Icons.audiotrack, size: 16),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          '${source['MediaStreams']?.where((s) => s['Type'] == 'Audio')?.length ?? 0} 音轨',
-                                          style: Theme.of(context).textTheme.bodySmall,
-                                        ),
-                                      ],
-                                      if (source['DefaultSubtitleStreamIndex'] != null) ...[
-                                        const SizedBox(width: 8),
-                                        const Icon(Icons.subtitles, size: 16),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          '${source['MediaStreams']?.where((s) => s['Type'] == 'Subtitle')?.length ?? 0} 字幕',
-                                          style: Theme.of(context).textTheme.bodySmall,
-                                        ),
-                                      ],
-                                    ],
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                                    runSpacing: 8,
-                      children: [
-                                      if (source['Container'] != null)
-                                        _buildInfoChip(
-                                          icon: Icons.folder,
-                                          label: source['Container'].toString().toUpperCase(),
-                                        ),
-                                      if (source['VideoCodec'] != null)
-                                        _buildInfoChip(
-                                          icon: Icons.video_file,
-                                          label: source['VideoCodec'].toString().toUpperCase(),
-                                        ),
-                                      if (source['Width'] != null)
-                                        _buildInfoChip(
-                                          icon: Icons.high_quality,
-                                          label: '${source['Width']}x${source['Height']}',
-                                        ),
-                                      if (source['Size'] != null)
-                                        _buildInfoChip(
-                                          icon: Icons.data_usage,
-                                          label: '${(source['Size'] / 1024 / 1024 / 1024).toStringAsFixed(2)} GB',
-                                        ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 24),
-                  ],
-                  
-                  // 制作信息
-                  if (_videoDetails!['Studios'] != null && (_videoDetails!['Studios'] as List).isNotEmpty) ...[
-                    Text(
-                      '制作信息',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).cardColor,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          for (var studio in _videoDetails!['Studios'])
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.business_outlined, size: 16),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      studio['Name'],
-                                      style: Theme.of(context).textTheme.bodyMedium,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                  ],
-                  
-                  // 简介
-                  if (_videoDetails!['Overview'] != null && _videoDetails!['Overview'].toString().isNotEmpty) ...[
-                    Text(
-                      '简介',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _videoDetails!['Overview'],
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                    const SizedBox(height: 24),
-                  ],
-                  
-                  // 演职人员列表
-                  if (_videoDetails!['People'] != null && (_videoDetails!['People'] as List).isNotEmpty) ...[
-                    Text(
-                      '演职人员',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      height: 120,
-                      child: ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: (_videoDetails!['People'] as List).length,
-                        itemBuilder: (context, index) {
-                          final person = _videoDetails!['People'][index];
-                          return Container(
-                            width: 80,
-                            margin: const EdgeInsets.only(right: 12),
-                            child: Column(
-                              children: [
-                                CircleAvatar(
-                                  radius: 30,
-                                  backgroundImage: person['PrimaryImageTag'] != null && widget.server.url.isNotEmpty
-                                      ? NetworkImage(
-                                          _api!.getImageUrl(
-                                            itemId: person['Id'],
-                                            imageType: 'Primary',
-                                            tag: person['PrimaryImageTag'],
-                                          ) ?? '',
-                                        )
-                                      : null,
-                                  child: person['PrimaryImageTag'] == null
-                                      ? const Icon(Icons.person, size: 30)
-                                      : null,
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  person['Name'],
-                                  style: Theme.of(context).textTheme.bodySmall,
-                                  maxLines: 2,
-                                  textAlign: TextAlign.center,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                Text(
-                                  person['Type'],
-                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: Theme.of(context).textTheme.bodySmall?.color?.withAlpha(179),
-                                  ),
-                                  maxLines: 1,
-                                  textAlign: TextAlign.center,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                  ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       extendBodyBehindAppBar: true,
-      appBar: AdaptiveAppBar(
-        title: _videoDetails?['Name'] ?? '视频详情',
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () => _loadVideoDetails(),
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          SizedBox(height: MediaQuery.of(context).padding.top + kToolbarHeight),
-          Expanded(child: _buildBody()),
-        ],
+      body: RefreshIndicator(
+        onRefresh: _loadVideoDetails,
+        child: CustomScrollView(
+          controller: _scrollController,
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            AdaptiveAppBar(
+              title: _videoDetails?['Name'] ?? '视频详情',
+              scrollController: _scrollController,
+              floating: true,
+              snap: true,
+              pinned: false,
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.refresh),
+                  onPressed: () => _loadVideoDetails(),
+                ),
+              ],
+            ),
+            SliverToBoxAdapter(
+              child: _buildBody(),
+            ),
+          ],
+        ),
       ),
       bottomNavigationBar: _videoDetails == null
           ? null
@@ -830,6 +341,501 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                 ),
               ),
             ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_error != null) {
+      return Center(child: Text(_error!));
+    }
+
+    if (_videoDetails == null) {
+      return const Center(child: Text('暂无视频详情'));
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 视频背景图
+        if (_videoDetails!['ImageTags'] != null) ...[
+          Stack(
+            children: [
+              // 尝试按优先级获取不同类型的图片
+              Builder(
+                builder: (context) {
+                  String? imageUrl;
+                  if (_videoDetails!['ImageTags']?['Backdrop'] != null && widget.server.url.isNotEmpty) {
+                    imageUrl = _api?.getImageUrl(
+                      itemId: _videoDetails!['Id'],
+                      imageType: 'Backdrop',
+                      width: 1920,
+                      height: 1080,
+                      quality: 90,
+                      tag: _videoDetails!['ImageTags']['Backdrop'],
+                    );
+                  } else if (_videoDetails!['ImageTags']?['Primary'] != null && widget.server.url.isNotEmpty) {
+                    imageUrl = _api?.getImageUrl(
+                      itemId: _videoDetails!['Id'],
+                      imageType: 'Primary',
+                      width: 800,
+                      height: 1200,
+                      quality: 90,
+                      tag: _videoDetails!['ImageTags']['Primary'],
+                    );
+                  } else if (_videoDetails!['ImageTags']?['Thumb'] != null && widget.server.url.isNotEmpty) {
+                    imageUrl = _api?.getImageUrl(
+                      itemId: _videoDetails!['Id'],
+                      imageType: 'Thumb',
+                      width: 800,
+                      height: 1200,
+                      quality: 90,
+                      tag: _videoDetails!['ImageTags']['Thumb'],
+                    );
+                  } else if (_videoDetails!['BackdropImageTags'] is List && 
+                             (_videoDetails!['BackdropImageTags'] as List).isNotEmpty &&
+                             widget.server.url.isNotEmpty) {
+                    imageUrl = _api?.getImageUrl(
+                      itemId: _videoDetails!['Id'],
+                      imageType: 'Backdrop',
+                      width: 1920,
+                      height: 1080,
+                      quality: 90,
+                      tag: _videoDetails!['BackdropImageTags'][0],
+                    );
+                  }
+
+                  return imageUrl != null && imageUrl.startsWith('http')
+                      ? Image.network(
+                          imageUrl,
+                headers: {'X-Emby-Token': widget.server.accessToken},
+                          width: double.infinity,
+                          height: 400,
+                fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            Logger.e('加载图片失败: $imageUrl', _tag, error);
+                            return Container(
+                              width: double.infinity,
+                              height: 400,
+                              color: Colors.grey[300],
+                              child: Center(
+                                child: Text(
+                                  _videoDetails!['Name'] ?? '未知标题',
+                                  style: const TextStyle(
+                                    color: Colors.black54,
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        )
+                      : Container(
+                width: double.infinity,
+                          height: 400,
+                          color: Colors.grey[300],
+                          child: Center(
+                            child: Text(
+                              _videoDetails!['Name'] ?? '未知标题',
+                              style: const TextStyle(
+                                color: Colors.black54,
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        );
+                },
+              ),
+              // 添加渐变遮罩
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.transparent,
+                        Colors.black.withAlpha(179),
+                      ],
+                      stops: const [0.6, 1.0],
+                    ),
+                  ),
+                ),
+              ),
+              // 收藏和播放状态按钮
+              Positioned(
+                right: 16,
+                bottom: 16,
+                child: Row(
+                  children: [
+                    // 收藏按钮
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.black54,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: IconButton(
+                        icon: Icon(
+                          _videoDetails!['UserData']?['IsFavorite'] == true
+                              ? Icons.favorite
+                              : Icons.favorite_border,
+                          color: _videoDetails!['UserData']?['IsFavorite'] == true
+                              ? Colors.red
+                              : Colors.white,
+                        ),
+                        onPressed: () async {
+                          try {
+                            final isFavorite = _videoDetails!['UserData']?['IsFavorite'] == true;
+                            await _api!.toggleFavorite(_videoDetails!['Id'], isFavorite);
+                            setState(() {
+                              _videoDetails!['UserData'] ??= {};
+                              _videoDetails!['UserData']['IsFavorite'] = !isFavorite;
+                            });
+                          } catch (e) {
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('操作失败: $e')),
+                            );
+                          }
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // 播放状态按钮
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.black54,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: IconButton(
+                        icon: Icon(
+                          _videoDetails!['UserData']?['Played'] == true
+                              ? Icons.check_circle
+                              : Icons.check_circle_outline,
+                          color: _videoDetails!['UserData']?['Played'] == true
+                              ? Colors.green
+                              : Colors.white,
+                        ),
+                        onPressed: () async {
+                          try {
+                            final isPlayed = _videoDetails!['UserData']?['Played'] == true;
+                            await _api!.togglePlayed(_videoDetails!['Id'], isPlayed);
+                            setState(() {
+                              _videoDetails!['UserData'] ??= {};
+                              _videoDetails!['UserData']['Played'] = !isPlayed;
+                            });
+                          } catch (e) {
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('操作失败: $e')),
+                            );
+                          }
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // 添加中央播放按钮
+              Positioned.fill(
+                child: Center(
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                      onTap: () {
+                        if (_playbackPosition != null && _playbackPosition! > 0) {
+                          _playVideo();
+                        } else {
+                          _playVideo(fromStart: true);
+                        }
+                      },
+                      customBorder: const CircleBorder(),
+                      child: Container(
+                        width: 80,
+                        height: 80,
+                        decoration: const BoxDecoration(
+                          color: Colors.black54,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          _playbackPosition != null && _playbackPosition! > 0
+                              ? Icons.play_circle_filled
+                              : Icons.play_arrow,
+                          color: Colors.white,
+                          size: 50,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+        
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 评分和类型信息
+              Row(
+                children: [
+                  if (_videoDetails!['CommunityRating'] != null) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).primaryColor,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.star, color: Colors.white, size: 16),
+                          const SizedBox(width: 4),
+                Text(
+                          _videoDetails!['CommunityRating'].toStringAsFixed(1),
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                  ],
+                  if (_videoDetails!['Genres'] != null && (_videoDetails!['Genres'] as List).isNotEmpty)
+                    Expanded(
+                      child: Text(
+                        (_videoDetails!['Genres'] as List).join(' · '),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).textTheme.bodySmall?.color,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              
+              // 技术信息
+              if (_videoDetails!['MediaSources'] != null && (_videoDetails!['MediaSources'] as List).isNotEmpty) ...[
+                Text(
+                  '可用版本',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: (_videoDetails!['MediaSources'] as List).length,
+                  itemBuilder: (context, index) {
+                    final source = _videoDetails!['MediaSources'][index];
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: InkWell(
+                        onTap: () => _showStreamSelectionDialog(source),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.video_file,
+                                    size: 20,
+                                    color: Theme.of(context).colorScheme.primary,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      source['Name'] ?? '默认版本',
+                                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                  if (source['DefaultAudioStreamIndex'] != null) ...[
+                                    const Icon(Icons.audiotrack, size: 16),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '${source['MediaStreams']?.where((s) => s['Type'] == 'Audio')?.length ?? 0} 音轨',
+                                      style: Theme.of(context).textTheme.bodySmall,
+                                    ),
+                                  ],
+                                  if (source['DefaultSubtitleStreamIndex'] != null) ...[
+                                    const SizedBox(width: 8),
+                                    const Icon(Icons.subtitles, size: 16),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '${source['MediaStreams']?.where((s) => s['Type'] == 'Subtitle')?.length ?? 0} 字幕',
+                                      style: Theme.of(context).textTheme.bodySmall,
+                                    ),
+                                  ],
+                                ],
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                              runSpacing: 8,
+                        children: [
+                                  if (source['Container'] != null)
+                                    _buildInfoChip(
+                                      icon: Icons.folder,
+                                      label: source['Container'].toString().toUpperCase(),
+                                    ),
+                                  if (source['VideoCodec'] != null)
+                                    _buildInfoChip(
+                                      icon: Icons.video_file,
+                                      label: source['VideoCodec'].toString().toUpperCase(),
+                                    ),
+                                  if (source['Width'] != null)
+                                    _buildInfoChip(
+                                      icon: Icons.high_quality,
+                                      label: '${source['Width']}x${source['Height']}',
+                                    ),
+                                  if (source['Size'] != null)
+                                    _buildInfoChip(
+                                      icon: Icons.data_usage,
+                                      label: '${(source['Size'] / 1024 / 1024 / 1024).toStringAsFixed(2)} GB',
+                                    ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 24),
+              ],
+              
+              // 制作信息
+              if (_videoDetails!['Studios'] != null && (_videoDetails!['Studios'] as List).isNotEmpty) ...[
+                Text(
+                  '制作信息',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).cardColor,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (var studio in _videoDetails!['Studios'])
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.business_outlined, size: 16),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  studio['Name'],
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+              ],
+              
+              // 简介
+              if (_videoDetails!['Overview'] != null && _videoDetails!['Overview'].toString().isNotEmpty) ...[
+                Text(
+                  '简介',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _videoDetails!['Overview'],
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 24),
+              ],
+              
+              // 演职人员列表
+              if (_videoDetails!['People'] != null && (_videoDetails!['People'] as List).isNotEmpty) ...[
+                Text(
+                  '演职人员',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 120,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: (_videoDetails!['People'] as List).length,
+                    itemBuilder: (context, index) {
+                      final person = _videoDetails!['People'][index];
+                      return Container(
+                        width: 80,
+                        margin: const EdgeInsets.only(right: 12),
+                        child: Column(
+                          children: [
+                            CircleAvatar(
+                              radius: 30,
+                              backgroundImage: person['PrimaryImageTag'] != null && widget.server.url.isNotEmpty
+                                  ? NetworkImage(
+                                      _api!.getImageUrl(
+                                        itemId: person['Id'],
+                                        imageType: 'Primary',
+                                        tag: person['PrimaryImageTag'],
+                                      ) ?? '',
+                                    )
+                                  : null,
+                              child: person['PrimaryImageTag'] == null
+                                  ? const Icon(Icons.person, size: 30)
+                                  : null,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              person['Name'],
+                              style: Theme.of(context).textTheme.bodySmall,
+                              maxLines: 2,
+                              textAlign: TextAlign.center,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              person['Type'],
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: Theme.of(context).textTheme.bodySmall?.color?.withAlpha(179),
+                              ),
+                              maxLines: 1,
+                              textAlign: TextAlign.center,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+              ),
+              ],
+            ],
+          ),
+        ),
+      ],
     );
   }
 

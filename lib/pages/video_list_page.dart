@@ -404,30 +404,42 @@ class _VideoListPageState extends State<VideoListPage> with SingleTickerProvider
   Widget build(BuildContext context) {
     return Scaffold(
       extendBodyBehindAppBar: true,
-      appBar: AdaptiveAppBar(
-        title: widget.server.name,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.search),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => VideoSearchPage(
-                    server: widget.server,
-                    api: _api,
-                  ),
-                ),
-              );
-            },
+      body: CustomScrollView(
+        controller: _scrollController,
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          AdaptiveAppBar(
+            title: widget.server.name,
+            scrollController: _scrollController,
+            floating: true,
+            snap: true,
+            pinned: false,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.search),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => VideoSearchPage(
+                        server: widget.server,
+                        api: _api,
+                      ),
+                    ),
+                  );
+                },
+              ),
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                onPressed: () => _loadAllSections(),
+              ),
+            ],
           ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () => _loadAllSections(),
+          SliverToBoxAdapter(
+            child: _buildBody(),
           ),
         ],
       ),
-      body: _buildBody(),
     );
   }
 
@@ -440,57 +452,33 @@ class _VideoListPageState extends State<VideoListPage> with SingleTickerProvider
       return Center(child: Text(_error!));
     }
 
-    return Stack(
-      children: [
-        RefreshIndicator(
-          onRefresh: _loadAllSections,
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: EdgeInsets.only(
-              top: MediaQuery.of(context).padding.top + kToolbarHeight,
-              bottom: 16,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 继续观看区域
-                if (_sectionLoading['continue'] == true)
-                  _buildSkeletonSectionWidget('继续观看')
-                else if (_videoSections['continue']?.isNotEmpty ?? false)
-                  _buildSectionWidget('继续观看', _videoSections['continue']!),
-                
-                // 最新添加区域
-                if (_sectionLoading['latest'] == true)
-                  _buildSkeletonSectionWidget('最新添加')
-                else if (_videoSections['latest']?.isNotEmpty ?? false)
-                  _buildSectionWidget('最新添加', _videoSections['latest']!),
-                
-                // 收藏区域
-                if (_sectionLoading['favorites'] == true)
-                  _buildSkeletonSectionWidget('我的收藏')
-                else if (_videoSections['favorites']?.isNotEmpty ?? false)
-                  _buildSectionWidget('我的收藏', _videoSections['favorites']!),
-                
-                // 媒体库视图区域
-                ..._buildViewSectionsWidgets(),
-              ],
-            ),
-          ),
-        ),
-        // 状态栏点击区域
-        Positioned(
-          top: 0,
-          left: 0,
-          right: 0,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () => Navigator.of(context).pop(),
-            child: SizedBox(
-              height: MediaQuery.of(context).padding.top,
-            ),
-          ),
-        ),
-      ],
+    return RefreshIndicator(
+      onRefresh: _loadAllSections,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 继续观看区域
+          if (_sectionLoading['continue'] == true)
+            _buildSkeletonSectionWidget('继续观看')
+          else if (_videoSections['continue']?.isNotEmpty ?? false)
+            _buildSectionWidget('继续观看', _videoSections['continue']!),
+          
+          // 最新添加区域
+          if (_sectionLoading['latest'] == true)
+            _buildSkeletonSectionWidget('最新添加')
+          else if (_videoSections['latest']?.isNotEmpty ?? false)
+            _buildSectionWidget('最新添加', _videoSections['latest']!),
+          
+          // 收藏区域
+          if (_sectionLoading['favorites'] == true)
+            _buildSkeletonSectionWidget('我的收藏')
+          else if (_videoSections['favorites']?.isNotEmpty ?? false)
+            _buildSectionWidget('我的收藏', _videoSections['favorites']!),
+          
+          // 媒体库视图区域
+          ..._buildViewSectionsWidgets(),
+        ],
+      ),
     );
   }
 

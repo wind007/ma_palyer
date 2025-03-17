@@ -8,6 +8,7 @@ import '../utils/error_dialog.dart';
 import '../utils/logger.dart';
 import '../widgets/video_grid.dart';
 import '../widgets/adaptive_app_bar.dart';
+import '../widgets/video_card.dart';
 
 class VideoListMorePage extends StatefulWidget {
   final ServerInfo server;
@@ -237,29 +238,67 @@ class _VideoListMorePageState extends State<VideoListMorePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       extendBodyBehindAppBar: true,
-      appBar: AdaptiveAppBar(
-        title: widget.title,
-      ),
-      body: _error != null
-          ? Center(child: Text(_error!))
-          : _api == null
-              ? const Center(child: CircularProgressIndicator())
-              : Column(
-                  children: [
-                    SizedBox(height: MediaQuery.of(context).padding.top + kToolbarHeight),
-                    Expanded(
-                      child: VideoGrid(
-                        videos: _videos,
+      body: RefreshIndicator(
+        onRefresh: () async {
+          setState(() {
+            _videos.clear();
+            _startIndex = 0;
+            _hasMore = true;
+          });
+          await _loadMore();
+        },
+        child: CustomScrollView(
+          controller: _scrollController,
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            AdaptiveAppBar(
+              title: widget.title,
+              scrollController: _scrollController,
+              floating: true,
+              snap: true,
+              pinned: false,
+            ),
+            if (_error != null)
+              SliverFillRemaining(
+                child: Center(child: Text(_error!)),
+              )
+            else if (_api == null)
+              const SliverFillRemaining(
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.all(16.0),
+                sliver: SliverGrid(
+                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: 200.0,
+                    mainAxisSpacing: 16.0,
+                    crossAxisSpacing: 16.0,
+                    childAspectRatio: 0.7,
+                  ),
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      if (index >= _videos.length) {
+                        if (_hasMore && !_isLoading) {
+                          _loadMore();
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        return null;
+                      }
+                      return VideoCard(
+                        video: _videos[index],
                         api: _api!,
                         server: widget.server,
-                        onVideoTap: _onVideoTap,
-                        hasMore: _hasMore,
-                        isLoading: _isLoading,
-                        scrollController: _scrollController,
-                      ),
-                    ),
-                  ],
+                        onTap: _onVideoTap,
+                      );
+                    },
+                    childCount: _hasMore ? _videos.length + 1 : _videos.length,
+                  ),
                 ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 } 
