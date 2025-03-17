@@ -236,14 +236,18 @@ class _VideoCardState extends State<VideoCard> {
                             Positioned.fill(
                               child: Material(
                                 color: Colors.transparent,
-                                child: GestureDetector(
+                                child: InkWell(
                                   onTap: () => widget.onTap(widget.video),
                                   onLongPress: () {
                                     _showOptionsDialog(context);
                                   },
-                                  child: Container(
-                                    color: Colors.transparent,
-                                  ),
+                                  borderRadius: BorderRadius.circular(8),
+                                  enableFeedback: true,
+                                  excludeFromSemantics: true,
+                                  canRequestFocus: false,
+                                  hoverColor: Colors.black12,
+                                  splashColor: Colors.black12,
+                                  highlightColor: Colors.black12,
                                 ),
                               ),
                             ),
