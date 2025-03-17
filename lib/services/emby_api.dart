@@ -343,12 +343,15 @@ class EmbyApiService {
   }
 
   // 获取视频详情
-  Future<Map<String, dynamic>> getVideoDetails(String itemId) async {
+  Future<Map<String, dynamic>> getVideoDetails(
+    String itemId, {
+    String? fields,
+  }) async {
     return await _request(
       path: '/Users/$userId/Items/$itemId',
       method: 'GET',
       queryParams: {
-        'Fields': 'Overview,Genres,Studios,CommunityRating,CriticRating,People,MediaStreams,MediaSources',
+        'Fields': fields ?? 'Overview,Genres,Studios,CommunityRating,CriticRating,People,MediaStreams,MediaSources',
       },
     );
   }
@@ -690,5 +693,47 @@ class EmbyApiService {
       Logger.e("搜索失败", _tag, e);
       rethrow;
     }
+  }
+
+  // 获取项目列表
+  Future<Map<String, dynamic>> getItems({
+    required String parentId,
+    required String userId,
+    String? fields,
+    String? includeItemTypes,
+    String? sortBy,
+    bool? recursive,
+  }) async {
+    Logger.d("获取项目列表 - ParentId: $parentId, UserId: $userId", _tag);
+    final response = await _request(
+      path: '/Users/$userId/Items',
+      method: 'GET',
+      queryParams: {
+        'ParentId': parentId,
+        'UserId': userId,
+        'Recursive': (recursive ?? true).toString(),
+        'ImageTypeLimit': '1',
+        'EnableImages': 'true',
+        'EnableImageTypes': 'Primary',
+        'EnableUserData': 'true',
+        'SortBy': sortBy ?? 'SortName,ProductionYear',
+        'SortOrder': 'Ascending',
+        'Fields': fields ?? 'Path,Overview,MediaSources,UserData,PrimaryImageAspectRatio,MediaType,Type',
+        if (includeItemTypes != null) 'IncludeItemTypes': includeItemTypes,
+      },
+    );
+    
+    if (response == null) {
+      Logger.w('获取项目列表失败：返回数据为空', _tag);
+      return {'Items': []};
+    }
+    
+    final items = response['Items'] as List?;
+    Logger.d('成功获取项目列表，共 ${items?.length ?? 0} 个项目', _tag);
+    if (items != null && items.isNotEmpty) {
+      Logger.d('第一个项目信息: Type=${items[0]['Type']}, MediaType=${items[0]['MediaType']}, Name=${items[0]['Name']}', _tag);
+    }
+    
+    return response as Map<String, dynamic>;
   }
 }

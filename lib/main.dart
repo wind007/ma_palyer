@@ -1,13 +1,23 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'services/server_manager.dart';
 import 'services/theme_manager.dart';
 import 'pages/server_list_page.dart';
 import 'package:fvp/fvp.dart' as fvp;
 import 'utils/http_client.dart';
+import 'package:flutter/rendering.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // 允许应用自动跟随系统横竖屏
+  SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+    DeviceOrientation.landscapeLeft,
+    DeviceOrientation.landscapeRight,
+  ]);
   
   await ServerManager().init();
   await ThemeManager().init();

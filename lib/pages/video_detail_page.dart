@@ -136,6 +136,11 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
             ? widget.video['EpisodeNumber'] 
             : int.tryParse(widget.video['EpisodeNumber'].toString()));
     
+    // 获取合集相关信息
+    final type = _videoDetails!['Type']?.toString().toLowerCase() ?? '';
+    final mediaType = _videoDetails!['MediaType']?.toString().toLowerCase() ?? '';
+    final parentType = _videoDetails!['ParentType']?.toString().toLowerCase() ?? '';
+    
     Logger.i(
       "开始播放视频: ${_videoDetails!['Name']}, "
       "${fromStart ? '从头开始' : '继续播放'}, "
@@ -143,6 +148,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
       "音频: $audioStreamIndex, "
       "字幕: $subtitleStreamIndex, "
       "剧集信息 - seriesId: $seriesId, seasonNumber: $seasonNumber, episodeNumber: $episodeNumber, "
+      "合集信息 - type: $type, mediaType: $mediaType, parentType: $parentType, "
       "原始数据 - video: ${widget.video}, "
       "详情数据 - videoDetails: $_videoDetails",
       _tag,
@@ -162,6 +168,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
           seriesId: seriesId,
           seasonNumber: seasonNumber,
           episodeNumber: episodeNumber,
+          playbackInfo: _videoDetails,  // 传递完整的视频详情信息
         ),
       ),
     ).then((_) {

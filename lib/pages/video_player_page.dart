@@ -18,6 +18,7 @@ class VideoPlayerPage extends StatefulWidget {
   final String? seriesId;
   final int? seasonNumber;
   final int? episodeNumber;
+  final Map<String, dynamic>? playbackInfo;
 
   const VideoPlayerPage({
     super.key,
@@ -31,6 +32,7 @@ class VideoPlayerPage extends StatefulWidget {
     this.seriesId,
     this.seasonNumber,
     this.episodeNumber,
+    this.playbackInfo,
   });
 
   @override
@@ -171,16 +173,15 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     super.initState();
     Logger.i("初始化视频播放页面 - 视频ID: ${widget.itemId}, 标题: ${widget.title}", _tag);
     
-    // 设置横屏
+    // 强制横屏
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
-    ]);
-    Logger.d("设置横屏模式", _tag);
-    
-    // 设置全屏
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-    Logger.d("设置全屏模式", _tag);
+    ]).then((_) {
+      // 设置全屏
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+      Logger.d("设置横屏和全屏模式", _tag);
+    });
     
     _initializePlayer();
     _initializeBrightness();
@@ -188,6 +189,9 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     // 加载剧集列表
     if (widget.seriesId != null) {
       _loadEpisodeList();
+    } else {
+      // 检查是否需要加载电影合集列表
+      _checkAndLoadMovieCollection();
     }
     
     // TV 端焦点监听
@@ -201,6 +205,9 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     final width = MediaQuery.of(context).size.width;
     _isMobile = width < 600;
     _isTV = Theme.of(context).platform == TargetPlatform.android && width > 960;
+    
+    // 确保横屏
+    _setLandscape();
   }
 
   Future<void> _initializeBrightness() async {
@@ -223,7 +230,14 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       
       // 获取媒体信息
       Logger.d("获取媒体信息", _tag);
-      _playbackInfo = await widget.embyApi.getPlaybackInfo(widget.itemId);
+      if (widget.playbackInfo != null) {
+        _playbackInfo = widget.playbackInfo;
+        Logger.d("使用传入的媒体信息", _tag);
+      } else {
+        _playbackInfo = await widget.embyApi.getPlaybackInfo(widget.itemId);
+        Logger.d("从服务器获取媒体信息", _tag);
+      }
+      
       if (_playbackInfo == null || _playbackInfo!['MediaSources'] == null || _playbackInfo!['MediaSources'].isEmpty) {
         Logger.e("获取媒体信息失败：MediaSources为空", _tag);
         throw Exception('无法获取媒体信息');
@@ -536,11 +550,16 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     _controller?.dispose();
     Logger.d("停止播放", _tag);
     widget.embyApi.stopPlayback(widget.itemId);
-    Logger.d("恢复屏幕方向为竖屏", _tag);
+    
+    // 恢复所有方向
+    Logger.d("恢复所有屏幕方向", _tag);
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
       DeviceOrientation.portraitDown,
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
     ]);
+    
     Logger.d("恢复系统UI显示模式", _tag);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _playlistFocusNode.removeListener(_onPlaylistFocusChange);
@@ -551,23 +570,62 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          // 主视频播放区域
-          Positioned.fill(
-            child: _buildMainPlayer(),
-          ),
-          
-          // 播放列表按钮 - 移动端显示在右侧，桌面端显示在顶部控制栏
-          if (!_isTV) // TV 端通过遥控器显示
-            _isMobile ? _buildMobilePlaylistButton() : _buildDesktopPlaylistButton(),
+    return WillPopScope(
+      onWillPop: () async {
+        // 如果播放器正在播放，显示确认对话框
+        if (_controller?.value.isPlaying == true) {
+          final shouldPop = await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              backgroundColor: Colors.black87,
+              title: const Text(
+                '确认退出',
+                style: TextStyle(color: Colors.white),
+              ),
+              content: const Text(
+                '是否要退出播放？',
+                style: TextStyle(color: Colors.white70),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text(
+                    '取消',
+                    style: TextStyle(color: Colors.white70),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text(
+                    '退出',
+                    style: TextStyle(color: Colors.red),
+                  ),
+                ),
+              ],
+            ),
+          );
+          return shouldPop ?? false;
+        }
+        return true;
+      },
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: Stack(
+          children: [
+            // 主视频播放区域
+            Positioned.fill(
+              child: _buildMainPlayer(),
+            ),
+            
+            // 播放列表按钮 - 移动端显示在右侧，桌面端显示在顶部控制栏
+            if (_shouldShowPlaylist && !_isTV)
+              _isMobile ? _buildMobilePlaylistButton() : _buildDesktopPlaylistButton(),
 
-          // 播放列表面板 - 覆盖在视频上方
-          if (_showPlaylist)
-            _buildPlaylistPanel(),
-        ],
+            // 播放列表面板 - 覆盖在视频上方
+            if (_showPlaylist)
+              _buildPlaylistPanel(),
+          ],
+        ),
       ),
     );
   }
@@ -623,132 +681,152 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     final size = MediaQuery.of(context).size;
     final isMobile = _isMobile;
     final isTV = _isTV;
+    final isSeries = widget.seriesId != null;
     
-    return Positioned(
-      right: 0,
-      top: 0,
-      bottom: 0,
-      width: isTV ? size.width * 0.3 : (isMobile ? size.width * 0.8 : 300),
-      child: Focus(
-        focusNode: _playlistFocusNode,
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.black.withOpacity(isTV && _isPlaylistFocused ? 0.95 : 0.9),
-            border: Border(
-              left: BorderSide(
-                color: Colors.white.withOpacity(0.1),
-                width: 1,
+    return Stack(
+      children: [
+        // 添加一个全屏的透明层用于捕获外部点击
+        Positioned.fill(
+          child: GestureDetector(
+            onTap: _togglePlaylist,
+            child: Container(
+              color: Colors.transparent,
+            ),
+          ),
+        ),
+        // 合集列表面板
+        Positioned(
+          right: 0,
+          top: 0,
+          bottom: 0,
+          width: isTV ? size.width * 0.3 : (isMobile ? size.width * 0.8 : 300),
+          child: Focus(
+            focusNode: _playlistFocusNode,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(isTV && _isPlaylistFocused ? 0.95 : 0.9),
+                border: Border(
+                  left: BorderSide(
+                    color: Colors.white.withOpacity(0.1),
+                    width: 1,
+                  ),
+                ),
+              ),
+              child: Column(
+                children: [
+                  // 播放列表标题栏
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(
+                          color: Colors.white.withOpacity(0.1),
+                          width: 1,
+                        ),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          isSeries ? '剧集列表' : '合集列表',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: isTV ? 20 : 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        if (!isTV)
+                          IconButton(
+                            icon: const Icon(Icons.close, color: Colors.white),
+                            onPressed: _togglePlaylist,
+                          ),
+                      ],
+                    ),
+                  ),
+                  // 剧集列表
+                  Expanded(
+                    child: _episodeList == null
+                        ? const Center(child: CircularProgressIndicator())
+                        : ListView.builder(
+                            controller: _playlistScrollController,
+                            itemCount: _episodeList!.length,
+                            itemBuilder: (context, index) {
+                              final episode = _episodeList![index];
+                              final isPlaying = episode['Id'] == widget.itemId;
+                              final isFocused = isTV && index == _focusedEpisodeIndex;
+                              
+                              return Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  onTap: isTV ? null : () => _onEpisodeSelected(episode),
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: isFocused
+                                          ? Colors.red.withOpacity(0.3)
+                                          : (isPlaying ? Colors.red.withOpacity(0.2) : null),
+                                    ),
+                                    child: ListTile(
+                                      title: Text(
+                                        episode['Name'] ?? '未知',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: isTV ? 18 : 14,
+                                          fontWeight: (isPlaying || isFocused) 
+                                              ? FontWeight.bold 
+                                              : FontWeight.normal,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      subtitle: isSeries ? Text(
+                                        '第${episode['IndexNumber'] ?? '?'}集',
+                                        style: TextStyle(
+                                          color: Colors.white70,
+                                          fontSize: isTV ? 16 : 12,
+                                        ),
+                                      ) : null,
+                                      leading: isPlaying
+                                          ? Icon(
+                                              Icons.play_arrow,
+                                              color: Colors.red,
+                                              size: isTV ? 32 : 24,
+                                            )
+                                          : Text(
+                                              '${index + 1}',
+                                              style: TextStyle(
+                                                color: Colors.white70,
+                                                fontSize: isTV ? 18 : 14,
+                                              ),
+                                            ),
+                                      contentPadding: EdgeInsets.symmetric(
+                                        horizontal: isTV ? 24 : 16,
+                                        vertical: isTV ? 16 : 8,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                  if (isTV)
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      child: const Text(
+                        '使用上下键选择，确定键播放',
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
           ),
-          child: Column(
-            children: [
-              // 播放列表标题栏
-              Container(
-                padding: EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: Colors.white.withOpacity(0.1),
-                      width: 1,
-                    ),
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      '播放列表',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: isTV ? 20 : 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    if (!isTV)
-                      IconButton(
-                        icon: Icon(Icons.close, color: Colors.white),
-                        onPressed: _togglePlaylist,
-                      ),
-                  ],
-                ),
-              ),
-              // 剧集列表
-              Expanded(
-                child: _episodeList == null
-                    ? Center(child: CircularProgressIndicator())
-                    : ListView.builder(
-                        controller: _playlistScrollController,
-                        itemCount: _episodeList!.length,
-                        itemBuilder: (context, index) {
-                          final episode = _episodeList![index];
-                          final isPlaying = episode['Id'] == widget.itemId;
-                          final isFocused = isTV && index == _focusedEpisodeIndex;
-                          
-                          return Container(
-                            decoration: BoxDecoration(
-                              color: isFocused
-                                  ? Colors.red.withOpacity(0.3)
-                                  : (isPlaying ? Colors.red.withOpacity(0.2) : null),
-                            ),
-                            child: ListTile(
-                              title: Text(
-                                episode['Name'] ?? '未知剧集',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: isTV ? 18 : 14,
-                                  fontWeight: (isPlaying || isFocused) 
-                                      ? FontWeight.bold 
-                                      : FontWeight.normal,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              subtitle: Text(
-                                '第${episode['IndexNumber'] ?? '?'}集',
-                                style: TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: isTV ? 16 : 12,
-                                ),
-                              ),
-                              leading: isPlaying
-                                  ? Icon(
-                                      Icons.play_arrow,
-                                      color: Colors.red,
-                                      size: isTV ? 32 : 24,
-                                    )
-                                  : Text(
-                                      '${index + 1}',
-                                      style: TextStyle(
-                                        color: Colors.white70,
-                                        fontSize: isTV ? 18 : 14,
-                                      ),
-                                    ),
-                              contentPadding: EdgeInsets.symmetric(
-                                horizontal: isTV ? 24 : 16,
-                                vertical: isTV ? 16 : 8,
-                              ),
-                              onTap: isTV ? null : () => _onEpisodeSelected(episode),
-                            ),
-                          );
-                        },
-                      ),
-              ),
-              if (isTV)
-                Container(
-                  padding: EdgeInsets.all(16),
-                  child: Text(
-                    '使用上下键选择剧集，确定键播放',
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontSize: 16,
-                    ),
-                  ),
-                ),
-            ],
-          ),
         ),
-      ),
+      ],
     );
   }
 
@@ -1973,6 +2051,120 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       setState(() {
         _isPlaylistFocused = _playlistFocusNode.hasFocus;
       });
+    }
+  }
+
+  bool get _shouldShowPlaylist {
+    // 如果是电视剧（有 seriesId），显示播放列表
+    if (widget.seriesId != null) {
+      Logger.d("显示播放列表：这是一个电视剧", _tag);
+      return true;
+    }
+    
+    // 如果已经加载了合集内容，说明是合集中的视频
+    if (_episodeList != null && _episodeList!.isNotEmpty) {
+      Logger.d("显示播放列表：这是合集中的视频", _tag);
+      return true;
+    }
+    
+    Logger.d("不显示播放列表：这是一个独立的视频", _tag);
+    return false;
+  }
+
+  // 检查并加载电影合集
+  Future<void> _checkAndLoadMovieCollection() async {
+    try {
+      Logger.d("检查当前视频是否属于合集", _tag);
+      
+      // 获取当前视频的详细信息
+      final videoDetails = await widget.embyApi.getVideoDetails(
+        widget.itemId,
+        fields: 'Path,Overview,ParentId,Type,MediaType,CollectionType',
+      );
+      
+      if (videoDetails == null) {
+        Logger.w("获取视频信息失败", _tag);
+        return;
+      }
+      
+      final parentId = videoDetails['ParentId']?.toString();
+      
+      if (parentId == null || parentId.isEmpty) {
+        Logger.d("视频没有父级ID", _tag);
+        return;
+      }
+
+      // 先获取父级信息
+      final parentInfo = await widget.embyApi.getVideoDetails(
+        parentId,
+        fields: 'CollectionType,Type',
+      );
+      
+      if (parentInfo == null) {
+        Logger.w("获取父级信息失败", _tag);
+        return;
+      }
+
+      final parentType = parentInfo['Type']?.toString().toLowerCase() ?? '';
+      Logger.d("父级类型: $parentType", _tag);
+
+      // 如果父级不是合集类型,直接返回
+      if (parentType != 'boxset' && parentType != 'moviescollection') {
+        Logger.d("父级不是合集类型", _tag);
+        return;
+      }
+
+      // 获取合集中的所有电影
+      final response = await widget.embyApi.getItems(
+        parentId: parentId,
+        userId: widget.embyApi.userId!,
+        fields: 'Path,Overview,MediaSources,UserData,MediaType,Type',
+        includeItemTypes: 'Movie',
+        sortBy: 'SortName',
+        recursive: true,
+      );
+
+      if (response['Items'] == null) {
+        Logger.w("获取合集内容失败", _tag);
+        return;
+      }
+
+      final items = response['Items'] as List;
+      
+      // 检查当前视频是否在合集中
+      final isInCollection = items.any((item) => item['Id'] == widget.itemId);
+      
+      if (!isInCollection) {
+        Logger.d("当前视频不在合集中", _tag);
+        return;
+      }
+
+      // 如果当前视频在合集中,更新状态
+      setState(() {
+        _episodeList = items;
+      });
+      
+      Logger.i("成功加载电影合集，共 ${items.length} 部电影", _tag);
+      
+      // 滚动到当前播放的电影
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToCurrentEpisode();
+      });
+
+    } catch (e, stackTrace) {
+      Logger.e("检查合集信息失败", _tag, e, stackTrace);
+    }
+  }
+
+  // 强制横屏方法
+  void _setLandscape() {
+    final orientation = MediaQuery.of(context).orientation;
+    if (orientation == Orientation.portrait) {
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+      Logger.d("强制切换到横屏模式", _tag);
     }
   }
 } 
