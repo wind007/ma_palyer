@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import '../services/emby_api.dart';
 import '../services/server_manager.dart';
 import '../services/api_service_manager.dart';
@@ -533,20 +534,30 @@ class _VideoListPageState extends State<VideoListPage> with SingleTickerProvider
               }
               return false;
             },
-            child: ListView.builder(
-              controller: scrollController,
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: items.length + (hasMore ? 1 : 0),
-              itemBuilder: (context, index) {
-                if (index == items.length) {
-                  return _buildLoadingIndicator();
-                }
-                return Padding(
-                  padding: const EdgeInsets.only(right: 12),
-                  child: _buildVideoCard(items[index]),
-                );
-              },
+            child: ScrollConfiguration(
+              behavior: ScrollConfiguration.of(context).copyWith(
+                dragDevices: {
+                  PointerDeviceKind.touch,
+                  PointerDeviceKind.mouse,
+                },
+                scrollbars: false,
+              ),
+              child: ListView.builder(
+                controller: scrollController,
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                physics: const AlwaysScrollableScrollPhysics(),
+                itemCount: items.length + (hasMore ? 1 : 0),
+                itemBuilder: (context, index) {
+                  if (index == items.length) {
+                    return _buildLoadingIndicator();
+                  }
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: _buildVideoCard(items[index]),
+                  );
+                },
+              ),
             ),
           ),
         ),
