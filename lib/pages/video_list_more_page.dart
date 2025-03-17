@@ -6,9 +6,8 @@ import './video_detail_page.dart';
 import './tv_show_detail_page.dart';
 import '../utils/error_dialog.dart';
 import '../utils/logger.dart';
-import '../widgets/video_grid.dart';
 import '../widgets/adaptive_app_bar.dart';
-import '../widgets/video_card.dart';
+import '../widgets/video_grid.dart';
 
 class VideoListMorePage extends StatefulWidget {
   final ServerInfo server;
@@ -267,34 +266,22 @@ class _VideoListMorePageState extends State<VideoListMorePage> {
                 child: Center(child: CircularProgressIndicator()),
               )
             else
-              SliverPadding(
-                padding: const EdgeInsets.all(16.0),
-                sliver: SliverGrid(
-                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                    maxCrossAxisExtent: 200.0,
-                    mainAxisSpacing: 16.0,
-                    crossAxisSpacing: 16.0,
-                    childAspectRatio: 0.7,
-                  ),
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      if (index >= _videos.length) {
-                        if (_hasMore && !_isLoading) {
-                          _loadMore();
-                          return const Center(child: CircularProgressIndicator());
-                        }
-                        return null;
-                      }
-                      return VideoCard(
-                        video: _videos[index],
-                        api: _api!,
-                        server: widget.server,
-                        onTap: _onVideoTap,
-                      );
-                    },
-                    childCount: _hasMore ? _videos.length + 1 : _videos.length,
-                  ),
-                ),
+              VideoGrid(
+                videos: _videos,
+                api: _api!,
+                server: widget.server,
+                onVideoTap: _onVideoTap,
+                hasMore: _hasMore,
+                isLoading: _isLoading,
+                scrollController: _scrollController,
+                padding: const EdgeInsets.all(16),
+                childAspectRatio: 0.6,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                cardWidth: 130,
+                imageWidth: 200,
+                imageHeight: 300,
+                useSliverGrid: true,
               ),
           ],
         ),

@@ -248,45 +248,22 @@ class _VideoSearchPageState extends State<VideoSearchPage> {
                       child: Text('输入关键词开始搜索'),
                     ),
                   )
-                : SliverGrid(
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 5,
-                      childAspectRatio: 0.55,
-                      crossAxisSpacing: 8,
-                      mainAxisSpacing: 8,
-                    ),
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        if (index >= _searchResults.length) {
-                          if (_hasMoreData && !_isLoading) {
-                            _loadMore();
-                          }
-                          return const Center(
-                            child: CircularProgressIndicator(),
-                          );
-                        }
-                        return GestureDetector(
-                          onTap: () => _onVideoTap(_searchResults[index]),
-                          child: VideoGrid(
-                            videos: [_searchResults[index]],
-                            api: widget.api,
-                            server: widget.server,
-                            onVideoTap: _onVideoTap,
-                            hasMore: false,
-                            isLoading: false,
-                            crossAxisCount: 1,
-                            childAspectRatio: 0.55,
-                            cardWidth: 120,
-                            imageWidth: 160,
-                            imageHeight: 240,
-                            scrollController: _gridScrollController,
-                          ),
-                        );
-                      },
-                      childCount: _hasMoreData
-                          ? _searchResults.length + 1
-                          : _searchResults.length,
-                    ),
+                : VideoGrid(
+                    videos: _searchResults,
+                    api: widget.api,
+                    server: widget.server,
+                    onVideoTap: _onVideoTap,
+                    hasMore: _hasMoreData,
+                    isLoading: _isLoading,
+                    scrollController: _gridScrollController,
+                    padding: const EdgeInsets.all(16),
+                    childAspectRatio: 0.6,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                    cardWidth: 130,
+                    imageWidth: 200,
+                    imageHeight: 300,
+                    useSliverGrid: true,
                   ),
           ),
         ],
