@@ -30,9 +30,6 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
   String? _error;
   int _selectedSeasonNumber = 1;
   final ScrollController _episodeScrollController = ScrollController();
-  bool _isMobile = false;
-  Set<int> _hoveredIndices = {};
-  bool _isDesktop = false;
 
   @override
   void initState() {
@@ -45,9 +42,6 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     // 判断是否为桌面平台
-    _isDesktop = Theme.of(context).platform == TargetPlatform.macOS ||
-                 Theme.of(context).platform == TargetPlatform.windows ||
-                 Theme.of(context).platform == TargetPlatform.linux;
   }
 
   @override
@@ -275,67 +269,7 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
         ),
         const SizedBox(height: 16),
         // 剧集列表
-        SizedBox(
-          height: 220,
-          child: ScrollConfiguration(
-            behavior: ScrollConfiguration.of(context).copyWith(
-              dragDevices: {
-                PointerDeviceKind.touch,
-                PointerDeviceKind.mouse,
-              },
-            ),
-            child: ListView.builder(
-              key: const PageStorageKey('episode_list'),
-              controller: _episodeScrollController,
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: _tvShowDetails?['Seasons']?[_selectedSeasonNumber]?.length ?? 0,
-              itemBuilder: (context, index) {
-                final episode = _tvShowDetails?['Seasons']?[_selectedSeasonNumber]?[index] ?? {};
-                final epIndexNumber = episode['IndexNumber'];
-                if (epIndexNumber == null) return const SizedBox.shrink();
-                
-                final episodeNumber = epIndexNumber is int 
-                    ? epIndexNumber 
-                    : int.tryParse(epIndexNumber.toString()) ?? 0;
-                if (episodeNumber <= 0) return const SizedBox.shrink();
-
-                return Padding(
-                  padding: const EdgeInsets.only(right: 12),
-                  child: FocusScope(
-                    child: Focus(
-                      onFocusChange: (focused) {
-                        if (focused) {
-                          _episodeScrollController.animateTo(
-                            index * 142.0, // 130 宽度 + 12 右边距
-                            duration: const Duration(milliseconds: 300),
-                            curve: Curves.easeInOut,
-                          );
-                        }
-                      },
-                      child: Builder(
-                        builder: (context) {
-                          final focused = Focus.of(context).hasFocus;
-                          return _isDesktop
-                              ? MouseRegion(
-                                  onEnter: (_) => setState(() {
-                                    _hoveredIndices.add(index);
-                                  }),
-                                  onExit: (_) => setState(() {
-                                    _hoveredIndices.remove(index);
-                                  }),
-                                  child: _buildEpisodeCard(focused, index, episode),
-                                )
-                              : _buildEpisodeCard(focused, index, episode);
-                        },
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ),
+        _buildEpisodeList(),
       ],
     );
   }
@@ -344,41 +278,86 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
     final episodeNumber = '第 ${episode['IndexNumber'] ?? '?'}集';
     final episodeTitle = episode['Name'] ?? '';
 
-    return Container(
-      decoration: (focused || (_isDesktop && _hoveredIndices.contains(index))) ? BoxDecoration(
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: Theme.of(context).colorScheme.primary,
-          width: 2,
-        ),
-      ) : null,
-      child: VideoCard(
-        video: {
-          ...episode,
-          'Name': '$episodeNumber${episodeTitle.isNotEmpty ? '\n$episodeTitle' : ''}',
-        },
-        api: _api!,
-        server: widget.server,
-        onTap: (video) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => VideoDetailPage(
-                server: widget.server,
-                video: {
-                  ...video,
-                  'SeriesId': widget.tvShow['Id'],
-                  'SeasonNumber': _selectedSeasonNumber,
-                  'EpisodeNumber': episode['IndexNumber'],
-                },
-              ),
+    return VideoCard(
+      video: {
+        ...episode,
+        'Name': '$episodeNumber${episodeTitle.isNotEmpty ? '\n$episodeTitle' : ''}',
+      },
+      api: _api!,
+      server: widget.server,
+      onTap: (video) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => VideoDetailPage(
+              server: widget.server,
+              video: {
+                ...video,
+                'SeriesId': widget.tvShow['Id'],
+                'SeasonNumber': _selectedSeasonNumber,
+                'EpisodeNumber': episode['IndexNumber'],
+              },
             ),
-          );
-        },
-        width: 130,
-        imageWidth: 240,
-        imageHeight: 160,
-        imageQuality: 80,
+          ),
+        );
+      },
+      width: 130,
+      imageWidth: 240,
+      imageHeight: 160,
+      imageQuality: 80,
+    );
+  }
+
+  Widget _buildEpisodeList() {
+    return SizedBox(
+      height: 220,
+      child: ScrollConfiguration(
+        behavior: ScrollConfiguration.of(context).copyWith(
+          dragDevices: {
+            PointerDeviceKind.touch,
+            PointerDeviceKind.mouse,
+          },
+        ),
+        child: ListView.builder(
+          key: const PageStorageKey('episode_list'),
+          controller: _episodeScrollController,
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          itemCount: _tvShowDetails?['Seasons']?[_selectedSeasonNumber]?.length ?? 0,
+          itemBuilder: (context, index) {
+            final episode = _tvShowDetails?['Seasons']?[_selectedSeasonNumber]?[index] ?? {};
+            final epIndexNumber = episode['IndexNumber'];
+            if (epIndexNumber == null) return const SizedBox.shrink();
+            
+            final episodeNumber = epIndexNumber is int 
+                ? epIndexNumber 
+                : int.tryParse(epIndexNumber.toString()) ?? 0;
+            if (episodeNumber <= 0) return const SizedBox.shrink();
+
+            return Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: FocusScope(
+                child: Focus(
+                  onFocusChange: (focused) {
+                    if (focused) {
+                      _episodeScrollController.animateTo(
+                        index * 142.0, // 130 宽度 + 12 右边距
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOut,
+                      );
+                    }
+                  },
+                  child: Builder(
+                    builder: (context) {
+                      final focused = Focus.of(context).hasFocus;
+                      return _buildEpisodeCard(focused, index, episode);
+                    },
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
       ),
     );
   }
