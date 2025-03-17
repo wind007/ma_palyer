@@ -79,8 +79,10 @@ class _VideoSearchPageState extends State<VideoSearchPage> {
     try {
       Logger.d("执行搜索: term=${_searchController.text}, startIndex=$_startIndex", _tag);
       
+      final searchTerm = _searchController.text;
       final response = await widget.api.searchItems(
-        searchTerm: _searchController.text,
+        searchTerm: searchTerm,
+        nameStartsWithOrGreater: searchTerm.toLowerCase(),
         startIndex: _startIndex,
         limit: _pageSize,
         includeItemTypes: 'Movie,Series,Episode',

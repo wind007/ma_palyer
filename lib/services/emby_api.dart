@@ -661,30 +661,35 @@ class EmbyApiService {
 
   // 搜索项目
   Future<Map<String, dynamic>> searchItems({
-    required String searchTerm,
+    String? searchTerm,
+    String? nameStartsWithOrGreater,
     int? startIndex,
     int? limit,
     String? includeItemTypes,
     String? fields,
+    bool? recursive,
   }) async {
     try {
-      Logger.d("执行搜索: term=$searchTerm", _tag);
+      Logger.d("执行搜索: term=$searchTerm, nameStartsWith=$nameStartsWithOrGreater", _tag);
+      final queryParams = {
+        'Recursive': (recursive ?? true).toString(),
+        'EnableTotalRecordCount': 'true',
+        'EnableImages': 'true',
+        'ImageTypeLimit': '1',
+        'EnableImageTypes': 'Primary',
+        'EnableUserData': 'true',
+        'Fields': fields ?? 'PrimaryImageAspectRatio,Overview',
+        if (searchTerm != null) 'SearchTerm': searchTerm,
+        if (nameStartsWithOrGreater != null) 'NameStartsWithOrGreater': nameStartsWithOrGreater,
+        if (includeItemTypes != null) 'IncludeItemTypes': includeItemTypes,
+        if (startIndex != null) 'StartIndex': startIndex.toString(),
+        if (limit != null) 'Limit': limit.toString(),
+      };
+
       final response = await _request(
         path: '/Users/$userId/Items',
         method: 'GET',
-        queryParams: {
-          'SearchTerm': searchTerm,
-          'Recursive': 'true',
-          'EnableTotalRecordCount': 'true',
-          'EnableImages': 'true',
-          'ImageTypeLimit': '1',
-          'EnableImageTypes': 'Primary',
-          'EnableUserData': 'true',
-          'Fields': fields ?? 'PrimaryImageAspectRatio,Overview',
-          if (includeItemTypes != null) 'IncludeItemTypes': includeItemTypes,
-          if (startIndex != null) 'StartIndex': startIndex.toString(),
-          if (limit != null) 'Limit': limit.toString(),
-        },
+        queryParams: queryParams,
       );
       
       Logger.d("搜索完成，获取到 ${(response['Items'] as List).length} 个结果", _tag);
