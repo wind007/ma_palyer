@@ -154,6 +154,18 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   List<dynamic>? _subtitleStreams;
   Map<String, dynamic>? _nextEpisode;
 
+  // 播放列表相关状态
+  List<dynamic>? _episodeList;
+  bool _showPlaylist = false;
+  ScrollController _playlistScrollController = ScrollController();
+  bool _isMobile = false;
+  bool _isTV = false;
+  
+  // TV 端焦点相关
+  final FocusNode _playlistFocusNode = FocusNode();
+  int? _focusedEpisodeIndex;
+  bool _isPlaylistFocused = false;
+
   @override
   void initState() {
     super.initState();
@@ -172,6 +184,23 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     
     _initializePlayer();
     _initializeBrightness();
+    
+    // 加载剧集列表
+    if (widget.seriesId != null) {
+      _loadEpisodeList();
+    }
+    
+    // TV 端焦点监听
+    _playlistFocusNode.addListener(_onPlaylistFocusChange);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 在这里初始化平台相关变量
+    final width = MediaQuery.of(context).size.width;
+    _isMobile = width < 600;
+    _isTV = Theme.of(context).platform == TargetPlatform.android && width > 960;
   }
 
   Future<void> _initializeBrightness() async {
@@ -514,12 +543,243 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     ]);
     Logger.d("恢复系统UI显示模式", _tag);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    _playlistFocusNode.removeListener(_onPlaylistFocusChange);
+    _playlistFocusNode.dispose();
     super.dispose();
     Logger.i("视频播放页面销毁完成", _tag);
   }
 
   @override
   Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          // 主视频播放区域
+          Positioned.fill(
+            child: _buildMainPlayer(),
+          ),
+          
+          // 播放列表按钮 - 移动端显示在右侧，桌面端显示在顶部控制栏
+          if (!_isTV) // TV 端通过遥控器显示
+            _isMobile ? _buildMobilePlaylistButton() : _buildDesktopPlaylistButton(),
+
+          // 播放列表面板 - 覆盖在视频上方
+          if (_showPlaylist)
+            _buildPlaylistPanel(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobilePlaylistButton() {
+    return Positioned(
+      right: 0,
+      top: MediaQuery.of(context).size.height / 2 - 25,
+      child: GestureDetector(
+        onTap: _togglePlaylist,
+        child: Container(
+          width: 25,
+          height: 50,
+          decoration: BoxDecoration(
+            color: Colors.black.withAlpha(100),
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(4),
+              bottomLeft: Radius.circular(4),
+            ),
+          ),
+          child: Icon(
+            _showPlaylist ? Icons.chevron_right : Icons.chevron_left,
+            color: Colors.white,
+            size: 20,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDesktopPlaylistButton() {
+    return Positioned(
+      right: 48,
+      top: 0,
+      child: _showControls ? Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: const BoxDecoration(
+          gradient: _topBarGradient,
+        ),
+        child: IconButton(
+          icon: Icon(
+            _showPlaylist ? Icons.playlist_play : Icons.playlist_add,
+            color: Colors.white,
+          ),
+          onPressed: _togglePlaylist,
+          tooltip: '播放列表',
+        ),
+      ) : const SizedBox.shrink(),
+    );
+  }
+
+  Widget _buildPlaylistPanel() {
+    final size = MediaQuery.of(context).size;
+    final isMobile = _isMobile;
+    final isTV = _isTV;
+    
+    return Positioned(
+      right: 0,
+      top: 0,
+      bottom: 0,
+      width: isTV ? size.width * 0.3 : (isMobile ? size.width * 0.8 : 300),
+      child: Focus(
+        focusNode: _playlistFocusNode,
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(isTV && _isPlaylistFocused ? 0.95 : 0.9),
+            border: Border(
+              left: BorderSide(
+                color: Colors.white.withOpacity(0.1),
+                width: 1,
+              ),
+            ),
+          ),
+          child: Column(
+            children: [
+              // 播放列表标题栏
+              Container(
+                padding: EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(
+                      color: Colors.white.withOpacity(0.1),
+                      width: 1,
+                    ),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '播放列表',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: isTV ? 20 : 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    if (!isTV)
+                      IconButton(
+                        icon: Icon(Icons.close, color: Colors.white),
+                        onPressed: _togglePlaylist,
+                      ),
+                  ],
+                ),
+              ),
+              // 剧集列表
+              Expanded(
+                child: _episodeList == null
+                    ? Center(child: CircularProgressIndicator())
+                    : ListView.builder(
+                        controller: _playlistScrollController,
+                        itemCount: _episodeList!.length,
+                        itemBuilder: (context, index) {
+                          final episode = _episodeList![index];
+                          final isPlaying = episode['Id'] == widget.itemId;
+                          final isFocused = isTV && index == _focusedEpisodeIndex;
+                          
+                          return Container(
+                            decoration: BoxDecoration(
+                              color: isFocused
+                                  ? Colors.red.withOpacity(0.3)
+                                  : (isPlaying ? Colors.red.withOpacity(0.2) : null),
+                            ),
+                            child: ListTile(
+                              title: Text(
+                                episode['Name'] ?? '未知剧集',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: isTV ? 18 : 14,
+                                  fontWeight: (isPlaying || isFocused) 
+                                      ? FontWeight.bold 
+                                      : FontWeight.normal,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              subtitle: Text(
+                                '第${episode['IndexNumber'] ?? '?'}集',
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: isTV ? 16 : 12,
+                                ),
+                              ),
+                              leading: isPlaying
+                                  ? Icon(
+                                      Icons.play_arrow,
+                                      color: Colors.red,
+                                      size: isTV ? 32 : 24,
+                                    )
+                                  : Text(
+                                      '${index + 1}',
+                                      style: TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: isTV ? 18 : 14,
+                                      ),
+                                    ),
+                              contentPadding: EdgeInsets.symmetric(
+                                horizontal: isTV ? 24 : 16,
+                                vertical: isTV ? 16 : 8,
+                              ),
+                              onTap: isTV ? null : () => _onEpisodeSelected(episode),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+              if (isTV)
+                Container(
+                  padding: EdgeInsets.all(16),
+                  child: Text(
+                    '使用上下键选择剧集，确定键播放',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _togglePlaylist() {
+    setState(() {
+      _showPlaylist = !_showPlaylist;
+      if (_showPlaylist) {
+        _scrollToCurrentEpisode();
+      }
+    });
+  }
+
+  void _onEpisodeSelected(Map<String, dynamic> episode) {
+    if (episode['Id'] != widget.itemId) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => VideoPlayerPage(
+            itemId: episode['Id'],
+            title: episode['Name'],
+            embyApi: widget.embyApi,
+            seriesId: widget.seriesId,
+            seasonNumber: widget.seasonNumber,
+            episodeNumber: episode['IndexNumber'],
+          ),
+        ),
+      );
+    }
+  }
+
+  Widget _buildMainPlayer() {
     if (_error != null) {
       return _buildErrorView();
     }
@@ -528,126 +788,29 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       return _buildLoadingView();
     }
 
-    return Scaffold(
-      body: Stack(
-        children: [
-          _buildVideoPlayer(),
-          if (_showControls) ...[
-            _buildTopBar(),
-            _buildVolumeControl(),
-            _buildSeekButtons(),
-            _buildBottomBar(),
-          ],
-          if (_showControls) _buildPlayPauseButton(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildErrorView() {
-    return Scaffold(
-      body: Container(
-        color: Colors.black,
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(
-                Icons.error_outline,
-                color: Colors.red,
-                size: 48,
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                '播放错误',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                _error!,
-                style: const TextStyle(
-                  color: Colors.white70,
-                  fontSize: 14,
-                ),
-              ),
-              const SizedBox(height: 24),
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 12,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.red,
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  child: const Text(
-                    '返回',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLoadingView() {
-    return Scaffold(
-      body: Container(
-        color: Colors.black,
-        child: const Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircularProgressIndicator(
-                color: Colors.red,
-              ),
-              SizedBox(height: 16),
-              Text(
-                '正在加载视频...',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildVideoPlayer() {
     return KeyboardListener(
       focusNode: FocusNode(),
       autofocus: true,
       onKeyEvent: (KeyEvent event) {
-        if (event is KeyDownEvent) {
-          if (event.logicalKey == LogicalKeyboardKey.space) {
-            _togglePlayPause();
-          } else if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-            _seekRelative(const Duration(seconds: -10));
-            _showSeekAnimation(-10);
-          } else if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-            _seekRelative(const Duration(seconds: 10));
-            _showSeekAnimation(10);
-          } else if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
-            _adjustVolume(_volumeStep);
-          } else if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-            _adjustVolume(-_volumeStep);
-          } else if (event.logicalKey == LogicalKeyboardKey.escape) {
-            Navigator.of(context).pop();
+        if (_isTV) {
+          _handleTVRemoteKey(event);
+        } else {
+          if (event is KeyDownEvent) {
+            if (event.logicalKey == LogicalKeyboardKey.space) {
+              _togglePlayPause();
+            } else if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+              _seekRelative(const Duration(seconds: -10));
+              _showSeekAnimation(-10);
+            } else if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+              _seekRelative(const Duration(seconds: 10));
+              _showSeekAnimation(10);
+            } else if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+              _adjustVolume(_volumeStep);
+            } else if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+              _adjustVolume(-_volumeStep);
+            } else if (event.logicalKey == LogicalKeyboardKey.escape) {
+              Navigator.of(context).pop();
+            }
           }
         }
       },
@@ -776,6 +939,13 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                   text: '${(_brightness * 100).round()}%',
                 ),
               ),
+            if (_showControls) ...[
+              _buildTopBar(),
+              _buildVolumeControl(),
+              _buildSeekButtons(),
+              _buildBottomBar(),
+              _buildPlayPauseButton(),
+            ],
           ],
         ),
       ),
@@ -1117,23 +1287,6 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
           ],
         );
       },
-    );
-  }
-
-
-  // ignore: unused_element
-  Widget _buildFullScreenButton() {
-    return GestureDetector(
-      onTap: _toggleFullScreen,
-      child: Container(
-        padding: _buttonPadding,
-        decoration: _buttonDecoration,
-        child: Icon(
-          _isFullScreen ? Icons.fit_screen : Icons.fullscreen,
-          color: Colors.white,
-          size: 16,
-        ),
-      ),
     );
   }
 
@@ -1638,6 +1791,188 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
           ),
         ),
       );
+    }
+  }
+
+  // 加载剧集列表
+  Future<void> _loadEpisodeList() async {
+    Logger.d("开始加载剧集列表", _tag);
+    try {
+      final response = await widget.embyApi.getEpisodes(
+        seriesId: widget.seriesId!,
+        userId: widget.embyApi.userId!,
+        seasonNumber: widget.seasonNumber,
+        fields: 'Path,MediaSources,UserData',
+      );
+
+      if (response['Items'] != null) {
+        setState(() {
+          _episodeList = response['Items'] as List;
+        });
+        Logger.i("成功加载 ${_episodeList?.length} 集", _tag);
+        
+        // 滚动到当前播放的剧集
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _scrollToCurrentEpisode();
+        });
+      }
+    } catch (e, stackTrace) {
+      Logger.e("加载剧集列表失败", _tag, e, stackTrace);
+    }
+  }
+
+  void _scrollToCurrentEpisode() {
+    if (_episodeList == null || !_playlistScrollController.hasClients) return;
+    
+    final currentIndex = _episodeList!.indexWhere(
+      (episode) => episode['Id'] == widget.itemId
+    );
+    
+    if (currentIndex != -1) {
+      _playlistScrollController.animateTo(
+        currentIndex * 60.0, // 假设每个条目高度为60
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
+
+  Widget _buildErrorView() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(
+            Icons.error_outline,
+            color: Colors.red,
+            size: 48,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            _error!,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLoadingView() {
+    return const Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          CircularProgressIndicator(
+            color: Colors.red,
+          ),
+          SizedBox(height: 16),
+          Text(
+            '正在加载视频...',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _handleTVRemoteKey(KeyEvent event) {
+    if (!_isTV) return;
+
+    if (event is KeyDownEvent) {
+      switch (event.logicalKey) {
+        case LogicalKeyboardKey.select:
+          if (_showPlaylist && _focusedEpisodeIndex != null) {
+            final episode = _episodeList![_focusedEpisodeIndex!];
+            _onEpisodeSelected(episode);
+          } else {
+            _togglePlayPause();
+          }
+          break;
+        case LogicalKeyboardKey.mediaPlayPause:
+          _togglePlayPause();
+          break;
+        case LogicalKeyboardKey.mediaTrackNext:
+          _playNextEpisode();
+          break;
+        case LogicalKeyboardKey.mediaTrackPrevious:
+          // TODO: 实现上一集功能
+          break;
+        case LogicalKeyboardKey.arrowLeft:
+          if (_showPlaylist && _isPlaylistFocused) {
+            _togglePlaylist();
+          } else {
+            _seekRelative(const Duration(seconds: -10));
+            _showSeekAnimation(-10);
+          }
+          break;
+        case LogicalKeyboardKey.arrowRight:
+          if (!_showPlaylist) {
+            _seekRelative(const Duration(seconds: 10));
+            _showSeekAnimation(10);
+          }
+          break;
+        case LogicalKeyboardKey.arrowUp:
+          if (_showPlaylist && _isPlaylistFocused) {
+            setState(() {
+              _focusedEpisodeIndex = (_focusedEpisodeIndex ?? 0) - 1;
+              if (_focusedEpisodeIndex! < 0) {
+                _focusedEpisodeIndex = _episodeList!.length - 1;
+              }
+            });
+            _scrollToFocusedEpisode();
+          } else {
+            _adjustVolume(_volumeStep);
+          }
+          break;
+        case LogicalKeyboardKey.arrowDown:
+          if (_showPlaylist && _isPlaylistFocused) {
+            setState(() {
+              _focusedEpisodeIndex = (_focusedEpisodeIndex ?? -1) + 1;
+              if (_focusedEpisodeIndex! >= _episodeList!.length) {
+                _focusedEpisodeIndex = 0;
+              }
+            });
+            _scrollToFocusedEpisode();
+          } else {
+            _adjustVolume(-_volumeStep);
+          }
+          break;
+        case LogicalKeyboardKey.contextMenu:
+          _togglePlaylist();
+          break;
+        case LogicalKeyboardKey.escape:
+        case LogicalKeyboardKey.goBack:
+          if (_showPlaylist) {
+            _togglePlaylist();
+          } else {
+            Navigator.of(context).pop();
+          }
+          break;
+      }
+    }
+  }
+
+  void _scrollToFocusedEpisode() {
+    if (_focusedEpisodeIndex == null || !_playlistScrollController.hasClients) return;
+    
+    _playlistScrollController.animateTo(
+      _focusedEpisodeIndex! * 60.0,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  void _onPlaylistFocusChange() {
+    if (mounted) {
+      setState(() {
+        _isPlaylistFocused = _playlistFocusNode.hasFocus;
+      });
     }
   }
 } 

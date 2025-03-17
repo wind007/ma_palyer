@@ -95,188 +95,198 @@ class _VideoCardState extends State<VideoCard> {
     }
 
     return MouseRegion(
-      // onEnter: (_) => setState(() => _isHovering = true),
-      // onExit: (_) => setState(() => _isHovering = false),
       child: GestureDetector(
         onTap: () => widget.onTap(widget.video),
-        child: SizedBox(
+        child: Container(
           width: widget.width,
+          height: 220, // 固定总高度
           child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Stack(
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: AspectRatio(
-                      aspectRatio: 2/3,
-                      child: Stack(
-                        children: [
-                          // 图片
-                          Positioned.fill(
-                            child: imageUrl != null && imageUrl.isNotEmpty && imageUrl.startsWith('http')
-                              ? Image.network(
-                                  imageUrl,
-                                  headers: {
-                                    'X-Emby-Token': widget.server.accessToken,
-                                  },
-                                  fit: BoxFit.cover,
-                                  loadingBuilder: (context, child, loadingProgress) {
-                                    if (loadingProgress == null) return child;
-                                    return Container(
-                                      color: Colors.grey[200],
-                                      child: Center(
-                                        child: CircularProgressIndicator(
-                                          value: loadingProgress.expectedTotalBytes != null
-                                              ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                                              : null,
-                                          strokeWidth: 2,
+              Expanded(
+                child: AspectRatio(
+                  aspectRatio: 2/3,
+                  child: Stack(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Stack(
+                          children: [
+                            // 图片
+                            Positioned.fill(
+                              child: imageUrl != null && imageUrl.isNotEmpty && imageUrl.startsWith('http')
+                                ? Image.network(
+                                    imageUrl,
+                                    headers: {
+                                      'X-Emby-Token': widget.server.accessToken,
+                                    },
+                                    fit: BoxFit.cover,
+                                    loadingBuilder: (context, child, loadingProgress) {
+                                      if (loadingProgress == null) return child;
+                                      return Container(
+                                        color: Colors.grey[200],
+                                        child: Center(
+                                          child: CircularProgressIndicator(
+                                            value: loadingProgress.expectedTotalBytes != null
+                                                ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                                                : null,
+                                            strokeWidth: 2,
+                                          ),
                                         ),
-                                      ),
-                                    );
-                                  },
-                                  errorBuilder: (context, error, stackTrace) {
-                                    Logger.e('加载图片失败: $imageUrl', _tag, error);
-                                    return _buildPlaceholder();
-                                  },
-                                )
-                              : _buildPlaceholder(),
-                          ),
-                          // 渐变遮罩
-                          Positioned.fill(
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                  colors: [
-                                    Colors.transparent,
-                                    Colors.black.withAlpha(120),
-                                  ],
-                                  stops: const [0.7, 1.0],
-                                ),
-                              ),
+                                      );
+                                    },
+                                    errorBuilder: (context, error, stackTrace) {
+                                      Logger.e('加载图片失败: $imageUrl', _tag, error);
+                                      return _buildPlaceholder();
+                                    },
+                                  )
+                                : _buildPlaceholder(),
                             ),
-                          ),
-                          // 状态图标
-                          if (!_isCollection && (widget.video['UserData']?['IsFavorite'] == true || 
-                              widget.video['UserData']?['Played'] == true))
-                            Positioned(
-                              right: 4,
-                              bottom: 4,
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  if (widget.video['UserData']?['IsFavorite'] == true)
-                                    Container(
-                                      padding: const EdgeInsets.all(4),
-                                      decoration: BoxDecoration(
-                                        color: Colors.black38,
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: const Icon(
-                                        Icons.favorite,
-                                        color: Colors.red,
-                                        size: 14,
-                                      ),
-                                    ),
-                                  if (widget.video['UserData']?['IsFavorite'] == true && 
-                                      widget.video['UserData']?['Played'] == true)
-                                    const SizedBox(width: 4),
-                                  if (widget.video['UserData']?['Played'] == true)
-                                    Container(
-                                      padding: const EdgeInsets.all(4),
-                                      decoration: BoxDecoration(
-                                        color: Colors.black38,
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: const Icon(
-                                        Icons.check_circle,
-                                        color: Colors.green,
-                                        size: 14,
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                          // 系列标识
-                          if (_isCollection)
-                            Positioned(
-                              right: 4,
-                              bottom: 4,
-                              child: Container(
-                                padding: const EdgeInsets.all(4),
+                            // 渐变遮罩
+                            Positioned.fill(
+                              child: DecoratedBox(
                                 decoration: BoxDecoration(
-                                  color: Colors.black38,
-                                  borderRadius: BorderRadius.circular(12),
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [
+                                      Colors.transparent,
+                                      Colors.black.withAlpha(120),
+                                    ],
+                                    stops: const [0.7, 1.0],
+                                  ),
                                 ),
+                              ),
+                            ),
+                            // 状态图标
+                            if (!_isCollection && (widget.video['UserData']?['IsFavorite'] == true || 
+                                widget.video['UserData']?['Played'] == true))
+                              Positioned(
+                                right: 4,
+                                bottom: 4,
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    const Icon(
-                                      Icons.collections,
-                                      color: Colors.white,
-                                      size: 14,
-                                    ),
-                                    if (widget.video['ChildCount'] != null) ...[
-                                      const SizedBox(width: 2),
-                                      Text(
-                                        '${widget.video['ChildCount']}',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.bold,
+                                    if (widget.video['UserData']?['IsFavorite'] == true)
+                                      Container(
+                                        padding: const EdgeInsets.all(4),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black38,
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        child: const Icon(
+                                          Icons.favorite,
+                                          color: Colors.red,
+                                          size: 14,
                                         ),
                                       ),
-                                    ],
+                                    if (widget.video['UserData']?['IsFavorite'] == true && 
+                                        widget.video['UserData']?['Played'] == true)
+                                      const SizedBox(width: 4),
+                                    if (widget.video['UserData']?['Played'] == true)
+                                      Container(
+                                        padding: const EdgeInsets.all(4),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black38,
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        child: const Icon(
+                                          Icons.check_circle,
+                                          color: Colors.green,
+                                          size: 14,
+                                        ),
+                                      ),
                                   ],
                                 ),
                               ),
-                            ),
-                          // 长按菜单触发区域
-                          Positioned.fill(
-                            child: Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                onTap: () => widget.onTap(widget.video),
-                                onLongPress: () {
-                                  _showOptionsDialog(context);
-                                },
+                            // 系列标识
+                            if (_isCollection)
+                              Positioned(
+                                right: 4,
+                                bottom: 4,
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black38,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(
+                                        Icons.collections,
+                                        color: Colors.white,
+                                        size: 14,
+                                      ),
+                                      if (widget.video['ChildCount'] != null) ...[
+                                        const SizedBox(width: 2),
+                                        Text(
+                                          '${widget.video['ChildCount']}',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            // 长按菜单触发区域
+                            Positioned.fill(
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  onTap: () => widget.onTap(widget.video),
+                                  onLongPress: () {
+                                    _showOptionsDialog(context);
+                                  },
+                                ),
                               ),
                             ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  // 播放进度条
-                  if (widget.video['UserData']?['PlaybackPositionTicks'] != null &&
-                      widget.video['UserData']?['PlaybackPositionTicks'] > 0)
-                    Positioned(
-                      bottom: 0,
-                      left: 0,
-                      right: 0,
-                      child: LinearProgressIndicator(
-                        value: widget.video['UserData']?['PlaybackPositionTicks'] /
-                            widget.video['RunTimeTicks'],
-                        backgroundColor: Colors.black45,
-                        valueColor: const AlwaysStoppedAnimation<Color>(
-                          Colors.red,
+                          ],
                         ),
-                        minHeight: 2,
                       ),
-                    ),
-                ],
+                      // 播放进度条
+                      if (widget.video['UserData']?['PlaybackPositionTicks'] != null &&
+                          widget.video['UserData']?['PlaybackPositionTicks'] > 0)
+                        Positioned(
+                          bottom: 0,
+                          left: 0,
+                          right: 0,
+                          child: LinearProgressIndicator(
+                            value: widget.video['UserData']?['PlaybackPositionTicks'] /
+                                widget.video['RunTimeTicks'],
+                            backgroundColor: Colors.black45,
+                            valueColor: const AlwaysStoppedAnimation<Color>(
+                              Colors.red,
+                            ),
+                            minHeight: 2,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
               ),
-              const SizedBox(height: 1),
-              Text(
-                widget.video['Name'] ?? '未知标题',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
+              Container(
+                height: 40, // 增加高度到40像素
+                padding: const EdgeInsets.only(top: 4, left: 4, right: 4, bottom: 4), // 添加底部内边距
+                alignment: Alignment.topLeft, // 改为顶部对齐
+                child: Text(
+                  widget.video['Name'] ?? '未知标题',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    inherit: false,
+                    fontSize: 12.0,
+                    height: 1.3, // 稍微增加行高
+                    letterSpacing: 0.3,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xff191c20),
+                    leadingDistribution: TextLeadingDistribution.even,
+                    textBaseline: TextBaseline.alphabetic,
+                    fontFamily: '.AppleSystemUIFont',
+                  ),
                 ),
               ),
             ],
