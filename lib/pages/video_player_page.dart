@@ -189,9 +189,6 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     // 加载剧集列表
     if (widget.seriesId != null) {
       _loadEpisodeList();
-    } else {
-      // 检查是否需要加载电影合集列表
-      _checkAndLoadMovieCollection();
     }
     
     // TV 端焦点监听
@@ -2061,99 +2058,8 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       return true;
     }
     
-    // 如果已经加载了合集内容，说明是合集中的视频
-    if (_episodeList != null && _episodeList!.isNotEmpty) {
-      Logger.d("显示播放列表：这是合集中的视频", _tag);
-      return true;
-    }
-    
     Logger.d("不显示播放列表：这是一个独立的视频", _tag);
     return false;
-  }
-
-  // 检查并加载电影合集
-  Future<void> _checkAndLoadMovieCollection() async {
-    try {
-      Logger.d("检查当前视频是否属于合集", _tag);
-      
-      // 获取当前视频的详细信息
-      final videoDetails = await widget.embyApi.getVideoDetails(
-        widget.itemId,
-        fields: 'Path,Overview,ParentId,Type,MediaType,CollectionType',
-      );
-      
-      if (videoDetails == null) {
-        Logger.w("获取视频信息失败", _tag);
-        return;
-      }
-      
-      final parentId = videoDetails['ParentId']?.toString();
-      
-      if (parentId == null || parentId.isEmpty) {
-        Logger.d("视频没有父级ID", _tag);
-        return;
-      }
-
-      // 先获取父级信息
-      final parentInfo = await widget.embyApi.getVideoDetails(
-        parentId,
-        fields: 'CollectionType,Type',
-      );
-      
-      if (parentInfo == null) {
-        Logger.w("获取父级信息失败", _tag);
-        return;
-      }
-
-      final parentType = parentInfo['Type']?.toString().toLowerCase() ?? '';
-      Logger.d("父级类型: $parentType", _tag);
-
-      // 如果父级不是合集类型,直接返回
-      if (parentType != 'boxset' && parentType != 'moviescollection') {
-        Logger.d("父级不是合集类型", _tag);
-        return;
-      }
-
-      // 获取合集中的所有电影
-      final response = await widget.embyApi.getItems(
-        parentId: parentId,
-        userId: widget.embyApi.userId!,
-        fields: 'Path,Overview,MediaSources,UserData,MediaType,Type',
-        includeItemTypes: 'Movie',
-        sortBy: 'SortName',
-        recursive: true,
-      );
-
-      if (response['Items'] == null) {
-        Logger.w("获取合集内容失败", _tag);
-        return;
-      }
-
-      final items = response['Items'] as List;
-      
-      // 检查当前视频是否在合集中
-      final isInCollection = items.any((item) => item['Id'] == widget.itemId);
-      
-      if (!isInCollection) {
-        Logger.d("当前视频不在合集中", _tag);
-        return;
-      }
-
-      // 如果当前视频在合集中,更新状态
-      setState(() {
-        _episodeList = items;
-      });
-      
-      Logger.i("成功加载电影合集，共 ${items.length} 部电影", _tag);
-      
-      // 滚动到当前播放的电影
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _scrollToCurrentEpisode();
-      });
-
-    } catch (e, stackTrace) {
-      Logger.e("检查合集信息失败", _tag, e, stackTrace);
-    }
   }
 
   // 强制横屏方法

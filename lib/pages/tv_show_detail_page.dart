@@ -301,16 +301,12 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
           ),
         );
       },
-      width: 130,
-      imageWidth: 240,
-      imageHeight: 160,
-      imageQuality: 80,
     );
   }
 
   Widget _buildEpisodeList() {
     return SizedBox(
-      height: 220,
+      height: 240,
       child: ScrollConfiguration(
         behavior: ScrollConfiguration.of(context).copyWith(
           dragDevices: {

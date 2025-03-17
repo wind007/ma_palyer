@@ -6,7 +6,6 @@ import 'services/theme_manager.dart';
 import 'pages/server_list_page.dart';
 import 'package:fvp/fvp.dart' as fvp;
 import 'utils/http_client.dart';
-import 'package:flutter/rendering.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
