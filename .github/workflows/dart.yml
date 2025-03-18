@@ -30,7 +30,8 @@ jobs:
         with:
           distribution: 'zulu'
           java-version: 11
-        
+          
+      - uses: steebchen/flutter@v1.1.0  
       - name: Install dependencies
         run: dart pub get
 
