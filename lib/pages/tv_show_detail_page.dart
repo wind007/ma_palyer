@@ -229,7 +229,7 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
                     decoration: BoxDecoration(
                       color: isSelected 
                           ? Theme.of(context).colorScheme.primary
-                          : Theme.of(context).colorScheme.surfaceContainerHighest,
+                          : Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.08),
                       borderRadius: BorderRadius.circular(20),
                     ),
                           child: Row(
@@ -772,7 +772,7 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
                               for (var tag in _tvShowDetails!['Tags'])
                                 Chip(
                                   label: Text(tag),
-                                  backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                                  backgroundColor: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.08),
                                 ),
                             ],
                           ),
@@ -796,7 +796,7 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                                   decoration: BoxDecoration(
-                                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                                    color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.08),
                                     borderRadius: BorderRadius.circular(16),
                                   ),
                                   child: Text(
@@ -889,7 +889,7 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.08),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
