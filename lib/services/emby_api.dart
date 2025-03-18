@@ -194,6 +194,7 @@ class EmbyApiService {
     int? mediaSourceIndex,
     int? audioStreamIndex,
     int? subtitleStreamIndex,
+    String subtitleMethod = 'Embed',
   }) async {
     final info = await getPlaybackInfo(itemId);
     final mediaSources = info['MediaSources'] as List;
@@ -214,7 +215,7 @@ class EmbyApiService {
       'Container': container,
       'AudioCodec': 'aac,mp3,ac3',
       'VideoCodec': 'h264,hevc,h265',
-      'SubtitleMethod': 'Embed',
+      'SubtitleMethod': subtitleMethod,
     };
 
     if (audioStreamIndex != null) {
@@ -740,5 +741,37 @@ class EmbyApiService {
     }
     
     return response as Map<String, dynamic>;
+  }
+
+  // 获取字幕 URL
+  String getSubtitleUrl({
+    required String itemId,
+    required String mediaSourceId,
+    required int subtitleStreamIndex,
+    String format = 'vtt',
+    int? startPositionTicks,
+    int? endPositionTicks,
+    bool copyTimestamps = false,
+  }) {
+    try {
+      Logger.d('获取字幕URL: itemId=$itemId, mediaSourceId=$mediaSourceId, subtitleStreamIndex=$subtitleStreamIndex', _tag);
+      
+      final params = {
+        'api_key': accessToken,
+        if (startPositionTicks != null) 'StartPositionTicks': startPositionTicks.toString(),
+        if (endPositionTicks != null) 'EndPositionTicks': endPositionTicks.toString(),
+        if (copyTimestamps) 'CopyTimestamps': 'true',
+      };
+
+      final uri = Uri.parse('$baseUrl/Videos/$itemId/$mediaSourceId/Subtitles/$subtitleStreamIndex/Stream.$format')
+          .replace(queryParameters: params);
+      
+      final url = uri.toString();
+      Logger.d('生成字幕URL: $url', _tag);
+      return url;
+    } catch (e) {
+      Logger.e('生成字幕URL失败', _tag, e);
+      rethrow;
+    }
   }
 }

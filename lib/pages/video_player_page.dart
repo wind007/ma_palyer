@@ -1265,8 +1265,8 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                         minWidth: 24,
                         minHeight: 24,
                       ),
-                      icon: const Icon(
-                        Icons.subtitles,
+                      icon: Icon(
+                        _currentSubtitleStreamIndex == -1 ? Icons.subtitles_off : Icons.subtitles,
                         color: Colors.white,
                         size: 16,
                       ),
@@ -1538,58 +1538,31 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Padding(
-                padding: EdgeInsets.only(bottom: 16),
-                child: Text(
-                  '选择音频',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
+              const Text(
+                '选择音频',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
-              for (var stream in _audioStreams!)
-                InkWell(
-                  onTap: () async {
-                    Navigator.pop(context);
-                    await _switchAudioStream(stream['Index']);
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 12,
-                      horizontal: 24,
+              const SizedBox(height: 16),
+              if (_audioStreams != null)
+                ..._audioStreams!.map((stream) {
+                  final isSelected = stream['Index'] == _currentAudioStreamIndex;
+                  return ListTile(
+                    title: Text(
+                      stream['DisplayTitle'] ?? '未知音轨',
+                      style: TextStyle(
+                        color: isSelected ? Colors.red : Colors.white,
+                      ),
                     ),
-                    decoration: BoxDecoration(
-                      color: _currentAudioStreamIndex == stream['Index']
-                          ? Colors.red.withAlpha(77)
-                          : Colors.transparent,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.audiotrack,
-                          color: _currentAudioStreamIndex == stream['Index']
-                              ? Colors.red
-                              : Colors.white,
-                          size: 16,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          '${stream['Language'] ?? '未知'} '
-                          '(${stream['Codec']?.toString().toUpperCase() ?? '未知'})',
-                          style: TextStyle(
-                            color: _currentAudioStreamIndex == stream['Index']
-                                ? Colors.red
-                                : Colors.white,
-                            fontSize: 15,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+                    onTap: () async {
+                      Navigator.pop(context);
+                      await _switchAudioStream(stream['Index']);
+                    },
+                  );
+                }).toList(),
             ],
           ),
         ),
@@ -1608,97 +1581,43 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Padding(
-                padding: EdgeInsets.only(bottom: 16),
-                child: Text(
-                  '选择字幕',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
+              const Text(
+                '选择字幕',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
-              InkWell(
+              const SizedBox(height: 16),
+              if (_subtitleStreams != null && _subtitleStreams!.isNotEmpty)
+                ..._subtitleStreams!.map((stream) {
+                  final isSelected = stream['Index'] == _currentSubtitleStreamIndex;
+                  return ListTile(
+                    title: Text(
+                      stream['DisplayTitle'] ?? '未知字幕',
+                      style: TextStyle(
+                        color: isSelected ? Colors.red : Colors.white,
+                      ),
+                    ),
+                    onTap: () async {
+                      Navigator.pop(context);
+                      await _switchSubtitleStream(stream['Index']);
+                    },
+                  );
+                }).toList(),
+              ListTile(
+                title: Text(
+                  '关闭字幕',
+                  style: TextStyle(
+                    color: _currentSubtitleStreamIndex == -1 ? Colors.red : Colors.white,
+                  ),
+                ),
                 onTap: () async {
                   Navigator.pop(context);
-                  await _switchSubtitleStream(null);
+                  await _switchSubtitleStream(-1);
                 },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 12,
-                    horizontal: 24,
-                  ),
-                  decoration: BoxDecoration(
-                    color: _currentSubtitleStreamIndex == null
-                        ? Colors.red.withAlpha(77)
-                        : Colors.transparent,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.subtitles_off,
-                        color: _currentSubtitleStreamIndex == null
-                            ? Colors.red
-                            : Colors.white,
-                        size: 16,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        '关闭字幕',
-                        style: TextStyle(
-                          color: _currentSubtitleStreamIndex == null
-                              ? Colors.red
-                              : Colors.white,
-                          fontSize: 15,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
               ),
-              for (var stream in _subtitleStreams!)
-                InkWell(
-                  onTap: () async {
-                    Navigator.pop(context);
-                    await _switchSubtitleStream(stream['Index']);
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 12,
-                      horizontal: 24,
-                    ),
-                    decoration: BoxDecoration(
-                      color: _currentSubtitleStreamIndex == stream['Index']
-                          ? Colors.red.withAlpha(77)
-                          : Colors.transparent,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.subtitles,
-                          color: _currentSubtitleStreamIndex == stream['Index']
-                              ? Colors.red
-                              : Colors.white,
-                          size: 16,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          '${stream['Language'] ?? '未知'} '
-                          '(${stream['Codec']?.toString().toUpperCase() ?? '未知'})',
-                          style: TextStyle(
-                            color: _currentSubtitleStreamIndex == stream['Index']
-                                ? Colors.red
-                                : Colors.white,
-                            fontSize: 15,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
             ],
           ),
         ),
@@ -1709,10 +1628,18 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   Future<void> _switchAudioStream(int index) async {
     Logger.i("切换音频流: $index", _tag);
     try {
+      if (_playbackInfo == null) {
+        Logger.e("无法切换音频：播放信息为空", _tag);
+        return;
+      }
+
+      final mediaSource = _playbackInfo!['MediaSources'][widget.mediaSourceIndex ?? 0];
+      final mediaSourceId = mediaSource['Id'];
+
       // 保存当前播放位置
-      final position = _controller!.value.position;
-      
-      // 获取新的播放URL
+      final currentPosition = _controller?.value.position;
+
+      // 获取新的播放 URL
       final url = await widget.embyApi.getPlaybackUrl(
         widget.itemId,
         mediaSourceIndex: widget.mediaSourceIndex,
@@ -1720,6 +1647,11 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         subtitleStreamIndex: _currentSubtitleStreamIndex,
       );
 
+      if (url.isEmpty) {
+        Logger.e("获取新播放地址失败", _tag);
+        return;
+      }
+
       // 创建新的控制器
       final newController = VideoPlayerController.networkUrl(
         Uri.parse(url),
@@ -1729,78 +1661,102 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       // 初始化新控制器
       await newController.initialize();
       
-      // 设置播放位置和状态
-      await newController.seekTo(position);
-      if (_controller!.value.isPlaying) {
-        await newController.play();
-      }
-      
-      // 更新状态
+      // 切换到新控制器
+      final oldController = _controller;
       setState(() {
-        _controller?.dispose();
         _controller = newController;
         _currentAudioStreamIndex = index;
       });
-      
-      // 添加监听器
+
+      // 设置音量和播放位置
+      await _controller?.setVolume(_currentVolume);
+      if (currentPosition != null) {
+        await _controller?.seekTo(currentPosition);
+      }
+
+      // 如果之前在播放，继续播放
+      if (oldController?.value.isPlaying ?? false) {
+        await _controller?.play();
+      }
+
+      // 清理旧控制器
+      await oldController?.dispose();
+
+      // 添加新的监听器
       _controller?.addListener(_onPlayerStateChanged);
-      
-      Logger.i("音频流切换成功", _tag);
+      _addVideoListeners();
+
+      Logger.i("音频切换完成", _tag);
     } catch (e) {
-      Logger.e("切换音频流失败", _tag, e);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('切换音频失败: $e')),
-      );
+      Logger.e("切换音频失败", _tag, e);
     }
   }
 
-  Future<void> _switchSubtitleStream(int? index) async {
+  Future<void> _switchSubtitleStream(int index) async {
     Logger.i("切换字幕流: $index", _tag);
     try {
-      // 保存当前播放位置
-      final position = _controller!.value.position;
-      
-      // 获取新的播放URL
+      if (_playbackInfo == null) {
+        Logger.e("无法切换字幕：播放信息为空", _tag);
+        return;
+      }
+
+      // 保存当前播放位置和状态
+      final currentPosition = _controller?.value.position;
+      final wasPlaying = _controller?.value.isPlaying ?? false;
+
+      // 获取新的播放 URL
       final url = await widget.embyApi.getPlaybackUrl(
         widget.itemId,
         mediaSourceIndex: widget.mediaSourceIndex,
         audioStreamIndex: _currentAudioStreamIndex,
-        subtitleStreamIndex: index,
+        subtitleStreamIndex: index == -1 ? null : index,
       );
+
+      if (url.isEmpty) {
+        Logger.e("获取新播放地址失败", _tag);
+        return;
+      }
 
       // 创建新的控制器
       final newController = VideoPlayerController.networkUrl(
         Uri.parse(url),
-        videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+        videoPlayerOptions: VideoPlayerOptions(
+          mixWithOthers: true,
+          allowBackgroundPlayback: true,
+        ),
       );
 
       // 初始化新控制器
       await newController.initialize();
       
-      // 设置播放位置和状态
-      await newController.seekTo(position);
-      if (_controller!.value.isPlaying) {
-        await newController.play();
-      }
-      
-      // 更新状态
+      // 切换到新控制器
+      final oldController = _controller;
       setState(() {
-        _controller?.dispose();
         _controller = newController;
         _currentSubtitleStreamIndex = index;
       });
-      
-      // 添加监听器
+
+      // 设置音量和播放位置
+      await _controller?.setVolume(_currentVolume);
+      if (currentPosition != null) {
+        await _controller?.seekTo(currentPosition);
+      }
+
+      // 如果之前在播放，继续播放
+      if (wasPlaying) {
+        await _controller?.play();
+      }
+
+      // 清理旧控制器
+      await oldController?.dispose();
+
+      // 添加新的监听器
       _controller?.addListener(_onPlayerStateChanged);
-      
-      Logger.i("字幕流切换成功", _tag);
+      _addVideoListeners();
+
+      Logger.i("字幕切换完成", _tag);
     } catch (e) {
-      Logger.e("切换字幕流失败", _tag, e);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('切换字幕失败: $e')),
-      );
+      Logger.e("切换字幕失败", _tag, e);
     }
   }
 
