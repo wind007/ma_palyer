@@ -20,15 +20,11 @@ jobs:  # 定义了一系列的工作，这些工作可以并行执行，也可�
     steps:
     - name: Checkout code  # 第一步，检出代码
       uses: actions/checkout@v2
-    - name: Flutter Runner
+    - name: Install Flutter
       # You may pin to the exact commit or the version.
-      # uses: jddeep/Flutter-Runner@56254d611d8b799e297ab6f81ab4ec5dd0d128a2
-      uses: jddeep/Flutter-Runner@1.2.0
-      
-    # - name: Setup Flutter  # 第二步，设置Flutter环境
-    #   uses: subosito/flutter-action@v1
-    #   with:
-    #     flutter-version: '3.13.7'  # 指定Flutter版本号
+      uses: britannio/action-install-flutter@a486b7e3148e54a76390d849100b9dee819ff810
+      # uses: britannio/action-install-flutter@v1.1
+          
 
     - name: Install dependencies  # 第三步，安装依赖
       run: flutter pub get
