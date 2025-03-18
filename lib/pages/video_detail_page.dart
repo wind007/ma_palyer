@@ -295,7 +295,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             AdaptiveAppBar(
-              title: _videoDetails?['Name'] ?? '视频详情',
+              title: _videoDetails?['Name'] ?? '加载中...',
               scrollController: _scrollController,
               floating: true,
               snap: true,
