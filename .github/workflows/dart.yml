@@ -20,11 +20,15 @@ jobs:  # 定义了一系列的工作，这些工作可以并行执行，也可�
     steps:
     - name: Checkout code  # 第一步，检出代码
       uses: actions/checkout@v2
-
-    - name: Setup Flutter  # 第二步，设置Flutter环境
-      uses: subosito/flutter-action@v1
-      with:
-        flutter-version: '3.13.7'  # 指定Flutter版本号
+    - name: flutter-cli
+      # You may pin to the exact commit or the version.
+      # uses: steebchen/flutter@55019e0f56278a7c84949e8e17c66e8f79d67290
+      uses: steebchen/flutter@v1.1.0
+      
+    # - name: Setup Flutter  # 第二步，设置Flutter环境
+    #   uses: subosito/flutter-action@v1
+    #   with:
+    #     flutter-version: '3.13.7'  # 指定Flutter版本号
 
     - name: Install dependencies  # 第三步，安装依赖
       run: flutter pub get
