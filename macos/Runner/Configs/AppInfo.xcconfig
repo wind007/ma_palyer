@@ -8,7 +8,7 @@
 PRODUCT_NAME = ma_player
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.example.maPlayer
+PRODUCT_BUNDLE_IDENTIFIER = com.wind.maPlayer
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2025 com.example. All rights reserved.
+PRODUCT_COPYRIGHT = Copyright © 2024 com.wind. All rights reserved.
