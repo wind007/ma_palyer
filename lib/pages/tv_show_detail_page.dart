@@ -380,7 +380,6 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
       return Scaffold(
         appBar: AppBar(
           title: const Text('加载中...'),
-          backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         ),
         body: const Center(
           child: CircularProgressIndicator(),
@@ -392,7 +391,6 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
       return Scaffold(
         appBar: AppBar(
           title: const Text('错误'),
-          backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         ),
         body: Center(
           child: Column(
@@ -414,7 +412,6 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
       return Scaffold(
         appBar: AppBar(
           title: const Text('无数据'),
-          backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         ),
         body: const Center(
           child: Text('暂无电视剧详情'),
