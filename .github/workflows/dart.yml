@@ -1,0 +1,38 @@
+# This workflow uses actions that are not certified by GitHub.
+# They are provided by a third-party and are governed by
+# separate terms of service, privacy policy, and support
+# documentation.
+
+name: Dart
+
+on:
+  push:
+    branches: [ "test" ]
+  pull_request:
+    branches: [ "test" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Note: This workflow uses the latest stable version of the Dart SDK.
+      # You can specify other versions if desired, see documentation here:
+      # https://github.com/dart-lang/setup-dart/blob/main/README.md
+      # - uses: dart-lang/setup-dart@v1
+      - uses: dart-lang/setup-dart@9a04e6d73cca37bd455e0608d7e5092f881fd603
+      
+      - name: Setup Java JDK
+        uses: actions/setup-java@v4.7.0
+        
+      - name: Install dependencies
+        run: dart pub get
+
+      - run: flutter build apk --release --target-platform=android-arm64 --no-shrink
+      - name: Upload APK
+        uses: actions/upload-artifact@v4.6.1
+        with:
+          name: apk
+          path: build/app/outputs/apk/release/app-release.apk
