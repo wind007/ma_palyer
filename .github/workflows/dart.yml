@@ -27,6 +27,9 @@ jobs:
       
       - name: Setup Java JDK
         uses: actions/setup-java@v4.7.0
+        with:
+          distribution: 'jdk'
+          java-version: 11
         
       - name: Install dependencies
         run: dart pub get
