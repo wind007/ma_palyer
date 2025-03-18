@@ -24,6 +24,9 @@ jobs:  # 定义了一系列的工作，这些工作可以并行执行，也可�
       # You may pin to the exact commit or the version.
       uses: britannio/action-install-flutter@a486b7e3148e54a76390d849100b9dee819ff810
       # uses: britannio/action-install-flutter@v1.1
+    - name: flutter version
+      run: flutter --version
+      
     - name: Setup Java JDK
       uses: actions/setup-java@v4.7.0
       with:
