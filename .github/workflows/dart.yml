@@ -28,7 +28,7 @@ jobs:
       - name: Setup Java JDK
         uses: actions/setup-java@v4.7.0
         with:
-          distribution: 'jdk'
+          distribution: 'zulu'
           java-version: 11
         
       - name: Install dependencies
