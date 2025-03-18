@@ -39,8 +39,8 @@ jobs:  # 定义了一系列的工作，这些工作可以并行执行，也可�
     - name: Build APK  # 第五步，构建APK
       run: flutter build apk
 
-    - name: Archive production artifacts  # 第六步，归档产物，你可以在Actions的界面下载到这个文件
-      uses: actions/upload-artifact@v2
+    - name: Upload a Build Artifact
+      uses: actions/upload-artifact@v4.6.1
       with:
         name: release-apk
         path: build/app/outputs/flutter-apk/app-release.apk
