@@ -20,7 +20,13 @@ void main() async {
   
   await ServerManager().init();
   await ThemeManager().init();
-  fvp.registerWith();
+  fvp.registerWith(options: {
+     'player' :{
+      'buffer.range' : '2000+8000',
+      'demux.buffer.ranges':'3',
+
+     }
+  });
   
   // 设置全局 HTTPS 证书验证
   HttpOverrides.global = TrustedHttpOverrides();
