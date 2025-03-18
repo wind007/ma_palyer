@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 import '../services/emby_api.dart';
 import '../utils/logger.dart';
+import '../widgets/video_progress_slider.dart';
 
 class VideoPlayerPage extends StatefulWidget {
   final String itemId;
@@ -128,6 +129,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   String? _error;               // 错误信息
   bool _showControls = false;   // 是否显示控制栏
   int _retryCount = 0;          // 重试次数
+  Duration _buffered = Duration.zero; // 缓冲进度
     
   // 播放控制
   double _currentVolume = 1.0;   // 当前音量
@@ -302,6 +304,9 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       // 启动定时更新
       _startProgressTimer();
       Logger.d("启动进度更新定时器", _tag);
+
+      // 在初始化播放器后添加缓冲进度监听
+      _addVideoListeners();
 
     } catch (e, stackTrace) {
       Logger.e("初始化播放器失败", _tag, e, stackTrace);
@@ -1176,77 +1181,35 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   }
 
   Widget _buildProgressBar() {
-    return ValueListenableBuilder(
-      valueListenable: _controller!,
-      builder: (context, VideoPlayerValue value, child) {
-        final duration = value.duration;
-        final position = _isDragging ? _previewPosition : value.position;
-
-        return Stack(
-          clipBehavior: Clip.none,
-          children: [
-            SliderTheme(
-              data: _sliderThemeData,
-              child: Slider(
-                value: position.inMilliseconds.toDouble(),
-                min: 0.0,
-                max: duration.inMilliseconds.toDouble(),
-                onChangeStart: (value) {
-                  setState(() {
-                    _isDragging = true;
-                    _previewPosition = Duration(milliseconds: value.toInt());
-                  });
-                  _hideControlsTimer?.cancel();
-                },
-                onChanged: (value) {
-                  setState(() {
-                    _previewPosition = Duration(milliseconds: value.toInt());
-                  });
-                },
-                onChangeEnd: (value) {
-                  final newPosition = Duration(milliseconds: value.toInt());
-                  _controller?.seekTo(newPosition);
-                  setState(() {
-                    _isDragging = false;
-                  });
-                  _updateProgress(isPaused: !(_controller?.value.isPlaying ?? false));
-                  _startHideControlsTimer();
-                },
-              ),
-            ),
-            if (_isDragging)
-              Positioned(
-                left: (position.inMilliseconds / duration.inMilliseconds) * 
-                  (MediaQuery.of(context).size.width - 32) - 30,
-                bottom: 25,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withAlpha(77),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.access_time,
-                        color: Colors.white,
-                        size: 12,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        _formatDuration(position),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-          ],
-        );
+    return VideoProgressSlider(
+      position: _controller?.value.position ?? Duration.zero,
+      duration: _controller?.value.duration ?? Duration.zero,
+      buffered: _buffered,
+      isDragging: _isDragging,
+      onChanged: (value) {
+        if (_controller?.value.duration != null) {
+          final newPosition = value * _controller!.value.duration!.inMilliseconds;
+          setState(() {
+            _previewPosition = Duration(milliseconds: newPosition.round());
+            _isDragging = true;
+          });
+        }
+      },
+      onChangeStart: (value) {
+        _hideControlsTimer?.cancel();
+        setState(() {
+          _isDragging = true;
+        });
+      },
+      onChangeEnd: (value) {
+        if (_controller?.value.duration != null) {
+          final newPosition = value * _controller!.value.duration!.inMilliseconds;
+          _controller?.seekTo(Duration(milliseconds: newPosition.round()));
+        }
+        _startHideControlsTimer();
+        setState(() {
+          _isDragging = false;
+        });
       },
     );
   }
@@ -2072,5 +2035,53 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       ]);
       Logger.d("强制切换到横屏模式", _tag);
     }
+  }
+
+  // 更新缓冲进度
+  void _updateBufferedPosition() {
+    if (_controller == null || !mounted) return;
+
+    // 从 FVP 的缓冲事件中获取缓冲进度
+    if (_controller!.value.buffered.isNotEmpty) {
+      final bufferedRanges = _controller!.value.buffered;
+      Duration maxBuffered = Duration.zero;
+      
+      // 找出最大的缓冲范围
+      for (final range in bufferedRanges) {
+        if (range.end > maxBuffered) {
+          maxBuffered = range.end;
+        }
+      }
+
+      if (maxBuffered > Duration.zero) {
+        setState(() {
+          _buffered = maxBuffered;
+        });
+        Logger.v("缓冲进度更新: ${_formatDuration(_buffered)}", _tag);
+      }
+    }
+  }
+
+  // 添加视频监听器
+  void _addVideoListeners() {
+    if (_controller == null) return;
+
+    // 添加播放器状态监听
+    _controller!.addListener(() {
+      // 更新缓冲进度
+      _updateBufferedPosition();
+
+      // 检查播放状态变化
+      if (_controller!.value.isBuffering) {
+        Logger.d("视频正在缓冲", _tag);
+      }
+
+      // 检查错误状态
+      if (_controller!.value.hasError) {
+        Logger.e("播放器错误: ${_controller!.value.errorDescription}", _tag);
+      }
+    });
+
+    Logger.d("已添加视频播放器监听器", _tag);
   }
 } 

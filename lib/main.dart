@@ -22,8 +22,8 @@ void main() async {
   await ThemeManager().init();
   fvp.registerWith(options: {
      'player' :{
-      'buffer.range' : '2000+8000',
-      'demux.buffer.ranges':'3',
+      'buffer.range' : '2000+20000',
+      'demux.buffer.ranges':'1',
 
      }
   });
