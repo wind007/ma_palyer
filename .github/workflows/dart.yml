@@ -46,7 +46,7 @@ jobs:  # 定义了一系列的工作，这些工作可以并行执行，也可�
     #   run: flutter test
 
     - name: Build APK  # 第五步，构建APK
-      run: flutter build apk --release --info
+      run: flutter build apk --release
 
     - name: Upload a Build Artifact
       uses: actions/upload-artifact@v4.6.1
