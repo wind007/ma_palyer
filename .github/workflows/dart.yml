@@ -12,33 +12,33 @@ on:
   pull_request:
     branches: [ "test" ]
 
-jobs:
-  build:
+jobs:  # 定义了一系列的工作，这些工作可以并行执行，也可以按照依赖顺序执行
+  build_and_test:  # 这是第一个工作的名称，你可以自行定义
+    # 工作运行的环境
     runs-on: ubuntu-latest
-
+    # 工作中的步骤，步骤会按照从上到下的顺序执行
     steps:
-      - uses: actions/checkout@v4
+    - name: Checkout code  # 第一步，检出代码
+      uses: actions/checkout@v2
 
-      # Note: This workflow uses the latest stable version of the Dart SDK.
-      # You can specify other versions if desired, see documentation here:
-      # https://github.com/dart-lang/setup-dart/blob/main/README.md
-      # - uses: dart-lang/setup-dart@v1
-      - uses: dart-lang/setup-dart@9a04e6d73cca37bd455e0608d7e5092f881fd603
-      - uses: jddeep/Flutter-Runner@1.2.0
-      
-      - name: Setup Java JDK
-        uses: actions/setup-java@v4.7.0
-        with:
-          distribution: 'zulu'
-          java-version: 11
-          
-      
-      - name: Install dependencies
-        run: dart pub get
+    - name: Setup Flutter  # 第二步，设置Flutter环境
+      uses: subosito/flutter-action@v1
+      with:
+        flutter-version: '2.2.3'  # 指定Flutter版本号
 
-      - run: flutter build apk --release --target-platform=android-arm64 --no-shrink
-      - name: Upload APK
-        uses: actions/upload-artifact@v4.6.1
-        with:
-          name: apk
-          path: build/app/outputs/apk/release/app-release.apk
+    - name: Install dependencies  # 第三步，安装依赖
+      run: flutter pub get
+
+    - name: Run tests  # 第四步，运行测试
+      run: flutter test
+
+    - name: Build APK  # 第五步，构建APK
+      run: flutter build apk
+
+    - name: Archive production artifacts  # 第六步，归档产物，你可以在Actions的界面下载到这个文件
+      uses: actions/upload-artifact@v2
+      with:
+        name: release-apk
+        path: build/app/outputs/flutter-apk/app-release.apk
+  
+        
