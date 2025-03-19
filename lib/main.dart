@@ -6,8 +6,19 @@ import 'services/theme_manager.dart';
 import 'pages/server_list_page.dart';
 import 'package:fvp/fvp.dart' as fvp;
 import 'utils/http_client.dart';
+import 'package:intl/intl.dart';
+import 'package:logging/logging.dart';
 
 void main() async {
+  
+  Logger.root.level = Level.ALL;
+  final df = DateFormat("HH:mm:ss.SSS");
+  Logger.root.onRecord.listen((record) {
+    debugPrint(
+        '${record.loggerName}.${record.level.name}: ${df.format(record.time)}: ${record.message}',
+        wrapWidth: 0x7FFFFFFFFFFFFFFF);
+  });
+
   WidgetsFlutterBinding.ensureInitialized();
   
   // 允许应用自动跟随系统横竖屏

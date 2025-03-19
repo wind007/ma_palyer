@@ -39,9 +39,9 @@ class EmbyApiService {
       // 准备请求头
       final headers = {
         'Content-Type': 'application/json',
-        'X-Emby-Client': 'Emby Flutter',
-        'X-Emby-Device-Name': 'Flutter App',
-        'X-Emby-Device-Id': 'flutter-app',
+        'X-Emby-Client': 'ma_player',
+        'X-Emby-Device-Name': 'ma_player',
+        'X-Emby-Device-Id': 'ma_player',
         'X-Emby-Client-Version': '1.0.0',
         'X-Emby-Language': 'zh-cn',
       };
@@ -744,34 +744,30 @@ class EmbyApiService {
   }
 
   // 获取字幕 URL
-  String getSubtitleUrl({
-    required String itemId,
-    required String mediaSourceId,
-    required int subtitleStreamIndex,
-    String format = 'vtt',
-    int? startPositionTicks,
-    int? endPositionTicks,
-    bool copyTimestamps = false,
-  }) {
+  Future<String?> getSubtitleUrl(String itemId, int subtitleIndex) async {
     try {
-      Logger.d('获取字幕URL: itemId=$itemId, mediaSourceId=$mediaSourceId, subtitleStreamIndex=$subtitleStreamIndex', _tag);
+      final info = await getPlaybackInfo(itemId);
+      final mediaSources = info['MediaSources'] as List;
+      if (mediaSources.isEmpty) {
+        throw Exception('没有可用的播放源');
+      }
       
+      final mediaSource = mediaSources[0];
+      final sourceId = mediaSource['Id'];
+      
+      // 构建字幕 URL
+      final subtitleUrl = '$baseUrl/Videos/$itemId/Subtitles/$subtitleIndex/Stream';
       final params = {
         'api_key': accessToken,
-        if (startPositionTicks != null) 'StartPositionTicks': startPositionTicks.toString(),
-        if (endPositionTicks != null) 'EndPositionTicks': endPositionTicks.toString(),
-        if (copyTimestamps) 'CopyTimestamps': 'true',
+        'MediaSourceId': sourceId,
       };
-
-      final uri = Uri.parse('$baseUrl/Videos/$itemId/$mediaSourceId/Subtitles/$subtitleStreamIndex/Stream.$format')
-          .replace(queryParameters: params);
       
-      final url = uri.toString();
-      Logger.d('生成字幕URL: $url', _tag);
-      return url;
+      final uri = Uri.parse(subtitleUrl).replace(queryParameters: params);
+      Logger.d('字幕URL: ${uri.toString()}', _tag);
+      return uri.toString();
     } catch (e) {
-      Logger.e('生成字幕URL失败', _tag, e);
-      rethrow;
+      Logger.e('获取字幕URL失败', _tag, e);
+      return null;
     }
   }
 }
