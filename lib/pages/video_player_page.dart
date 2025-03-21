@@ -3,6 +3,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:fvp/fvp.dart';
 import 'package:video_player/video_player.dart';
 import '../services/emby_api.dart';
 import '../utils/logger.dart';
@@ -359,6 +360,16 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         }
       });
     }
+    //     if (_controller!.value.isInitialized) {
+    //   // 获取媒体信息，检查字幕轨道
+    //   _controller!.getMediaInfo();
+    //   if (_subtitleStreams != null && _subtitleStreams!.isNotEmpty) {
+    //     // 有字幕轨道可用
+        
+    //     Logger.d('可用字幕轨道数: $_subtitleStreams', _tag); 
+    //     _controller?.setAudioTracks([0]);
+    //   }
+    // }
   }
 
   Future<void> _handleVideoCompletion() async {
@@ -1700,59 +1711,34 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         return;
       }
 
-      // 保存当前播放位置和状态
-      final currentPosition = _controller?.value.position;
-      final wasPlaying = _controller?.value.isPlaying ?? false;
-
-      // 获取新的播放 URL
-      final url = await widget.embyApi.getPlaybackUrl(
-        widget.itemId,
-        mediaSourceIndex: widget.mediaSourceIndex,
-        audioStreamIndex: _currentAudioStreamIndex,
-        subtitleStreamIndex: index == -1 ? null : index,
-      );
-
-      if (url.isEmpty) {
-        Logger.e("获取新播放地址失败", _tag);
+      if (index == -1) {
+        // 关闭字幕
+        setState(() {
+          _currentSubtitleStreamIndex = -1;
+        });
+        _controller?.setVideoTracks([]);
+        Logger.i("字幕已关闭", _tag);
         return;
       }
 
-      // 创建新的控制器
-      final newController = VideoPlayerController.networkUrl(
-        Uri.parse(url),
-        videoPlayerOptions: VideoPlayerOptions(
-          mixWithOthers: true,
-          allowBackgroundPlayback: true,
-        ),
-      );
+      // 获取字幕 URL
+      final subtitleUrl = await widget.embyApi.getSubtitleUrl(widget.itemId, index);
+      if (subtitleUrl == null || subtitleUrl.isEmpty) {
+        Logger.e("获取字幕URL失败", _tag);
+        return;
+      }
 
-      // 初始化新控制器
-      await newController.initialize();
-      
-      // 切换到新控制器
-      final oldController = _controller;
+      _controller?.setExternalSubtitle(subtitleUrl);
+
+
+    // 2. 等待字幕加载完成
+      await Future.delayed(const Duration(milliseconds: 100)); // 给一点时间让字幕加载
+      final tt = _controller?.getActiveSubtitleTracks();
+      Logger.d('tt: $tt', _tag);
+      _controller?.setSubtitleTracks([0]);
       setState(() {
-        _controller = newController;
         _currentSubtitleStreamIndex = index;
       });
-
-      // 设置音量和播放位置
-      await _controller?.setVolume(_currentVolume);
-      if (currentPosition != null) {
-        await _controller?.seekTo(currentPosition);
-      }
-
-      // 如果之前在播放，继续播放
-      if (wasPlaying) {
-        await _controller?.play();
-      }
-
-      // 清理旧控制器
-      await oldController?.dispose();
-
-      // 添加新的监听器
-      _controller?.addListener(_onPlayerStateChanged);
-      _addVideoListeners();
 
       Logger.i("字幕切换完成", _tag);
     } catch (e) {

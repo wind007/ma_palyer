@@ -744,8 +744,16 @@ class EmbyApiService {
   }
 
   // 获取字幕 URL
-  Future<String?> getSubtitleUrl(String itemId, int subtitleIndex) async {
+  Future<String?> getSubtitleUrl(
+    String itemId, 
+    int subtitleIndex, {
+    String format = 'srt',
+    int? startPositionTicks,
+    int? endPositionTicks,
+    bool? copyTimestamps,
+  }) async {
     try {
+      // 获取媒体源信息
       final info = await getPlaybackInfo(itemId);
       final mediaSources = info['MediaSources'] as List;
       if (mediaSources.isEmpty) {
@@ -753,14 +761,30 @@ class EmbyApiService {
       }
       
       final mediaSource = mediaSources[0];
-      final sourceId = mediaSource['Id'];
-      
-      // 构建字幕 URL
-      final subtitleUrl = '$baseUrl/Videos/$itemId/Subtitles/$subtitleIndex/Stream';
-      final params = {
-        'api_key': accessToken,
-        'MediaSourceId': sourceId,
+      final mediaSourceId = mediaSource['Id'];
+
+      // 构建基础 URL
+      String subtitleUrl;
+      if (startPositionTicks != null) {
+        // 使用带时间戳的 API
+        subtitleUrl = '$baseUrl/Videos/$itemId/$mediaSourceId/Subtitles/$subtitleIndex/$startPositionTicks/Stream.$format';
+      } else {
+        // 使用基础 API
+        subtitleUrl = '$baseUrl/Videos/$itemId/$mediaSourceId/Subtitles/$subtitleIndex/Stream.$format';
+      }
+
+      // 添加查询参数
+      final params = <String, String>{
+        'api_key': accessToken!,
       };
+
+      if (endPositionTicks != null) {
+        params['EndPositionTicks'] = endPositionTicks.toString();
+      }
+
+      if (copyTimestamps != null) {
+        params['CopyTimestamps'] = copyTimestamps.toString();
+      }
       
       final uri = Uri.parse(subtitleUrl).replace(queryParameters: params);
       Logger.d('字幕URL: ${uri.toString()}', _tag);

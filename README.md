@@ -16,3 +16,8 @@ For help getting started with Flutter development, view the
 samples, guidance on mobile development, and a full API reference.
 
 package
+
+Flutter 3.29.1 • channel stable • https://github.com/flutter/flutter.git
+Framework • revision 09de023485 (3 周前) • 2025-02-28 13:44:05 -0800
+Engine • revision 871f65ac1b
+Tools • Dart 3.7.0 • DevTools 2.42.2
