@@ -168,6 +168,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   
   // TV 端焦点相关
   final FocusNode _playlistFocusNode = FocusNode();
+  final FocusNode _keyboardFocusNode = FocusNode();
   int? _focusedEpisodeIndex;
   bool _isPlaylistFocused = false;
 
@@ -286,6 +287,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       
       if (!mounted) {
         Logger.w("页面已卸载，取消后续初始化", _tag);
+        await _disposeCurrentController();
         return;
       }
 
@@ -311,10 +313,16 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
 
     } catch (e, stackTrace) {
       Logger.e("初始化播放器失败", _tag, e, stackTrace);
+      if (!mounted) {
+        await _disposeCurrentController();
+        return;
+      }
       if (_retryCount < _maxRetries) {
+        await _disposeCurrentController();
         _retryCount++;
         Logger.w("准备第$_retryCount次重试", _tag);
         await Future.delayed(const Duration(seconds: 1));
+        if (!mounted) return;
         await _initializePlayer();
       } else if (mounted) {
         Logger.e("超过最大重试次数，显示错误信息", _tag);
@@ -421,6 +429,39 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     _progressTimer?.cancel();
     _hideControlsTimer?.cancel();
     _seekIndicatorTimer?.cancel();
+  }
+
+  void _fireAndForgetCleanup(Future<void> task, String action) {
+    task.catchError((error, stackTrace) {
+      Logger.e('清理任务失败: $action', _tag, error, stackTrace);
+    });
+  }
+
+  Future<void> _disposeCurrentController() async {
+    final controller = _controller;
+    if (controller == null) return;
+
+    controller.removeListener(_onPlayerStateChanged);
+    controller.removeListener(_onVideoControllerValueChanged);
+    await controller.dispose();
+    _controller = null;
+  }
+
+  void _onVideoControllerValueChanged() {
+    if (_controller == null || !mounted) return;
+
+    // 更新缓冲进度
+    _updateBufferedPosition();
+
+    // 检查播放状态变化
+    if (_controller!.value.isBuffering) {
+      Logger.d("视频正在缓冲", _tag);
+    }
+
+    // 检查错误状态
+    if (_controller!.value.hasError) {
+      Logger.e("播放器错误: ${_controller!.value.errorDescription}", _tag);
+    }
   }
 
   void _startProgressTimer() {
@@ -555,14 +596,15 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     Logger.i("销毁视频播放页面", _tag);
     _clearTimers();
     _controller?.removeListener(_onPlayerStateChanged);
+    _controller?.removeListener(_onVideoControllerValueChanged);
     if (_controller?.value.isInitialized == true) {
       Logger.d("更新最终播放进度", _tag);
-      _updateProgress(isPaused: true);
+      _fireAndForgetCleanup(_updateProgress(isPaused: true), '更新最终播放进度');
     }
     Logger.d("释放播放器控制器", _tag);
-    _controller?.dispose();
+    _fireAndForgetCleanup(_disposeCurrentController(), '释放播放器控制器');
     Logger.d("停止播放", _tag);
-    widget.embyApi.stopPlayback(widget.itemId);
+    _fireAndForgetCleanup(widget.embyApi.stopPlayback(widget.itemId), '停止播放会话');
     
     // 恢复所有方向
     Logger.d("恢复所有屏幕方向", _tag);
@@ -576,6 +618,8 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     Logger.d("恢复系统UI显示模式", _tag);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _playlistFocusNode.removeListener(_onPlaylistFocusChange);
+    _playlistScrollController.dispose();
+    _keyboardFocusNode.dispose();
     _playlistFocusNode.dispose();
     super.dispose();
     Logger.i("视频播放页面销毁完成", _tag);
@@ -880,7 +924,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     }
 
     return KeyboardListener(
-      focusNode: FocusNode(),
+      focusNode: _keyboardFocusNode,
       autofocus: true,
       onKeyEvent: (KeyEvent event) {
         if (_isTV) {
@@ -1671,6 +1715,10 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
 
       // 初始化新控制器
       await newController.initialize();
+      if (!mounted) {
+        await newController.dispose();
+        return;
+      }
       
       // 切换到新控制器
       final oldController = _controller;
@@ -1691,6 +1739,8 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       }
 
       // 清理旧控制器
+      oldController?.removeListener(_onPlayerStateChanged);
+      oldController?.removeListener(_onVideoControllerValueChanged);
       await oldController?.dispose();
 
       // 添加新的监听器
@@ -1701,6 +1751,24 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     } catch (e) {
       Logger.e("切换音频失败", _tag, e);
     }
+  }
+
+  Future<void> _disableSubtitleSafely() async {
+    if (_controller == null) return;
+
+    _controller?.setSubtitleTracks([]);
+    await Future.delayed(const Duration(milliseconds: 80));
+    if (!mounted || _controller == null) return;
+
+    final activeTracks = _controller?.getActiveSubtitleTracks();
+    if (activeTracks != null && activeTracks.isNotEmpty) {
+      Logger.w('setSubtitleTracks([]) 未清空字幕轨，尝试兼容回退 setVideoTracks([])', _tag);
+      _controller?.setVideoTracks([]);
+      await Future.delayed(const Duration(milliseconds: 80));
+      if (!mounted || _controller == null) return;
+    }
+
+    Logger.d('关闭字幕后 active subtitle tracks: ${_controller?.getActiveSubtitleTracks()}', _tag);
   }
 
   Future<void> _switchSubtitleStream(int index) async {
@@ -1716,26 +1784,39 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         setState(() {
           _currentSubtitleStreamIndex = -1;
         });
-        _controller?.setVideoTracks([]);
+        await _disableSubtitleSafely();
         Logger.i("字幕已关闭", _tag);
         return;
       }
 
       // 获取字幕 URL
-      final subtitleUrl = await widget.embyApi.getSubtitleUrl(widget.itemId, index);
+      final subtitleUrl = await widget.embyApi.getSubtitleUrl(
+        widget.itemId,
+        index,
+        mediaSourceIndex: widget.mediaSourceIndex,
+      );
       if (subtitleUrl == null || subtitleUrl.isEmpty) {
         Logger.e("获取字幕URL失败", _tag);
         return;
       }
 
+      if (!mounted || _controller == null) return;
       _controller?.setExternalSubtitle(subtitleUrl);
 
-
-    // 2. 等待字幕加载完成
+      // 2. 等待字幕加载完成
       await Future.delayed(const Duration(milliseconds: 100)); // 给一点时间让字幕加载
-      final tt = _controller?.getActiveSubtitleTracks();
-      Logger.d('tt: $tt', _tag);
-      _controller?.setSubtitleTracks([0]);
+      if (!mounted || _controller == null) return;
+
+      final activeTracks = _controller?.getActiveSubtitleTracks();
+      Logger.d('active subtitle tracks: $activeTracks', _tag);
+      if (activeTracks != null && activeTracks.isNotEmpty) {
+        final firstTrack = activeTracks.first;
+        if (firstTrack is int) {
+          _controller?.setSubtitleTracks([firstTrack]);
+        } else {
+          Logger.w('字幕轨道类型异常，无法激活: $firstTrack', _tag);
+        }
+      }
       setState(() {
         _currentSubtitleStreamIndex = index;
       });
@@ -2008,22 +2089,10 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   void _addVideoListeners() {
     if (_controller == null) return;
 
-    // 添加播放器状态监听
-    _controller!.addListener(() {
-      // 更新缓冲进度
-      _updateBufferedPosition();
-
-      // 检查播放状态变化
-      if (_controller!.value.isBuffering) {
-        Logger.d("视频正在缓冲", _tag);
-      }
-
-      // 检查错误状态
-      if (_controller!.value.hasError) {
-        Logger.e("播放器错误: ${_controller!.value.errorDescription}", _tag);
-      }
-    });
+    // 防止重复注册监听器
+    _controller!.removeListener(_onVideoControllerValueChanged);
+    _controller!.addListener(_onVideoControllerValueChanged);
 
     Logger.d("已添加视频播放器监听器", _tag);
   }
-} 
+}
