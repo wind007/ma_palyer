@@ -745,8 +745,9 @@ class EmbyApiService {
 
   // 获取字幕 URL
   Future<String?> getSubtitleUrl(
-    String itemId, 
+    String itemId,
     int subtitleIndex, {
+    int? mediaSourceIndex,
     String format = 'srt',
     int? startPositionTicks,
     int? endPositionTicks,
@@ -760,7 +761,12 @@ class EmbyApiService {
         throw Exception('没有可用的播放源');
       }
       
-      final mediaSource = mediaSources[0];
+      final sourceIndex = mediaSourceIndex ?? 0;
+      if (sourceIndex < 0 || sourceIndex >= mediaSources.length) {
+        throw Exception('无效的播放源索引: $sourceIndex');
+      }
+
+      final mediaSource = mediaSources[sourceIndex];
       final mediaSourceId = mediaSource['Id'];
 
       // 构建基础 URL

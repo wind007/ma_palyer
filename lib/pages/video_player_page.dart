@@ -1753,6 +1753,24 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     }
   }
 
+  Future<void> _disableSubtitleSafely() async {
+    if (_controller == null) return;
+
+    _controller?.setSubtitleTracks([]);
+    await Future.delayed(const Duration(milliseconds: 80));
+    if (!mounted || _controller == null) return;
+
+    final activeTracks = _controller?.getActiveSubtitleTracks();
+    if (activeTracks != null && activeTracks.isNotEmpty) {
+      Logger.w('setSubtitleTracks([]) 未清空字幕轨，尝试兼容回退 setVideoTracks([])', _tag);
+      _controller?.setVideoTracks([]);
+      await Future.delayed(const Duration(milliseconds: 80));
+      if (!mounted || _controller == null) return;
+    }
+
+    Logger.d('关闭字幕后 active subtitle tracks: ${_controller?.getActiveSubtitleTracks()}', _tag);
+  }
+
   Future<void> _switchSubtitleStream(int index) async {
     Logger.i("切换字幕流: $index", _tag);
     try {
@@ -1766,26 +1784,39 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         setState(() {
           _currentSubtitleStreamIndex = -1;
         });
-        _controller?.setVideoTracks([]);
+        await _disableSubtitleSafely();
         Logger.i("字幕已关闭", _tag);
         return;
       }
 
       // 获取字幕 URL
-      final subtitleUrl = await widget.embyApi.getSubtitleUrl(widget.itemId, index);
+      final subtitleUrl = await widget.embyApi.getSubtitleUrl(
+        widget.itemId,
+        index,
+        mediaSourceIndex: widget.mediaSourceIndex,
+      );
       if (subtitleUrl == null || subtitleUrl.isEmpty) {
         Logger.e("获取字幕URL失败", _tag);
         return;
       }
 
+      if (!mounted || _controller == null) return;
       _controller?.setExternalSubtitle(subtitleUrl);
 
-
-    // 2. 等待字幕加载完成
+      // 2. 等待字幕加载完成
       await Future.delayed(const Duration(milliseconds: 100)); // 给一点时间让字幕加载
-      final tt = _controller?.getActiveSubtitleTracks();
-      Logger.d('tt: $tt', _tag);
-      _controller?.setSubtitleTracks([0]);
+      if (!mounted || _controller == null) return;
+
+      final activeTracks = _controller?.getActiveSubtitleTracks();
+      Logger.d('active subtitle tracks: $activeTracks', _tag);
+      if (activeTracks != null && activeTracks.isNotEmpty) {
+        final firstTrack = activeTracks.first;
+        if (firstTrack is int) {
+          _controller?.setSubtitleTracks([firstTrack]);
+        } else {
+          Logger.w('字幕轨道类型异常，无法激活: $firstTrack', _tag);
+        }
+      }
       setState(() {
         _currentSubtitleStreamIndex = index;
       });
