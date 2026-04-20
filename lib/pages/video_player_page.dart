@@ -1848,7 +1848,15 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     final audioStreams = targetSource['MediaStreams']?.where((s) => s['Type'] == 'Audio')?.toList();
     final subtitleStreams = targetSource['MediaStreams']?.where((s) => s['Type'] == 'Subtitle')?.toList();
     final nextAudioIndex = targetSource['DefaultAudioStreamIndex'];
-    final nextSubtitleIndex = targetSource['DefaultSubtitleStreamIndex'] ?? -1;
+    int nextSubtitleIndex;
+    if (_currentSubtitleStreamIndex != null &&
+        _currentSubtitleStreamIndex != -1 &&
+        subtitleStreams != null &&
+        subtitleStreams.any((s) => s['Index'] == _currentSubtitleStreamIndex)) {
+      nextSubtitleIndex = _currentSubtitleStreamIndex!;
+    } else {
+      nextSubtitleIndex = targetSource['DefaultSubtitleStreamIndex'] ?? -1;
+    }
 
     final currentPosition = _controller?.value.position;
     final wasPlaying = _controller?.value.isPlaying ?? false;
@@ -1891,6 +1899,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       if (currentPosition != null) {
         await _controller?.seekTo(currentPosition);
       }
+      await _applySubtitleSelection(nextSubtitleIndex);
       if (wasPlaying) {
         await _controller?.play();
       }
@@ -1956,6 +1965,9 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       if (currentPosition != null) {
         await _controller?.seekTo(currentPosition);
       }
+      if (_currentSubtitleStreamIndex != null) {
+        await _applySubtitleSelection(_currentSubtitleStreamIndex!);
+      }
 
       // 如果之前在播放，继续播放
       if (oldController?.value.isPlaying ?? false) {
@@ -1995,6 +2007,30 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     Logger.d('关闭字幕后 active subtitle tracks: ${_controller?.getActiveSubtitleTracks()}', _tag);
   }
 
+  Future<void> _applySubtitleSelection(int subtitleIndex) async {
+    if (!mounted || _controller == null) return;
+    if (subtitleIndex == -1) {
+      await _disableSubtitleSafely();
+      return;
+    }
+
+    final subtitleUrl = await widget.embyApi.getSubtitleUrl(
+      widget.itemId,
+      subtitleIndex,
+      mediaSourceIndex: _currentMediaSourceIndex,
+    );
+    if (subtitleUrl == null || subtitleUrl.isEmpty || !mounted || _controller == null) return;
+
+    _controller?.setExternalSubtitle(subtitleUrl);
+    await Future.delayed(const Duration(milliseconds: 100));
+    if (!mounted || _controller == null) return;
+
+    final activeTracks = _controller?.getActiveSubtitleTracks();
+    if (activeTracks != null && activeTracks.isNotEmpty) {
+      _controller?.setSubtitleTracks([activeTracks.first]);
+    }
+  }
+
   Future<void> _switchSubtitleStream(int index) async {
     Logger.i("切换字幕流: $index", _tag);
     try {
@@ -2014,28 +2050,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       }
 
       // 获取字幕 URL
-      final subtitleUrl = await widget.embyApi.getSubtitleUrl(
-        widget.itemId,
-        index,
-        mediaSourceIndex: _currentMediaSourceIndex,
-      );
-      if (subtitleUrl == null || subtitleUrl.isEmpty) {
-        Logger.e("获取字幕URL失败", _tag);
-        return;
-      }
-
-      if (!mounted || _controller == null) return;
-      _controller?.setExternalSubtitle(subtitleUrl);
-
-      // 2. 等待字幕加载完成
-      await Future.delayed(const Duration(milliseconds: 100)); // 给一点时间让字幕加载
-      if (!mounted || _controller == null) return;
-
-      final activeTracks = _controller?.getActiveSubtitleTracks();
-      Logger.d('active subtitle tracks: $activeTracks', _tag);
-      if (activeTracks != null && activeTracks.isNotEmpty) {
-        _controller?.setSubtitleTracks([activeTracks.first]);
-      }
+      await _applySubtitleSelection(index);
       setState(() {
         _currentSubtitleStreamIndex = index;
       });
