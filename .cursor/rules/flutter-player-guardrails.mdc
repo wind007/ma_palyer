@@ -1,0 +1,37 @@
+---
+description: Guardrails for dependency, startup, and build safety in this Flutter player project
+alwaysApply: true
+---
+
+# Flutter Player Guardrails
+
+## Dependency changes
+- Do not upgrade/downgrade `fvp` or `video_player` automatically.
+- Before changing media-related dependencies, reproduce the current error first and explain compatibility impact.
+- Ask for confirmation before any dependency upgrade that may trigger native SDK download or toolchain changes.
+
+## Startup safety (`lib/main.dart`)
+- Keep `fvp.registerWith(...)` in place unless user explicitly requests refactor.
+- Do not remove or alter global init order (`ensureInitialized`, managers init, then `runApp`) without confirmation.
+- Any change to startup config must include a compile/run verification step.
+
+## Build artifacts and generated files
+- Never commit or intentionally edit generated folders/files like `.dart_tool/`, `build/`, `**/flutter/ephemeral/`, `GeneratedPluginRegistrant*`.
+- Prefer fixing ignore rules and source code; do not treat generated outputs as source-of-truth.
+
+## Safe workflow
+- Reproduce -> identify root cause -> minimal fix -> verify with `flutter pub get` and platform build/run.
+- Avoid destructive commands (`reset --hard`, force cleanup) unless user explicitly asks.
+- If environment/network causes third-party download failures, explain fallback options and ask before risky workaround.
+
+## External reference requirements
+- When media playback behavior, stream URLs, subtitles, transcoding, or auth/session logic is unclear, consult Emby API documentation before changing code.
+- When `fvp` behavior/API/native build integration is unclear, inspect `fvp` source code (package source and/or plugin CMake/native bridge) before changing code.
+- For fixes that rely on external docs/source, record what was consulted and why in the response (or project note/changelog when requested), so future changes have traceable rationale.
+
+## Reference links (preferred)
+- Emby API docs: `https://dev.emby.media/reference/RestAPI.html`
+- Emby API examples: `https://github.com/MediaBrowser/Emby/wiki/Api`
+- fvp package page: `https://pub.dev/packages/fvp`
+- fvp source repository: `https://github.com/wang-bin/fvp`
+- mdk-sdk wiki (fvp backend details): `https://github.com/wang-bin/mdk-sdk/wiki`
