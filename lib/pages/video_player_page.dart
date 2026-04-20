@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fvp/fvp.dart';
+import 'package:screen_brightness/screen_brightness.dart';
 import 'package:video_player/video_player.dart';
 import '../services/emby_api.dart';
 import '../utils/logger.dart';
@@ -138,6 +139,8 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   bool _isFullScreen = false;    // 全屏状态
   double _playbackSpeed = 1.0;   // 播放速度
   double _brightness = 0.0;      // 当前亮度
+  final ScreenBrightness _screenBrightness = ScreenBrightness.instance;
+  bool _canControlBrightness = true;
 
   // 手势控制
   double? _dragStartX;           // 水平拖动起始位置
@@ -214,13 +217,28 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   Future<void> _initializeBrightness() async {
     Logger.d("初始化屏幕亮度", _tag);
     try {
+      _brightness = await _screenBrightness.application;
+      Logger.d("读取系统亮度成功: $_brightness", _tag);
+    } catch (e, stackTrace) {
+      _canControlBrightness = false;
+      // 插件在不支持的平台会抛异常，这里降级为仅显示UI提示而不实际调亮度。
+      Logger.w("当前平台不支持亮度控制，降级为UI模拟", _tag);
+      Logger.e("获取系统亮度失败", _tag, e, stackTrace);
       // ignore: deprecated_member_use
       final window = WidgetsBinding.instance.window;
       _brightness = window.platformBrightness == Brightness.dark ? 0.3 : 0.7;
-      Logger.d("设置初始亮度: $_brightness", _tag);
-    } catch (e, stackTrace) {
-      Logger.e("获取系统亮度失败", _tag, e, stackTrace);
     }
+  }
+
+  void _applyBrightness(double value) {
+    final newBrightness = value.clamp(0.0, 1.0);
+    _brightness = newBrightness;
+    if (!_canControlBrightness) return;
+    _screenBrightness.setApplicationScreenBrightness(newBrightness).catchError((e, stackTrace) {
+      _canControlBrightness = false;
+      Logger.w("亮度设置失败，后续关闭实际亮度控制", _tag);
+      Logger.e("设置屏幕亮度失败", _tag, e, stackTrace);
+    });
   }
 
   Future<void> _initializePlayer() async {
@@ -994,7 +1012,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
             });
           } else if (_isDraggingBrightness) {
             setState(() {
-              _brightness = (_brightness + percentage).clamp(0.0, 1.0);
+              _applyBrightness(_brightness + percentage);
               SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
                 statusBarBrightness: _brightness > 0.5 ? Brightness.dark : Brightness.light,
               ));

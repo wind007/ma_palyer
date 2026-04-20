@@ -43,6 +43,7 @@ dependencies:
   win32: ^5.2.0
   logging: any
   intl: any
+  screen_brightness: ^2.1.4
 
 dev_dependencies:
   flutter_test:
