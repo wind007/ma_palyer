@@ -830,11 +830,17 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                         ? const Center(child: CircularProgressIndicator())
                         : ListView.builder(
                             controller: _playlistScrollController,
+                            itemExtent: _playlistItemExtent,
                             itemCount: _episodeList!.length,
                             itemBuilder: (context, index) {
                               final episode = _episodeList![index];
                               final isPlaying = episode['Id'] == widget.itemId;
                               final isFocused = isTV && index == _focusedEpisodeIndex;
+                              final userData = episode['UserData'] as Map<String, dynamic>?;
+                              final played = userData?['Played'] == true;
+                              final playedPctRaw = userData?['PlayedPercentage'];
+                              final playedPct = playedPctRaw is num ? playedPctRaw.toDouble() : 0.0;
+                              final progressValue = (playedPct / 100).clamp(0.0, 1.0);
                               
                               return Material(
                                 color: Colors.transparent,
@@ -879,6 +885,25 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                                                 fontSize: isTV ? 18 : 14,
                                               ),
                                             ),
+                                      trailing: played
+                                          ? Icon(
+                                              Icons.check_circle,
+                                              color: Colors.greenAccent.shade200,
+                                              size: isTV ? 24 : 20,
+                                            )
+                                          : progressValue > 0.01
+                                              ? SizedBox(
+                                                  width: isTV ? 56 : 44,
+                                                  child: LinearProgressIndicator(
+                                                    value: progressValue,
+                                                    minHeight: isTV ? 6 : 4,
+                                                    backgroundColor: Colors.white24,
+                                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                                      Colors.greenAccent.shade200,
+                                                    ),
+                                                  ),
+                                                )
+                                              : null,
                                       contentPadding: EdgeInsets.symmetric(
                                         horizontal: isTV ? 24 : 16,
                                         vertical: isTV ? 16 : 8,
@@ -914,6 +939,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     setState(() {
       _showPlaylist = !_showPlaylist;
       if (_showPlaylist) {
+        _focusedEpisodeIndex = _currentEpisodeIndex;
         _scrollToCurrentEpisode();
       }
     });
@@ -1153,6 +1179,15 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                           fontWeight: FontWeight.w600,
                         ),
                       ),
+                    ),
+                  if (_shouldShowPlaylist)
+                    IconButton(
+                      icon: Icon(
+                        _showPlaylist ? Icons.playlist_remove : Icons.playlist_play,
+                        color: Colors.white,
+                      ),
+                      tooltip: _showPlaylist ? '关闭可切换内容' : '切换剧集/系列内容',
+                      onPressed: _togglePlaylist,
                     ),
                 ],
               ),
@@ -2068,14 +2103,13 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
 
   void _scrollToCurrentEpisode() {
     if (_episodeList == null || !_playlistScrollController.hasClients) return;
-    
-    final currentIndex = _episodeList!.indexWhere(
-      (episode) => episode['Id'] == widget.itemId
-    );
-    
+
+    final currentIndex = _currentEpisodeIndex;
     if (currentIndex != -1) {
+      final targetOffset = (currentIndex * _playlistItemExtent)
+          .clamp(0.0, _playlistScrollController.position.maxScrollExtent);
       _playlistScrollController.animateTo(
-        currentIndex * 60.0, // 假设每个条目高度为60
+        targetOffset,
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
       );
@@ -2205,13 +2239,22 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
 
   void _scrollToFocusedEpisode() {
     if (_focusedEpisodeIndex == null || !_playlistScrollController.hasClients) return;
-    
+
+    final targetOffset = (_focusedEpisodeIndex! * _playlistItemExtent)
+        .clamp(0.0, _playlistScrollController.position.maxScrollExtent);
     _playlistScrollController.animateTo(
-      _focusedEpisodeIndex! * 60.0,
+      targetOffset,
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeInOut,
     );
   }
+
+  int get _currentEpisodeIndex {
+    if (_episodeList == null) return -1;
+    return _episodeList!.indexWhere((episode) => episode['Id'] == widget.itemId);
+  }
+
+  double get _playlistItemExtent => _isTV ? 88.0 : 72.0;
 
   void _onPlaylistFocusChange() {
     if (mounted) {

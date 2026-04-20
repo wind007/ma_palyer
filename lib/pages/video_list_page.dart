@@ -233,6 +233,7 @@ class _VideoListPageState extends State<VideoListPage> with SingleTickerProvider
       final response = await _api.getResumeItems(
         startIndex: 0,
         limit: _pageSize,
+        includeItemTypes: 'Movie,Episode,Series',
       );
 
       if (!mounted) return;
@@ -332,6 +333,7 @@ class _VideoListPageState extends State<VideoListPage> with SingleTickerProvider
         response = await _api.getResumeItems(
           startIndex: startIndex,
           limit: _pageSize,
+          includeItemTypes: 'Movie,Episode,Series',
         );
         newItems = response['Items'] as List;
         totalCount = response['TotalRecordCount'] as int;

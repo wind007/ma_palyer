@@ -361,6 +361,7 @@ class EmbyApiService {
   Future<Map<String, dynamic>> getResumeItems({
     int? startIndex,
     int? limit,
+    String includeItemTypes = 'Movie,Episode,Series',
   }) async {
     return await _request(
       path: '/Users/$userId/Items/Resume',
@@ -372,6 +373,7 @@ class EmbyApiService {
         'EnableImageTypes': 'Primary',
         'EnableUserData': 'true',
         'MediaTypes': 'Video',
+        'IncludeItemTypes': includeItemTypes,
         'EnableTotalRecordCount': 'true',
         if (startIndex != null) 'StartIndex': startIndex.toString(),
         if (limit != null) 'Limit': limit.toString(),
