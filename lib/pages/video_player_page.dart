@@ -155,6 +155,10 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   Duration _previewPosition = Duration.zero; // 预览位置
   bool _isControllerSwitching = false;
   int _switchSession = 0;
+  late final String _playSessionId;
+  bool _isSessionFinalized = false;
+  bool _isFinalizingSession = false;
+  bool _isNavigatingToEpisode = false;
 
   // 添加新的状态变量
   Map<String, dynamic>? _playbackInfo;
@@ -182,6 +186,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   @override
   void initState() {
     super.initState();
+    _playSessionId = 'flutter-app-${DateTime.now().millisecondsSinceEpoch}';
     Logger.i("初始化视频播放页面 - 视频ID: ${widget.itemId}, 标题: ${widget.title}", _tag);
     
     // 强制横屏
@@ -462,6 +467,110 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     });
   }
 
+  Future<void> _finalizePlaybackSession() async {
+    if (_isSessionFinalized || _isFinalizingSession) {
+      return;
+    }
+    _isFinalizingSession = true;
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) {
+      await _disposeCurrentController();
+      _isSessionFinalized = true;
+      _isFinalizingSession = false;
+      return;
+    }
+
+    final mediaSourceId = _currentMediaSourceId;
+    final positionTicks = controller.value.position.inMicroseconds * 10;
+    final isMuted = _currentVolume <= 0;
+    final volumeLevel = (_currentVolume * 100).round().clamp(0, 100);
+
+    try {
+      if (mediaSourceId.isNotEmpty) {
+        Logger.d("退出前顺序上报最终进度", _tag);
+        await widget.embyApi.updatePlaybackProgress(
+          itemId: widget.itemId,
+          mediaSourceId: mediaSourceId,
+          playSessionId: _playSessionId,
+          positionTicks: positionTicks,
+          isPaused: true,
+          audioStreamIndex: _currentAudioStreamIndex,
+          subtitleStreamIndex: _currentSubtitleStreamIndex,
+          volumeLevel: volumeLevel,
+          isMuted: isMuted,
+        );
+      } else {
+        Logger.w("退出收尾缺少 MediaSourceId，跳过最终进度上报", _tag);
+      }
+    } catch (e, stackTrace) {
+      Logger.e("退出前最终进度上报失败", _tag, e, stackTrace);
+    }
+
+    try {
+      Logger.d("退出前顺序上报停止播放", _tag);
+      await widget.embyApi.stopPlayback(
+        widget.itemId,
+        mediaSourceId: mediaSourceId,
+        playSessionId: _playSessionId,
+        positionTicks: positionTicks,
+        audioStreamIndex: _currentAudioStreamIndex,
+        subtitleStreamIndex: _currentSubtitleStreamIndex,
+      );
+    } catch (e, stackTrace) {
+      Logger.e("退出前停止播放上报失败", _tag, e, stackTrace);
+    } finally {
+      await _disposeCurrentController();
+      _isSessionFinalized = true;
+      _isFinalizingSession = false;
+    }
+  }
+
+  Future<void> _switchToEpisodeWithFinalize(
+    String itemId,
+    String title, {
+    bool fromStart = false,
+    int? episodeNumber,
+  }) async {
+    if (_isNavigatingToEpisode) {
+      Logger.w("正在切换剧集，忽略重复导航请求", _tag);
+      return;
+    }
+    if (mounted) {
+      setState(() {
+        _isNavigatingToEpisode = true;
+      });
+    } else {
+      _isNavigatingToEpisode = true;
+    }
+    if (!mounted) return;
+    try {
+      await _finalizePlaybackSession();
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => VideoPlayerPage(
+            itemId: itemId,
+            title: title,
+            embyApi: widget.embyApi,
+            fromStart: fromStart,
+            seriesId: widget.seriesId,
+            seasonNumber: widget.seasonNumber,
+            episodeNumber: episodeNumber,
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isNavigatingToEpisode = false;
+        });
+      } else {
+        _isNavigatingToEpisode = false;
+      }
+    }
+  }
+
   Future<void> _disposeCurrentController() async {
     final controller = _controller;
     if (controller == null) return;
@@ -541,10 +650,21 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       if (_controller == null || !mounted) return;
       final position = _controller!.value.position;
       final duration = _controller!.value.duration;
+      final mediaSourceId = _currentMediaSourceId;
+      if (mediaSourceId.isEmpty) {
+        Logger.w("更新播放进度失败：缺少有效 MediaSourceId", _tag);
+        return;
+      }
       await widget.embyApi.updatePlaybackProgress(
         itemId: widget.itemId,
+        mediaSourceId: mediaSourceId,
+        playSessionId: _playSessionId,
         positionTicks: position.inMicroseconds * 10,
         isPaused: isPaused,
+        audioStreamIndex: _currentAudioStreamIndex,
+        subtitleStreamIndex: _currentSubtitleStreamIndex,
+        volumeLevel: (_currentVolume * 100).round().clamp(0, 100),
+        isMuted: _currentVolume <= 0,
       );
       _syncCurrentEpisodeProgress(position, duration);
       Logger.v("播放进度更新成功 - 位置: ${position.inSeconds}秒", _tag);
@@ -625,14 +745,11 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     _clearTimers();
     _controller?.removeListener(_onPlayerStateChanged);
     _controller?.removeListener(_onVideoControllerValueChanged);
-    if (_controller?.value.isInitialized == true) {
-      Logger.d("更新最终播放进度", _tag);
-      _fireAndForgetCleanup(_updateProgress(isPaused: true), '更新最终播放进度');
+    if (!_isSessionFinalized && !_isFinalizingSession) {
+      _fireAndForgetCleanup(_finalizePlaybackSession(), '播放会话顺序收尾');
+    } else {
+      _fireAndForgetCleanup(_disposeCurrentController(), '播放会话已收尾，仅释放控制器');
     }
-    Logger.d("释放播放器控制器", _tag);
-    _fireAndForgetCleanup(_disposeCurrentController(), '释放播放器控制器');
-    Logger.d("停止播放", _tag);
-    _fireAndForgetCleanup(widget.embyApi.stopPlayback(widget.itemId), '停止播放会话');
     
     // 恢复所有方向
     Logger.d("恢复所有屏幕方向", _tag);
@@ -702,13 +819,52 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
               child: _buildMainPlayer(),
             ),
             
-            // 播放列表按钮 - 移动端显示在右侧，桌面端显示在顶部控制栏
-            if (_shouldShowPlaylist && !_isTV)
-              _isMobile ? _buildMobilePlaylistButton() : _buildDesktopPlaylistButton(),
+            // 播放列表按钮 - 仅移动端显示在右侧（桌面端使用顶部控制栏入口）
+            if (_shouldShowPlaylist && !_isTV && _isMobile)
+              _buildMobilePlaylistButton(),
 
             // 播放列表面板 - 覆盖在视频上方
             if (_showPlaylist)
               _buildPlaylistPanel(),
+            if (_isNavigatingToEpisode)
+              Positioned.fill(
+                child: AbsorbPointer(
+                  child: Container(
+                    color: Colors.black.withAlpha(90),
+                    alignment: Alignment.center,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withAlpha(170),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.white24),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          ),
+                          SizedBox(width: 10),
+                          Text(
+                            '正在切换内容...',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -738,27 +894,6 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildDesktopPlaylistButton() {
-    return Positioned(
-      right: 48,
-      top: 0,
-      child: _showControls ? Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: const BoxDecoration(
-          gradient: _topBarGradient,
-        ),
-        child: IconButton(
-          icon: Icon(
-            _showPlaylist ? Icons.playlist_play : Icons.playlist_add,
-            color: Colors.white,
-          ),
-          onPressed: _togglePlaylist,
-          tooltip: '播放列表',
-        ),
-      ) : const SizedBox.shrink(),
     );
   }
 
@@ -850,7 +985,9 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                               return Material(
                                 color: Colors.transparent,
                                 child: InkWell(
-                                  onTap: isTV ? null : () => _onEpisodeSelected(episode),
+                                  onTap: (isTV || _isNavigatingToEpisode)
+                                      ? null
+                                      : () => _onEpisodeSelected(episode),
                                   child: Container(
                                     decoration: BoxDecoration(
                                       color: isFocused
@@ -941,6 +1078,10 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   }
 
   void _togglePlaylist() {
+    if (_isNavigatingToEpisode) {
+      Logger.v("切换剧集中，忽略播放列表开关操作", _tag);
+      return;
+    }
     setState(() {
       _showPlaylist = !_showPlaylist;
       if (_showPlaylist) {
@@ -950,20 +1091,12 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     });
   }
 
-  void _onEpisodeSelected(Map<String, dynamic> episode) {
+  Future<void> _onEpisodeSelected(Map<String, dynamic> episode) async {
     if (episode['Id'] != widget.itemId) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => VideoPlayerPage(
-            itemId: episode['Id'],
-            title: episode['Name'],
-            embyApi: widget.embyApi,
-            seriesId: widget.seriesId,
-            seasonNumber: widget.seasonNumber,
-            episodeNumber: episode['IndexNumber'],
-          ),
-        ),
+      await _switchToEpisodeWithFinalize(
+        episode['Id'],
+        episode['Name'],
+        episodeNumber: episode['IndexNumber'],
       );
     }
   }
@@ -1168,20 +1301,27 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                     ),
                   ),
                   if (_currentVersionLabel.isNotEmpty)
-                    Container(
-                      margin: const EdgeInsets.only(left: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withAlpha(120),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.white24),
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: _isMobile ? 140 : 220,
                       ),
-                      child: Text(
-                        _currentVersionLabel,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
+                      child: Container(
+                        margin: const EdgeInsets.only(left: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withAlpha(120),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.white24),
+                        ),
+                        child: Text(
+                          _currentVersionLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ),
@@ -1936,6 +2076,27 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       return;
     }
     Logger.i("切换音频流: $index", _tag);
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) {
+      Logger.w("播放器未初始化，无法切换音轨", _tag);
+      return;
+    }
+
+    // 优先使用 fvp 轨道切换，避免重建 controller 带来的中断。
+    try {
+      setState(() {
+        _currentAudioStreamIndex = index;
+      });
+      controller.setAudioTracks([index]);
+      Logger.i("音频切换完成（fvp 轨道切换）", _tag);
+    } catch (e, stackTrace) {
+      Logger.w("fvp 轨道切换失败，回退到重建 controller 切换音轨", _tag);
+      Logger.e("轨道切换异常", _tag, e, stackTrace);
+      await _switchAudioStreamByRebuild(index);
+    }
+  }
+
+  Future<void> _switchAudioStreamByRebuild(int index) async {
     final session = ++_switchSession;
     _isControllerSwitching = true;
     try {
@@ -1944,10 +2105,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         return;
       }
 
-      // 保存当前播放位置
       final currentPosition = _controller?.value.position;
-
-      // 获取新的播放 URL
       final url = await widget.embyApi.getPlaybackUrl(
         widget.itemId,
         mediaSourceIndex: _currentMediaSourceIndex,
@@ -1960,27 +2118,22 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         return;
       }
 
-      // 创建新的控制器
       final newController = VideoPlayerController.networkUrl(
         Uri.parse(url),
         videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
       );
-
-      // 初始化新控制器
       await newController.initialize();
       if (!mounted || session != _switchSession) {
         await newController.dispose();
         return;
       }
-      
-      // 切换到新控制器
+
       final oldController = _controller;
       setState(() {
         _controller = newController;
         _currentAudioStreamIndex = index;
       });
 
-      // 设置音量和播放位置
       await _controller?.setVolume(_currentVolume);
       if (currentPosition != null) {
         await _controller?.seekTo(currentPosition);
@@ -1989,24 +2142,19 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         await _applySubtitleSelection(_currentSubtitleStreamIndex!);
       }
       if (!mounted || session != _switchSession) return;
-
-      // 如果之前在播放，继续播放
       if (oldController?.value.isPlaying ?? false) {
         await _controller?.play();
       }
 
-      // 清理旧控制器
       oldController?.removeListener(_onPlayerStateChanged);
       oldController?.removeListener(_onVideoControllerValueChanged);
       await oldController?.dispose();
 
-      // 添加新的监听器
       _controller?.addListener(_onPlayerStateChanged);
       _addVideoListeners();
-
-      Logger.i("音频切换完成", _tag);
+      Logger.i("音频切换完成（回退重建 controller）", _tag);
     } catch (e, stackTrace) {
-      Logger.e("切换音频失败", _tag, e, stackTrace);
+      Logger.e("回退切换音频失败", _tag, e, stackTrace);
     } finally {
       _isControllerSwitching = false;
     }
@@ -2094,20 +2242,16 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     }
 
     Logger.i("开始播放下一集: ${_nextEpisode!['Name']}", _tag);
+    if (_isNavigatingToEpisode) {
+      Logger.w("下一集导航已在进行中，忽略重复触发", _tag);
+      return;
+    }
     if (mounted) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => VideoPlayerPage(
-            itemId: _nextEpisode!['Id'],
-            title: _nextEpisode!['Name'],
-            embyApi: widget.embyApi,
-            fromStart: true,
-            seriesId: widget.seriesId,
-            seasonNumber: widget.seasonNumber,
-            episodeNumber: (_nextEpisode!['IndexNumber'] as num).toInt(),
-          ),
-        ),
+      await _switchToEpisodeWithFinalize(
+        _nextEpisode!['Id'],
+        _nextEpisode!['Name'],
+        fromStart: true,
+        episodeNumber: (_nextEpisode!['IndexNumber'] as num).toInt(),
       );
     }
   }
@@ -2311,6 +2455,16 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     
     Logger.d("不显示播放列表：这是一个独立的视频", _tag);
     return false;
+  }
+
+  String get _currentMediaSourceId {
+    final mediaSources = _availableMediaSources;
+    if (mediaSources.isEmpty ||
+        _currentMediaSourceIndex < 0 ||
+        _currentMediaSourceIndex >= mediaSources.length) {
+      return '';
+    }
+    return mediaSources[_currentMediaSourceIndex]['Id']?.toString() ?? '';
   }
 
   void _syncCurrentEpisodeProgress(Duration position, Duration duration) {

@@ -251,8 +251,14 @@ class EmbyApiService {
   // 更新播放进度
   Future<void> updatePlaybackProgress({
     required String itemId,
+    required String mediaSourceId,
+    required String playSessionId,
     required int positionTicks,
     required bool isPaused,
+    int? audioStreamIndex,
+    int? subtitleStreamIndex,
+    bool isMuted = false,
+    int volumeLevel = 100,
   }) async {
     try {
       await _request(
@@ -260,21 +266,24 @@ class EmbyApiService {
         method: 'POST',
         body: {
           'ItemId': itemId,
-          'MediaSourceId': itemId,
+          'MediaSourceId': mediaSourceId,
           'PositionTicks': positionTicks,
           'IsPaused': isPaused,
-          'IsMuted': false,
+          'IsMuted': isMuted,
           'PlayMethod': 'DirectStream',
           'RepeatMode': 'RepeatNone',
           'PlaybackStartTimeTicks': 0,
-          'VolumeLevel': 100,
-          'AudioStreamIndex': 1,
-          'SubtitleStreamIndex': -1,
-          'PlaySessionId': 'flutter-app-${DateTime.now().millisecondsSinceEpoch}',
+          'VolumeLevel': volumeLevel,
+          if (audioStreamIndex != null) 'AudioStreamIndex': audioStreamIndex,
+          if (subtitleStreamIndex != null) 'SubtitleStreamIndex': subtitleStreamIndex,
+          'PlaySessionId': playSessionId,
         },
         allowNoContent: true,
       );
-      Logger.i('更新播放进度成功: $positionTicks ticks, isPaused: $isPaused', _tag);
+      Logger.i(
+        '更新播放进度成功: $positionTicks ticks, isPaused: $isPaused, mediaSourceId: $mediaSourceId',
+        _tag,
+      );
     } catch (e) {
       Logger.e('更新播放进度失败', _tag, e);
       rethrow;
@@ -282,7 +291,14 @@ class EmbyApiService {
   }
 
   // 停止播放
-  Future<void> stopPlayback(String itemId) async {
+  Future<void> stopPlayback(
+    String itemId, {
+    String? mediaSourceId,
+    String? playSessionId,
+    int? positionTicks,
+    int? audioStreamIndex,
+    int? subtitleStreamIndex,
+  }) async {
     try {
       await _request(
         path: '/Sessions/Playing/Stopped',
@@ -291,7 +307,13 @@ class EmbyApiService {
           'ItemId': itemId,
           'UserId': userId,
           'PlayMethod': 'DirectStream',
+          if (mediaSourceId != null && mediaSourceId.isNotEmpty) 'MediaSourceId': mediaSourceId,
+          if (playSessionId != null && playSessionId.isNotEmpty) 'PlaySessionId': playSessionId,
+          if (positionTicks != null) 'PositionTicks': positionTicks,
+          if (audioStreamIndex != null) 'AudioStreamIndex': audioStreamIndex,
+          if (subtitleStreamIndex != null) 'SubtitleStreamIndex': subtitleStreamIndex,
         },
+        allowNoContent: true,
       );
     } catch (e) {
       Logger.e('停止播放失败', _tag, e);
