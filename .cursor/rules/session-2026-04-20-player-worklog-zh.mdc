@@ -40,3 +40,15 @@ alwaysApply: false
 - fvp 包页面：`https://pub.dev/packages/fvp`
 - fvp 源码：`https://github.com/wang-bin/fvp`
 - mdk-sdk wiki：`https://github.com/wang-bin/mdk-sdk/wiki`
+
+## 追加记录（本轮新增改动）
+- 播放页新增“切换内容”入口：剧集/系列在顶部控制栏可直接打开/关闭列表面板（`lib/pages/video_player_page.dart`）。
+- 切换列表展示状态增强：每集显示“已看完成”图标或观看进度条（基于 `UserData.Played` 与 `PlayedPercentage`）。
+- 列表默认选中当前集：打开列表时自动聚焦当前播放内容，避免用户手动查找。
+- 长列表滚动稳定性优化：使用统一 `itemExtent` + 偏移量边界保护，集数很多时仍可准确定位与滚动。
+- 首页“继续观看”补全剧集类型：`Resume` 请求显式加入 `IncludeItemTypes=Movie,Episode,Series`，并同步到分页加载（`lib/services/emby_api.dart`、`lib/pages/video_list_page.dart`）。
+
+## 追加验证建议
+- 首页下拉刷新后确认“继续观看”出现电视剧剧集（Episode）。
+- 播放页打开列表时确认：默认焦点在当前集，且滚动位置正确。
+- 集数较多（>50）时，连续上下移动焦点，确认列表滚动不中断、不跳错位。
