@@ -156,8 +156,10 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
 
   // 添加新的状态变量
   Map<String, dynamic>? _playbackInfo;
+  int _currentMediaSourceIndex = 0;
   int? _currentAudioStreamIndex;
   int? _currentSubtitleStreamIndex;
+  String _currentVersionLabel = '';
   List<dynamic>? _audioStreams;
   List<dynamic>? _subtitleStreams;
   Map<String, dynamic>? _nextEpisode;
@@ -263,9 +265,12 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       }
       
       // 获取音频和字幕流
-      final mediaSource = _playbackInfo!['MediaSources'][widget.mediaSourceIndex ?? 0];
+      final mediaSources = _playbackInfo!['MediaSources'] as List;
+      _currentMediaSourceIndex = (widget.mediaSourceIndex ?? 0).clamp(0, mediaSources.length - 1);
+      final mediaSource = mediaSources[_currentMediaSourceIndex] as Map<String, dynamic>;
       _audioStreams = mediaSource['MediaStreams']?.where((s) => s['Type'] == 'Audio')?.toList();
       _subtitleStreams = mediaSource['MediaStreams']?.where((s) => s['Type'] == 'Subtitle')?.toList();
+      _currentVersionLabel = _buildVersionLabel(mediaSource);
       
       _currentAudioStreamIndex = widget.initialAudioStreamIndex ?? mediaSource['DefaultAudioStreamIndex'];
       _currentSubtitleStreamIndex = widget.initialSubtitleStreamIndex ?? mediaSource['DefaultSubtitleStreamIndex'];
@@ -275,7 +280,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
 
       final url = await widget.embyApi.getPlaybackUrl(
         widget.itemId,
-        mediaSourceIndex: widget.mediaSourceIndex,
+        mediaSourceIndex: _currentMediaSourceIndex,
         audioStreamIndex: _currentAudioStreamIndex,
         subtitleStreamIndex: _currentSubtitleStreamIndex,
       );
@@ -1122,10 +1127,34 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
               onPressed: () => Navigator.of(context).pop(),
             ),
             Expanded(
-              child: Text(
-                widget.title,
-                style: const TextStyle(color: Colors.white),
-                overflow: TextOverflow.ellipsis,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      widget.title,
+                      style: const TextStyle(color: Colors.white),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (_currentVersionLabel.isNotEmpty)
+                    Container(
+                      margin: const EdgeInsets.only(left: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withAlpha(120),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.white24),
+                      ),
+                      child: Text(
+                        _currentVersionLabel,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
           ],
@@ -1261,7 +1290,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       isDragging: _isDragging,
       onChanged: (value) {
         if (_controller?.value.duration != null) {
-          final newPosition = value * _controller!.value.duration!.inMilliseconds;
+          final newPosition = value * _controller!.value.duration.inMilliseconds;
           setState(() {
             _previewPosition = Duration(milliseconds: newPosition.round());
             _isDragging = true;
@@ -1276,7 +1305,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       },
       onChangeEnd: (value) {
         if (_controller?.value.duration != null) {
-          final newPosition = value * _controller!.value.duration!.inMilliseconds;
+          final newPosition = value * _controller!.value.duration.inMilliseconds;
           _controller?.seekTo(Duration(milliseconds: newPosition.round()));
         }
         _startHideControlsTimer();
@@ -1306,6 +1335,25 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
             // 右侧控件组
             Row(
               children: [
+                if (_availableMediaSources.length > 1)
+                  Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    padding: _buttonPadding,
+                    decoration: _buttonDecoration,
+                    child: IconButton(
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 24,
+                        minHeight: 24,
+                      ),
+                      icon: const Icon(
+                        Icons.movie_filter,
+                        color: Colors.white,
+                        size: 16,
+                      ),
+                      onPressed: _showMediaSourceDialog,
+                    ),
+                  ),
                 // 音频轨道按钮
                 if (_audioStreams != null && _audioStreams!.isNotEmpty)
                   Container(
@@ -1698,6 +1746,132 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     );
   }
 
+  void _showMediaSourceDialog() {
+    final mediaSources = _availableMediaSources;
+    if (mediaSources.length <= 1) return;
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.black87,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                '选择版本',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 12),
+              ...List.generate(mediaSources.length, (index) {
+                final source = mediaSources[index];
+                final isSelected = index == _currentMediaSourceIndex;
+                final label = _buildVersionLabel(source);
+                return ListTile(
+                  title: Text(
+                    label.isEmpty ? '版本 ${index + 1}' : label,
+                    style: TextStyle(
+                      color: isSelected ? Colors.red : Colors.white,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    ),
+                  ),
+                  trailing: isSelected
+                      ? const Icon(Icons.check_circle, color: Colors.red, size: 18)
+                      : null,
+                  onTap: () async {
+                    Navigator.pop(context);
+                    await _switchMediaSource(index);
+                  },
+                );
+              }),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<Map<String, dynamic>> get _availableMediaSources {
+    final sources = _playbackInfo?['MediaSources'];
+    if (sources is! List) return const [];
+    return sources.whereType<Map<String, dynamic>>().toList();
+  }
+
+  Future<void> _switchMediaSource(int targetIndex) async {
+    final mediaSources = _availableMediaSources;
+    if (mediaSources.isEmpty) return;
+    if (targetIndex < 0 || targetIndex >= mediaSources.length) return;
+    if (targetIndex == _currentMediaSourceIndex) return;
+
+    Logger.i("切换媒体版本: $_currentMediaSourceIndex -> $targetIndex", _tag);
+
+    final targetSource = mediaSources[targetIndex];
+    final audioStreams = targetSource['MediaStreams']?.where((s) => s['Type'] == 'Audio')?.toList();
+    final subtitleStreams = targetSource['MediaStreams']?.where((s) => s['Type'] == 'Subtitle')?.toList();
+    final nextAudioIndex = targetSource['DefaultAudioStreamIndex'];
+    final nextSubtitleIndex = targetSource['DefaultSubtitleStreamIndex'] ?? -1;
+
+    final currentPosition = _controller?.value.position;
+    final wasPlaying = _controller?.value.isPlaying ?? false;
+
+    try {
+      final url = await widget.embyApi.getPlaybackUrl(
+        widget.itemId,
+        mediaSourceIndex: targetIndex,
+        audioStreamIndex: nextAudioIndex,
+        subtitleStreamIndex: nextSubtitleIndex,
+      );
+      if (url.isEmpty) {
+        Logger.e("切换版本失败：播放地址为空", _tag);
+        return;
+      }
+
+      final newController = VideoPlayerController.networkUrl(
+        Uri.parse(url),
+        videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+      );
+      await newController.initialize();
+      if (!mounted) {
+        await newController.dispose();
+        return;
+      }
+
+      final oldController = _controller;
+      setState(() {
+        _controller = newController;
+        _currentMediaSourceIndex = targetIndex;
+        _audioStreams = audioStreams;
+        _subtitleStreams = subtitleStreams;
+        _currentAudioStreamIndex = nextAudioIndex;
+        _currentSubtitleStreamIndex = nextSubtitleIndex;
+        _currentVersionLabel = _buildVersionLabel(targetSource);
+      });
+
+      await _controller?.setVolume(_currentVolume);
+      await _controller?.setPlaybackSpeed(_playbackSpeed);
+      if (currentPosition != null) {
+        await _controller?.seekTo(currentPosition);
+      }
+      if (wasPlaying) {
+        await _controller?.play();
+      }
+
+      oldController?.removeListener(_onPlayerStateChanged);
+      oldController?.removeListener(_onVideoControllerValueChanged);
+      await oldController?.dispose();
+
+      _controller?.addListener(_onPlayerStateChanged);
+      _addVideoListeners();
+      Logger.i("版本切换完成: $targetIndex", _tag);
+    } catch (e, stackTrace) {
+      Logger.e("切换版本失败", _tag, e, stackTrace);
+    }
+  }
+
   Future<void> _switchAudioStream(int index) async {
     Logger.i("切换音频流: $index", _tag);
     try {
@@ -1706,16 +1880,13 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         return;
       }
 
-      final mediaSource = _playbackInfo!['MediaSources'][widget.mediaSourceIndex ?? 0];
-      final mediaSourceId = mediaSource['Id'];
-
       // 保存当前播放位置
       final currentPosition = _controller?.value.position;
 
       // 获取新的播放 URL
       final url = await widget.embyApi.getPlaybackUrl(
         widget.itemId,
-        mediaSourceIndex: widget.mediaSourceIndex,
+        mediaSourceIndex: _currentMediaSourceIndex,
         audioStreamIndex: index,
         subtitleStreamIndex: _currentSubtitleStreamIndex,
       );
@@ -1811,7 +1982,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       final subtitleUrl = await widget.embyApi.getSubtitleUrl(
         widget.itemId,
         index,
-        mediaSourceIndex: widget.mediaSourceIndex,
+        mediaSourceIndex: _currentMediaSourceIndex,
       );
       if (subtitleUrl == null || subtitleUrl.isEmpty) {
         Logger.e("获取字幕URL失败", _tag);
@@ -1828,12 +1999,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       final activeTracks = _controller?.getActiveSubtitleTracks();
       Logger.d('active subtitle tracks: $activeTracks', _tag);
       if (activeTracks != null && activeTracks.isNotEmpty) {
-        final firstTrack = activeTracks.first;
-        if (firstTrack is int) {
-          _controller?.setSubtitleTracks([firstTrack]);
-        } else {
-          Logger.w('字幕轨道类型异常，无法激活: $firstTrack', _tag);
-        }
+        _controller?.setSubtitleTracks([activeTracks.first]);
       }
       setState(() {
         _currentSubtitleStreamIndex = index;
@@ -2112,5 +2278,107 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     _controller!.addListener(_onVideoControllerValueChanged);
 
     Logger.d("已添加视频播放器监听器", _tag);
+  }
+
+  String _buildVersionLabel(Map<String, dynamic> mediaSource) {
+    final mediaStreams = mediaSource['MediaStreams'];
+    Map<String, dynamic>? videoStream;
+    Map<String, dynamic>? audioStream;
+    if (mediaStreams is List) {
+      for (final stream in mediaStreams) {
+        if (stream is! Map<String, dynamic>) continue;
+        if (stream['Type'] == 'Video' && videoStream == null) {
+          videoStream = stream;
+        } else if (stream['Type'] == 'Audio' && audioStream == null) {
+          audioStream = stream;
+        }
+        if (videoStream != null && audioStream != null) {
+          break;
+        }
+      }
+    }
+
+    final parts = <String>[];
+
+    final sourceName = mediaSource['Name']?.toString();
+    final sourcePath = mediaSource['Path']?.toString();
+    final parsedFromName = _extractResolutionFromText(sourceName) ?? _extractResolutionFromText(sourcePath);
+    if (parsedFromName != null) {
+      parts.add(parsedFromName);
+    } else {
+      final sourceHeight = _toInt(mediaSource['Height']);
+      final sourceWidth = _toInt(mediaSource['Width']);
+      final streamHeight = _toInt(videoStream?['Height']);
+      final streamWidth = _toInt(videoStream?['Width']);
+      final bestHeight = sourceHeight ?? streamHeight;
+      final bestWidth = sourceWidth ?? streamWidth;
+
+      if (bestHeight != null && bestHeight > 0) {
+        parts.add('${bestHeight}p');
+      } else if (bestWidth != null && bestWidth > 0) {
+        if (bestWidth >= 3500) {
+          parts.add('4K');
+        } else if (bestWidth >= 2500) {
+          parts.add('1440p');
+        } else if (bestWidth >= 1800) {
+          parts.add('1080p');
+        } else if (bestWidth >= 1200) {
+          parts.add('720p');
+        }
+      }
+    }
+
+    final videoCodec = (videoStream?['Codec'] ?? videoStream?['VideoCodec'])?.toString().trim();
+    if (videoCodec != null && videoCodec.isNotEmpty) {
+      parts.add(videoCodec.toUpperCase());
+    }
+
+    final audioCodec = (audioStream?['Codec'] ?? audioStream?['AudioCodec'])?.toString().trim();
+    final channels = _toInt(audioStream?['Channels']);
+    final audioPartItems = <String>[];
+    if (audioCodec != null && audioCodec.isNotEmpty) {
+      audioPartItems.add(audioCodec.toUpperCase());
+    }
+    if (channels != null && channels > 0) {
+      audioPartItems.add(_formatChannelLabel(channels));
+    }
+    if (audioPartItems.isNotEmpty) {
+      parts.add(audioPartItems.join(' '));
+    }
+
+    if (parts.isNotEmpty) {
+      return parts.join(' · ');
+    }
+
+    if (sourceName is String && sourceName.trim().isNotEmpty) {
+      return sourceName.trim();
+    }
+    return '';
+  }
+
+  int? _toInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value);
+    return null;
+  }
+
+  String _formatChannelLabel(int channels) {
+    if (channels == 8) return '7.1';
+    if (channels == 6) return '5.1';
+    if (channels == 2) return '2.0';
+    if (channels == 1) return '1.0';
+    return '$channels ch';
+  }
+
+  String? _extractResolutionFromText(String? text) {
+    if (text == null || text.isEmpty) return null;
+    final lower = text.toLowerCase();
+    if (lower.contains('2160p') || lower.contains('4k') || lower.contains('uhd')) return '4K';
+    if (lower.contains('1440p') || lower.contains('2k')) return '1440p';
+    if (lower.contains('1080p') || lower.contains('fhd')) return '1080p';
+    if (lower.contains('720p') || lower.contains('hd')) return '720p';
+    if (lower.contains('480p')) return '480p';
+    return null;
   }
 }

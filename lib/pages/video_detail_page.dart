@@ -29,6 +29,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
   bool _isLoading = true;
   String? _error;
   late ScrollController _scrollController;
+  int _currentMediaSourceIndex = 0;
 
   @override
   void initState() {
@@ -97,6 +98,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
       setState(() {
         _videoDetails = details;
         _playbackPosition = position;
+        _currentMediaSourceIndex = _resolveInitialMediaSourceIndex(details);
         _isLoading = false;
       });
       }
@@ -182,7 +184,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
   }
 
   // 添加音频和字幕流选择对话框
-  void _showStreamSelectionDialog(Map<String, dynamic> mediaSource) {
+  void _showStreamSelectionDialog(Map<String, dynamic> mediaSource, int mediaSourceIndex) {
     showDialog(
       context: context,
       builder: (context) {
@@ -193,90 +195,121 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
             ?.where((s) => s['Type'] == 'Subtitle')
             ?.toList() as List?;
 
-        return Dialog(
-          backgroundColor: Theme.of(context).colorScheme.surface,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '选择音频和字幕',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 16),
-                if (audioStreams != null && audioStreams.isNotEmpty) ...[
-                  Text(
-                    '音频',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      for (var stream in audioStreams)
-                        ChoiceChip(
-                          label: Text(
-                            '${stream['Language'] ?? '未知'} '
-                            '(${stream['Codec']?.toString().toUpperCase() ?? '未知'})',
-                          ),
-                          selected: stream['Index'] == mediaSource['DefaultAudioStreamIndex'],
-                          onSelected: (selected) {
-                            Navigator.pop(context, {
-                              'audioIndex': selected ? stream['Index'] : null,
-                            });
-                          },
-                        ),
-                    ],
-                  ),
-                ],
-                if (subtitleStreams != null && subtitleStreams.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  Text(
-                    '字幕',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      ChoiceChip(
-                        label: const Text('关闭字幕'),
-                        selected: mediaSource['DefaultSubtitleStreamIndex'] == null,
-                        onSelected: (selected) {
-                          Navigator.pop(context, {
-                            'subtitleIndex': null,
-                          });
-                        },
+        int? selectedAudioIndex = mediaSource['DefaultAudioStreamIndex'];
+        int selectedSubtitleIndex = mediaSource['DefaultSubtitleStreamIndex'] ?? -1;
+
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return Dialog(
+              backgroundColor: Theme.of(context).colorScheme.surface,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '选择音频和字幕',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 16),
+                    if (audioStreams != null && audioStreams.isNotEmpty) ...[
+                      Text(
+                        '音频',
+                        style: Theme.of(context).textTheme.titleMedium,
                       ),
-                      for (var stream in subtitleStreams)
-                        ChoiceChip(
-                          label: Text(
-                            '${stream['Language'] ?? '未知'} '
-                            '(${stream['Codec']?.toString().toUpperCase() ?? '未知'})',
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (var stream in audioStreams)
+                            ChoiceChip(
+                              label: Text(
+                                '${stream['Language'] ?? '未知'} '
+                                '(${stream['Codec']?.toString().toUpperCase() ?? '未知'})',
+                              ),
+                              selected: stream['Index'] == selectedAudioIndex,
+                              onSelected: (selected) {
+                                setDialogState(() {
+                                  if (selected) {
+                                    selectedAudioIndex = stream['Index'] as int?;
+                                  }
+                                });
+                              },
+                            ),
+                        ],
+                      ),
+                    ],
+                    if (subtitleStreams != null && subtitleStreams.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      Text(
+                        '字幕',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          ChoiceChip(
+                            label: const Text('关闭字幕'),
+                            selected: selectedSubtitleIndex == -1,
+                            onSelected: (_) {
+                              setDialogState(() {
+                                selectedSubtitleIndex = -1;
+                              });
+                            },
                           ),
-                          selected: stream['Index'] == mediaSource['DefaultSubtitleStreamIndex'],
-                          onSelected: (selected) {
+                          for (var stream in subtitleStreams)
+                            ChoiceChip(
+                              label: Text(
+                                '${stream['Language'] ?? '未知'} '
+                                '(${stream['Codec']?.toString().toUpperCase() ?? '未知'})',
+                              ),
+                              selected: stream['Index'] == selectedSubtitleIndex,
+                              onSelected: (selected) {
+                                setDialogState(() {
+                                  if (selected) {
+                                    selectedSubtitleIndex = stream['Index'] as int? ?? -1;
+                                  }
+                                });
+                              },
+                            ),
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('取消'),
+                        ),
+                        const SizedBox(width: 8),
+                        FilledButton(
+                          onPressed: () {
                             Navigator.pop(context, {
-                              'subtitleIndex': selected ? stream['Index'] : null,
+                              'audioIndex': selectedAudioIndex,
+                              'subtitleIndex': selectedSubtitleIndex,
                             });
                           },
+                          child: const Text('播放'),
                         ),
-                    ],
-                  ),
-                ],
-              ],
-            ),
-          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
         );
       },
     ).then((value) {
       if (value != null) {
         _playVideo(
-          mediaSourceIndex: mediaSource['Index'],
+          mediaSourceIndex: mediaSourceIndex,
           audioStreamIndex: value['audioIndex'],
           subtitleStreamIndex: value['subtitleIndex'],
         );
@@ -325,7 +358,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                         child: ElevatedButton.icon(
                           icon: const Icon(Icons.play_circle),
                           label: Text('继续播放 (${_formatDuration(_playbackPosition! ~/ 10000000)})'),
-                          onPressed: () => _playVideo(),
+                          onPressed: () => _playVideo(mediaSourceIndex: _currentMediaSourceIndex),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -334,7 +367,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                       child: ElevatedButton.icon(
                         icon: const Icon(Icons.play_arrow),
                         label: const Text('从头播放'),
-                        onPressed: () => _playVideo(fromStart: true),
+                        onPressed: () => _playVideo(fromStart: true, mediaSourceIndex: _currentMediaSourceIndex),
                       ),
                     ),
                   ],
@@ -451,6 +484,27 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                         );
                 },
               ),
+              if (_currentMediaSourceLabel.isNotEmpty)
+                Positioned(
+                  top: 16,
+                  right: 16,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withAlpha(160),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.white24),
+                    ),
+                    child: Text(
+                      _currentMediaSourceLabel,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
               // 添加渐变遮罩
               Positioned.fill(
                 child: DecoratedBox(
@@ -549,9 +603,9 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                   child: InkWell(
                       onTap: () {
                         if (_playbackPosition != null && _playbackPosition! > 0) {
-                          _playVideo();
+                          _playVideo(mediaSourceIndex: _currentMediaSourceIndex);
                         } else {
-                          _playVideo(fromStart: true);
+                          _playVideo(fromStart: true, mediaSourceIndex: _currentMediaSourceIndex);
                         }
                       },
                       customBorder: const CircleBorder(),
@@ -635,10 +689,49 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                   itemCount: (_videoDetails!['MediaSources'] as List).length,
                   itemBuilder: (context, index) {
                     final source = _videoDetails!['MediaSources'][index];
+                    final isCurrent = index == _currentMediaSourceIndex;
                     return Card(
                       margin: const EdgeInsets.only(bottom: 8),
+                      color: isCurrent
+                          ? Theme.of(context).colorScheme.primary.withAlpha(22)
+                          : null,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(
+                          color: isCurrent
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).dividerColor.withAlpha(80),
+                          width: isCurrent ? 1.5 : 0.8,
+                        ),
+                      ),
                       child: InkWell(
-                        onTap: () => _showStreamSelectionDialog(source),
+                        onTap: () {
+                          setState(() {
+                            _currentMediaSourceIndex = index;
+                          });
+                          final mediaStreams = source['MediaStreams'] as List? ?? const [];
+                          final audioStreams = mediaStreams
+                              .where((s) => s is Map<String, dynamic> && s['Type'] == 'Audio')
+                              .toList();
+                          final subtitleStreams = mediaStreams
+                              .where((s) => s is Map<String, dynamic> && s['Type'] == 'Subtitle')
+                              .toList();
+
+                          final hasAudioChoices = audioStreams.length > 1;
+                          // 字幕只有在 >=2 条时才有真实选择；0/1 条都不需要打断用户
+                          final hasSubtitleChoices = subtitleStreams.length > 1;
+
+                          if (!hasAudioChoices && !hasSubtitleChoices) {
+                            _playVideo(
+                              mediaSourceIndex: index,
+                              audioStreamIndex: _resolveDefaultAudioIndex(source, audioStreams),
+                              subtitleStreamIndex: _resolveDefaultSubtitleIndex(source, subtitleStreams),
+                            );
+                            return;
+                          }
+
+                          _showStreamSelectionDialog(source, index);
+                        },
                         child: Padding(
                           padding: const EdgeInsets.all(12),
                           child: Column(
@@ -660,6 +753,23 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                                       ),
                                     ),
                                   ),
+                                  if (isCurrent) ...[
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: Theme.of(context).colorScheme.primary,
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Text(
+                                        '当前',
+                                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                              color: Theme.of(context).colorScheme.onPrimary,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                  ],
                                   if (source['DefaultAudioStreamIndex'] != null) ...[
                                     const Icon(Icons.audiotrack, size: 16),
                                     const SizedBox(width: 4),
@@ -874,5 +984,122 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
         ],
       ),
     );
+  }
+
+  int _resolveInitialMediaSourceIndex(Map<String, dynamic> details) {
+    final mediaSources = details['MediaSources'];
+    if (mediaSources is! List || mediaSources.isEmpty) return 0;
+    for (var i = 0; i < mediaSources.length; i++) {
+      final source = mediaSources[i];
+      if (source is Map<String, dynamic> && source['IsDefault'] == true) {
+        return i;
+      }
+    }
+    return 0;
+  }
+
+  String get _currentMediaSourceLabel {
+    if (_videoDetails == null) return '';
+    final mediaSources = _videoDetails!['MediaSources'];
+    if (mediaSources is! List || mediaSources.isEmpty) return '';
+    final index = _currentMediaSourceIndex.clamp(0, mediaSources.length - 1);
+    final source = mediaSources[index];
+    if (source is! Map<String, dynamic>) return '';
+    return _buildVersionLabel(source);
+  }
+
+  String _buildVersionLabel(Map<String, dynamic> mediaSource) {
+    final mediaStreams = mediaSource['MediaStreams'];
+    Map<String, dynamic>? videoStream;
+    Map<String, dynamic>? audioStream;
+    if (mediaStreams is List) {
+      for (final stream in mediaStreams) {
+        if (stream is! Map<String, dynamic>) continue;
+        if (stream['Type'] == 'Video' && videoStream == null) {
+          videoStream = stream;
+        } else if (stream['Type'] == 'Audio' && audioStream == null) {
+          audioStream = stream;
+        }
+        if (videoStream != null && audioStream != null) break;
+      }
+    }
+
+    final parts = <String>[];
+    final height = _toInt(videoStream?['Height']) ?? _toInt(mediaSource['Height']);
+    final width = _toInt(videoStream?['Width']) ?? _toInt(mediaSource['Width']);
+    if (height != null && height > 0) {
+      parts.add('${height}p');
+    } else if (width != null && width > 0) {
+      if (width >= 3500) {
+        parts.add('4K');
+      } else if (width >= 2500) {
+        parts.add('1440p');
+      } else if (width >= 1800) {
+        parts.add('1080p');
+      } else if (width >= 1200) {
+        parts.add('720p');
+      }
+    }
+
+    final videoCodec = (videoStream?['Codec'] ?? mediaSource['VideoCodec'])?.toString().trim();
+    if (videoCodec != null && videoCodec.isNotEmpty) {
+      parts.add(videoCodec.toUpperCase());
+    }
+
+    final audioCodec = (audioStream?['Codec'] ?? mediaSource['AudioCodec'])?.toString().trim();
+    final channels = _toInt(audioStream?['Channels']);
+    final audioParts = <String>[];
+    if (audioCodec != null && audioCodec.isNotEmpty) {
+      audioParts.add(audioCodec.toUpperCase());
+    }
+    if (channels != null && channels > 0) {
+      audioParts.add(_formatChannelLabel(channels));
+    }
+    if (audioParts.isNotEmpty) {
+      parts.add(audioParts.join(' '));
+    }
+
+    if (parts.isNotEmpty) return parts.join(' · ');
+    final name = mediaSource['Name']?.toString().trim();
+    return (name != null && name.isNotEmpty) ? name : '';
+  }
+
+  int? _toInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value);
+    return null;
+  }
+
+  String _formatChannelLabel(int channels) {
+    if (channels == 8) return '7.1';
+    if (channels == 6) return '5.1';
+    if (channels == 2) return '2.0';
+    if (channels == 1) return '1.0';
+    return '$channels ch';
+  }
+
+  int? _resolveDefaultAudioIndex(Map<String, dynamic> mediaSource, List audioStreams) {
+    final defaultIndex = mediaSource['DefaultAudioStreamIndex'];
+    if (defaultIndex is int) return defaultIndex;
+    if (audioStreams.length == 1) {
+      final only = audioStreams.first;
+      if (only is Map<String, dynamic> && only['Index'] is int) {
+        return only['Index'] as int;
+      }
+    }
+    return null;
+  }
+
+  int? _resolveDefaultSubtitleIndex(Map<String, dynamic> mediaSource, List subtitleStreams) {
+    final defaultIndex = mediaSource['DefaultSubtitleStreamIndex'];
+    if (defaultIndex is int) return defaultIndex;
+    if (subtitleStreams.length == 1) {
+      final only = subtitleStreams.first;
+      if (only is Map<String, dynamic> && only['Index'] is int) {
+        return only['Index'] as int;
+      }
+    }
+    return null;
   }
 }
