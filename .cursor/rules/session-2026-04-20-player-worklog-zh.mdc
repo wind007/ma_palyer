@@ -81,3 +81,35 @@ alwaysApply: false
 - 播放任一剧集约 30~60 秒后打开切换列表，确认当前集进度条有变化。
 - 快进到接近结尾（>=95%）后，确认列表状态切为“已看”。
 - 切换到其他剧集再返回，确认原剧集进度仍保持最新状态。
+
+## 追加记录（Emby 会话上报与切集稳定性）
+- 目标：修复 Emby 会话上报参数不准确、切音轨重建控制器带来的中断，以及切集收尾竞态（`lib/services/emby_api.dart`、`lib/pages/video_player_page.dart`）。
+- 进度上报修复：
+  - `updatePlaybackProgress(...)` 改为显式接收并上报真实 `MediaSourceId`、稳定 `PlaySessionId`、当前音轨/字幕索引、静音与音量状态。
+  - 移除错误默认值（如固定 `MediaSourceId=itemId`、固定音轨/字幕、每次重新生成会话 ID）。
+- 停止上报补齐：
+  - `stopPlayback(...)` 补齐可选参数：`MediaSourceId`、`PlaySessionId`、`PositionTicks`、`AudioStreamIndex`、`SubtitleStreamIndex`，并允许 204 返回。
+- 收尾顺序化：
+  - 新增 `_finalizePlaybackSession()`，退出时按“最终 Progress -> Stopped -> dispose controller”顺序执行，避免并发 fire-and-forget 导致的会话尾部错乱。
+  - 增加 `_isSessionFinalized` / `_isFinalizingSession` 防重，防止 `dispose()` 与切集路径重复上报。
+- 切集前先收尾：
+  - 新增 `_switchToEpisodeWithFinalize(...)`，手动切集与自动下一集都会先完成当前会话顺序收尾，再 `pushReplacement`。
+- 音轨切换优化：
+  - `_switchAudioStream(...)` 优先使用 fvp 轨道接口 `setAudioTracks([index])`；
+  - 若失败再回退到重建 controller，兼顾稳定与兼容。
+
+## 追加记录（播放列表/切换 UI 修复）
+- 修复右上角重叠：移除桌面端额外悬浮“播放列表按钮”，仅保留顶部控制栏入口，避免与视频格式标签重叠。
+- 格式标签增加宽度约束与省略显示，避免长文本挤压右侧交互区。
+- 切集提示层交互修复：
+  - 切换中遮罩由 `IgnorePointer` 改为 `AbsorbPointer`，防止点击透传造成误触。
+  - 切换中禁用剧集列表项点击，避免重复触发切集。
+- 轻量切换提示：
+  - 切换剧集时显示“正在切换内容...”提示；
+  - 增加 `_isNavigatingToEpisode` 锁，防止快速连点导致多次导航。
+
+## 追加验证建议（本轮）
+- 在播放页右上角验证：视频格式标签与“切换剧集/系列内容”入口不再重叠。
+- 在播放列表中快速连续点击不同剧集，确认只触发一次切换，且会出现“正在切换内容...”提示。
+- 切集后在 Emby 会话侧观察：同一播放会话内 `PlaySessionId` 稳定，`MediaSourceId` 与当前版本一致。
+- 退出播放页时观察日志/会话：先上报最终进度，再上报停止事件，无明显竞态异常。
