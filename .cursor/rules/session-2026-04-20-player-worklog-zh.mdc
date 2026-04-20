@@ -1,0 +1,42 @@
+---
+description: 2026-04-20 播放器问题处理记录（中文）
+alwaysApply: false
+---
+
+# 今日工作记录（播放器）
+
+## 目标与背景
+- 项目为 Flutter + Emby + fvp 的多端播放器。
+- 今天重点处理：启动报错、版本信息显示、详情页版本交互、播放器内版本切换、音轨字幕选择逻辑。
+
+## 今日已完成改动
+- 修复主题类型兼容：`CardTheme` -> `CardThemeData`（`lib/main.dart`）。
+- 依赖兼容回退：`video_player` 固定为 `2.9.5`，避免与当前 `fvp` 组合冲突（`pubspec.yaml`）。
+- 新增亮度控制：接入 `screen_brightness`，在播放页手势中调用真实亮度 API，不支持平台自动降级为 UI 模拟（`lib/pages/video_player_page.dart`）。
+- 桌面端转场优化：Windows/Linux/macOS 使用更轻的页面过渡动画（`lib/main.dart`）。
+- 播放器顶部版本信息：显示完整格式（如 `1080p · H264 · AAC 5.1`）。
+- 详情页大图版本信息：右上角显示“当前版本”标签，并与版本选择联动。
+- 详情页版本卡高亮：当前版本卡片高亮并标记“当前”。
+- 修复详情页“选择音轨/字幕”弹窗逻辑：改为“先选后确认播放”，不再点一下就关闭弹窗。
+- 优化详情页交互：当音轨<=1 且字幕<=1 时，点击版本直接播放，不弹选择框。
+- 实现播放器内版本切换：新增版本选择入口与切换逻辑，切换后保留进度/音量/倍速/播放状态。
+- 修复版本切换后音轨字幕上下文错位：音轨/字幕切换统一使用当前版本索引。
+- 修复版本标签总是 720p 的问题：版本分辨率优先从 `MediaSource.Name/Path` 解析，其次 `MediaSource.Width/Height`，最后才回退流参数。
+
+## 关键结论（避免重复踩坑）
+- `flutter run -t lib/pages/video_player_page.dart` 不是合法启动方式（页面文件不是入口），会触发 isolate 启动失败。
+- 必须从 `lib/main.dart` 启动：`flutter run -d windows` 或 `flutter run -d windows -t lib/main.dart`。
+- `fvp` 升级时常受 `mdk-sdk` 下载源影响；网络异常会导致构建失败，需优先确认依赖下载完整性。
+- 版本信息显示不能仅依赖播放流参数，否则容易被转码链路误导（例如固定显示 720p）。
+
+## 后续建议
+- 继续验证“版本切换是否真实生效”时，优先观察 Emby 会话中的 `MediaSourceId` 是否变化。
+- 若需要更强可见性，可增加切换成功提示（含版本标签与 `MediaSourceId`）。
+- 可将详情页与播放页的版本标签解析逻辑抽到公共工具，避免双处维护。
+
+## 参考（本次问题排查优先来源）
+- Emby API 文档：`https://dev.emby.media/reference/RestAPI.html`
+- Emby API 说明页：`https://github.com/MediaBrowser/Emby/wiki/Api`
+- fvp 包页面：`https://pub.dev/packages/fvp`
+- fvp 源码：`https://github.com/wang-bin/fvp`
+- mdk-sdk wiki：`https://github.com/wang-bin/mdk-sdk/wiki`
