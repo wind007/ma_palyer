@@ -54,6 +54,14 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   final _themeManager = ThemeManager();
+  static const PageTransitionsTheme _desktopPageTransitions =
+      PageTransitionsTheme(
+    builders: <TargetPlatform, PageTransitionsBuilder>{
+      TargetPlatform.windows: FadeUpwardsPageTransitionsBuilder(),
+      TargetPlatform.linux: FadeUpwardsPageTransitionsBuilder(),
+      TargetPlatform.macOS: FadeUpwardsPageTransitionsBuilder(),
+    },
+  );
 
   @override
   void initState() {
@@ -73,6 +81,7 @@ class _MyAppState extends State<MyApp> {
           seedColor: Colors.blue,
           brightness: Brightness.light,
         ),
+        pageTransitionsTheme: _desktopPageTransitions,
         useMaterial3: true,
         cardTheme: CardThemeData(
           elevation: 2,
@@ -90,6 +99,7 @@ class _MyAppState extends State<MyApp> {
           seedColor: Colors.blue,
           brightness: Brightness.dark,
         ),
+        pageTransitionsTheme: _desktopPageTransitions,
         useMaterial3: true,
         cardTheme: CardThemeData(
           elevation: 2,
