@@ -540,11 +540,13 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     try {
       if (_controller == null || !mounted) return;
       final position = _controller!.value.position;
+      final duration = _controller!.value.duration;
       await widget.embyApi.updatePlaybackProgress(
         itemId: widget.itemId,
         positionTicks: position.inMicroseconds * 10,
         isPaused: isPaused,
       );
+      _syncCurrentEpisodeProgress(position, duration);
       Logger.v("播放进度更新成功 - 位置: ${position.inSeconds}秒", _tag);
     } catch (e, stackTrace) {
       Logger.e("更新播放进度失败", _tag, e, stackTrace);
@@ -2309,6 +2311,34 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     
     Logger.d("不显示播放列表：这是一个独立的视频", _tag);
     return false;
+  }
+
+  void _syncCurrentEpisodeProgress(Duration position, Duration duration) {
+    if (_episodeList == null || _episodeList!.isEmpty) return;
+    final idx = _currentEpisodeIndex;
+    if (idx < 0 || idx >= _episodeList!.length) return;
+    final rawPercent = duration.inMilliseconds > 0
+        ? (position.inMilliseconds / duration.inMilliseconds) * 100.0
+        : 0.0;
+    final playedPercent = rawPercent.clamp(0.0, 100.0);
+    final played = playedPercent >= 95.0;
+
+    final episode = _episodeList![idx];
+    if (episode is! Map<String, dynamic>) return;
+    final userData = (episode['UserData'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
+    final oldPercentRaw = userData['PlayedPercentage'];
+    final oldPercent = oldPercentRaw is num ? oldPercentRaw.toDouble() : 0.0;
+    final oldPlayed = userData['Played'] == true;
+
+    if ((oldPercent - playedPercent).abs() < 0.5 && oldPlayed == played) {
+      return;
+    }
+
+    userData['PlayedPercentage'] = playedPercent;
+    userData['Played'] = played;
+    userData['PlaybackPositionTicks'] = position.inMicroseconds * 10;
+    episode['UserData'] = userData;
+    if (mounted) setState(() {});
   }
 
   // 强制横屏方法
