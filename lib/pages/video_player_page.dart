@@ -153,6 +153,8 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   bool _showSeekIndicator = false;    // 是否显示快进快退指示器
   int _seekSeconds = 0;         // 快进快退秒数
   Duration _previewPosition = Duration.zero; // 预览位置
+  bool _isControllerSwitching = false;
+  int _switchSession = 0;
 
   // 添加新的状态变量
   Map<String, dynamic>? _playbackInfo;
@@ -617,6 +619,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   @override
   void dispose() {
     Logger.i("销毁视频播放页面", _tag);
+    _switchSession++;
     _clearTimers();
     _controller?.removeListener(_onPlayerStateChanged);
     _controller?.removeListener(_onVideoControllerValueChanged);
@@ -1837,6 +1840,10 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   }
 
   Future<void> _switchMediaSource(int targetIndex) async {
+    if (_isControllerSwitching) {
+      Logger.w("正在切换播放源，忽略重复操作", _tag);
+      return;
+    }
     final mediaSources = _availableMediaSources;
     if (mediaSources.isEmpty) return;
     if (targetIndex < 0 || targetIndex >= mediaSources.length) return;
@@ -1861,6 +1868,8 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     final currentPosition = _controller?.value.position;
     final wasPlaying = _controller?.value.isPlaying ?? false;
 
+    final session = ++_switchSession;
+    _isControllerSwitching = true;
     try {
       final url = await widget.embyApi.getPlaybackUrl(
         widget.itemId,
@@ -1878,7 +1887,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
       );
       await newController.initialize();
-      if (!mounted) {
+      if (!mounted || session != _switchSession) {
         await newController.dispose();
         return;
       }
@@ -1900,6 +1909,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         await _controller?.seekTo(currentPosition);
       }
       await _applySubtitleSelection(nextSubtitleIndex);
+      if (!mounted || session != _switchSession) return;
       if (wasPlaying) {
         await _controller?.play();
       }
@@ -1913,11 +1923,19 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       Logger.i("版本切换完成: $targetIndex", _tag);
     } catch (e, stackTrace) {
       Logger.e("切换版本失败", _tag, e, stackTrace);
+    } finally {
+      _isControllerSwitching = false;
     }
   }
 
   Future<void> _switchAudioStream(int index) async {
+    if (_isControllerSwitching) {
+      Logger.w("正在切换播放源，忽略重复操作", _tag);
+      return;
+    }
     Logger.i("切换音频流: $index", _tag);
+    final session = ++_switchSession;
+    _isControllerSwitching = true;
     try {
       if (_playbackInfo == null) {
         Logger.e("无法切换音频：播放信息为空", _tag);
@@ -1948,7 +1966,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
 
       // 初始化新控制器
       await newController.initialize();
-      if (!mounted) {
+      if (!mounted || session != _switchSession) {
         await newController.dispose();
         return;
       }
@@ -1968,6 +1986,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       if (_currentSubtitleStreamIndex != null) {
         await _applySubtitleSelection(_currentSubtitleStreamIndex!);
       }
+      if (!mounted || session != _switchSession) return;
 
       // 如果之前在播放，继续播放
       if (oldController?.value.isPlaying ?? false) {
@@ -1984,8 +2003,10 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       _addVideoListeners();
 
       Logger.i("音频切换完成", _tag);
-    } catch (e) {
-      Logger.e("切换音频失败", _tag, e);
+    } catch (e, stackTrace) {
+      Logger.e("切换音频失败", _tag, e, stackTrace);
+    } finally {
+      _isControllerSwitching = false;
     }
   }
 
