@@ -1,0 +1,62 @@
+ma_player Third-Party Notices
+
+Last updated: 2026-04-21
+
+This product includes software developed by third parties.
+Licenses and notices for core dependencies are listed below.
+
+Project: fvp
+Homepage: https://pub.dev/packages/fvp
+Source: https://github.com/wang-bin/fvp
+Declared license: BSD-3-Clause
+Copyright:
+- Copyright 2022 Wang Bin
+
+Project: video_player
+Homepage: https://pub.dev/packages/video_player
+Source: https://github.com/flutter/packages
+Declared license: BSD-3-Clause
+Copyright:
+- Copyright The Flutter Authors
+
+Project: http
+Homepage: https://pub.dev/packages/http
+Source: https://github.com/dart-lang/http
+Declared license: BSD-3-Clause
+Copyright:
+- Copyright The Dart project authors
+
+Project: shared_preferences
+Homepage: https://pub.dev/packages/shared_preferences
+Source: https://github.com/flutter/packages
+Declared license: BSD-3-Clause
+Copyright:
+- Copyright The Flutter Authors
+
+Project: screen_brightness
+Homepage: https://pub.dev/packages/screen_brightness
+Source: https://github.com/aaassseee/screen_brightness
+Declared license: MIT
+
+Important:
+1) You should verify all final dependency licenses in the exact release build.
+2) If your release package contains additional native binaries (for example runtime multimedia libraries),
+   add their corresponding notices and license texts before store submission.
+3) This notice file is a draft and should be reviewed by your legal/compliance process.
+
+BSD-3-Clause License (Template)
+
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer
+   in the documentation and/or other materials provided with the distribution.
+3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products
+   derived from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES,
+INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
+OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA,
+OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+THE POSSIBILITY OF SUCH DAMAGE.
