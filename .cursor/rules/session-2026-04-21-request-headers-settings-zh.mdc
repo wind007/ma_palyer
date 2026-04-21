@@ -1,0 +1,56 @@
+---
+description: 2026-04-21 请求头可配置能力与设置页实现记录（中文）
+alwaysApply: false
+---
+
+# 今日工作记录（请求头可配置）
+
+## 目标
+- 支持自定义 `User-Agent` 与 `X-Emby-*` 请求头。
+- 提供可视化设置页，方便非代码方式修改与回退默认值。
+
+## 已完成改动
+
+### 1) 请求头配置能力（`lib/services/server_manager.dart`）
+- 新增默认值：
+  - `defaultUserAgent = ma_player/1.0.0`
+  - `defaultEmbyHeaders`（含 `X-Emby-Client`、`X-Emby-Device-Name`、`X-Emby-Device-Id`、`X-Emby-Client-Version`、`X-Emby-Language`）
+- 新增持久化键：
+  - `custom_user_agent`
+  - `custom_emby_headers`
+- 新增生效读取：
+  - `effectiveUserAgent`
+  - `effectiveEmbyHeaders`（默认值 + 自定义覆盖）
+- 新增写入接口：
+  - `setCustomUserAgent(String? value)`
+  - `setCustomEmbyHeader(String key, String? value)`
+  - `setCustomEmbyHeaders(Map<String, String>? headers)`
+
+### 2) API 请求统一应用（`lib/services/emby_api.dart`）
+- `_request(...)` 统一请求头改为：
+  - `User-Agent: ServerManager.effectiveUserAgent`
+  - `...ServerManager.effectiveEmbyHeaders`
+
+### 3) 图片请求同步应用（避免 UA 不一致）
+- `lib/widgets/video_card.dart`
+- `lib/pages/video_detail_page.dart`
+- 图片 `Image.network` 请求头增加 `User-Agent`。
+
+### 4) 设置界面（`lib/pages/request_headers_settings_page.dart`）
+- 新增“请求头设置”页面：
+  - 可编辑 `User-Agent` 与 5 个 `X-Emby-*` 字段
+  - 留空即回退默认
+  - 支持“保存”“恢复默认（清空输入）”
+
+### 5) 页面入口（`lib/pages/server_list_page.dart`）
+- 服务器列表页右上角新增设置按钮，进入“请求头设置”页。
+
+## 行为说明
+- 保存后全局生效，后续请求自动带新头。
+- 输入为空时不作为自定义值，使用默认头。
+- 批量清空自定义值后可完全回退默认行为。
+
+## 回归建议
+- 打开设置页修改 `User-Agent` 与 `X-Emby-Client`，保存后抓包确认生效。
+- 清空字段并保存，确认请求回退到默认头。
+- 进入列表/详情/播放页，确认 API 与图片请求头一致。
