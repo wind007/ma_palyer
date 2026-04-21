@@ -126,6 +126,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   Timer? _progressTimer;      // 进度更新定时器
   Timer? _hideControlsTimer;  // 控制栏隐藏定时器
   Timer? _seekIndicatorTimer; // 快进快退指示器定时器
+  Timer? _networkStatsTimer;  // 网速估算定时器
   
   // 状态标记
   bool _isInitializing = true;  // 初始化状态
@@ -163,6 +164,9 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   bool _isNavigatingToEpisode = false;
   bool _isReportingProgress = false;
   int? _lastReportedPositionTicks;
+  double _estimatedNetworkSpeedBps = 0;
+  Duration? _lastBufferedForSpeed;
+  Duration? _lastPositionForSpeed;
 
   // 添加新的状态变量
   Map<String, dynamic>? _playbackInfo;
@@ -351,6 +355,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       // 启动定时更新
       _startProgressTimer();
       Logger.d("启动进度更新定时器", _tag);
+      _startNetworkStatsTimer();
 
       // 在初始化播放器后添加缓冲进度监听
       _addVideoListeners();
@@ -473,6 +478,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     _progressTimer?.cancel();
     _hideControlsTimer?.cancel();
     _seekIndicatorTimer?.cancel();
+    _networkStatsTimer?.cancel();
   }
 
   void _fireAndForgetCleanup(Future<void> task, String action) {
@@ -637,6 +643,46 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         }
       },
     );
+  }
+
+  void _startNetworkStatsTimer() {
+    _networkStatsTimer?.cancel();
+    _lastBufferedForSpeed = null;
+    _lastPositionForSpeed = null;
+    _networkStatsTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      _updateEstimatedNetworkSpeed();
+    });
+  }
+
+  void _updateEstimatedNetworkSpeed() {
+    if (!mounted || _controller == null) return;
+    final bitrate = _currentVideoBitrate;
+    if (bitrate <= 0) return;
+
+    final currentBuffered = _buffered;
+    final currentPosition = _controller!.value.position;
+    final previousBuffered = _lastBufferedForSpeed;
+    final previousPosition = _lastPositionForSpeed;
+    _lastBufferedForSpeed = currentBuffered;
+    _lastPositionForSpeed = currentPosition;
+    if (previousBuffered == null || previousPosition == null) return;
+
+    final deltaBufferedMs = (currentBuffered - previousBuffered).inMilliseconds.toDouble();
+    final deltaPositionMs = (currentPosition - previousPosition).inMilliseconds.toDouble();
+    final effectiveDeltaMs = deltaBufferedMs + deltaPositionMs;
+    if (effectiveDeltaMs <= 0) {
+      if (_estimatedNetworkSpeedBps != 0) {
+        setState(() => _estimatedNetworkSpeedBps = 0);
+      }
+      return;
+    }
+
+    // 估算：每秒新增可用媒体时长 * 当前媒体码率
+    final estimatedBps = bitrate * (effectiveDeltaMs / 1000.0);
+    final stableBps = estimatedBps.clamp(0, bitrate * 8.0).toDouble();
+    if ((_estimatedNetworkSpeedBps - stableBps).abs() > 1024) {
+      setState(() => _estimatedNetworkSpeedBps = stableBps);
+    }
   }
 
 
@@ -1355,6 +1401,25 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                         ),
                       ),
                     ),
+                  Container(
+                    margin: const EdgeInsets.only(left: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withAlpha(120),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.white24),
+                    ),
+                    child: Text(
+                      '网速 $_estimatedNetworkSpeedText',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
                   if (_shouldShowPlaylist)
                     IconButton(
                       icon: Icon(
@@ -1888,6 +1953,28 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       return '$hours:${twoDigits(minutes)}:${twoDigits(seconds)}';
     }
     return '${twoDigits(minutes)}:${twoDigits(seconds)}';
+  }
+
+  int get _currentVideoBitrate {
+    final mediaSources = _availableMediaSources;
+    if (mediaSources.isEmpty ||
+        _currentMediaSourceIndex < 0 ||
+        _currentMediaSourceIndex >= mediaSources.length) {
+      return 0;
+    }
+    final source = mediaSources[_currentMediaSourceIndex];
+    final raw = source['Bitrate'];
+    if (raw is int) return raw;
+    if (raw is num) return raw.toInt();
+    if (raw is String) return int.tryParse(raw) ?? 0;
+    return 0;
+  }
+
+  String get _estimatedNetworkSpeedText {
+    if (_estimatedNetworkSpeedBps <= 0) return '--';
+    final kb = _estimatedNetworkSpeedBps / 1024;
+    if (kb < 1024) return '${kb.toStringAsFixed(0)} KB/s';
+    return '${(kb / 1024).toStringAsFixed(2)} MB/s';
   }
 
   // 辅助方法
