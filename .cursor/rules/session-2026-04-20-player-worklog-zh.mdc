@@ -149,3 +149,31 @@ alwaysApply: false
 - TV 端（Android TV）：
   - 打开播放列表后，上下键可稳定移动焦点，确认键可选集中项。
   - 空列表或当前集未命中时不崩溃；返回键在“先关列表、再退页面”路径下行为正确。
+
+## 追加记录（操作逻辑设计收敛）
+- 目标：解决“平台判定误伤平板、全屏状态语义不一致、主动退出收尾非阻塞”三类设计风险（`lib/pages/video_player_page.dart`）。
+- TV 判定收敛：
+  - 将 TV 判定改为 Android 且满足以下任一条件：  
+    - `MediaQuery.navigationMode == NavigationMode.directional`（遥控器方向键导航）；  
+    - 或大屏阈值（`width >= 1100 && shortestSide >= 700`）。  
+  - 目的：降低 Android 平板在横屏下被误判为 TV 的概率。
+- 全屏语义对齐：
+  - 初始化阶段系统 UI 模式改为 `edgeToEdge`，与 `_isFullScreen = false` 一致。
+  - 目的：避免“初始就沉浸式，但按钮显示未全屏”的状态错位。
+- 退出流程顺序化（主动路径）：
+  - 新增 `_confirmExitIfNeeded()`：播放中退出统一二次确认。
+  - 新增 `_handleWillPop()`：确认后先 `await _finalizePlaybackSession()`，再允许退出。
+  - 新增 `_requestExitFromUi()`：用于顶部返回按钮、键盘 `Esc`、TV `goBack/escape`，统一走“确认 -> 顺序收尾 -> pop”流程。
+  - 目的：减少主动退出时最终进度/停止事件丢失的窗口。
+- 本轮质量结果：
+  - `lib/pages/video_player_page.dart` lint 检查通过，无新增 lint 错误。
+
+## 追加验证建议（设计收敛）
+- Android 平板横屏：
+  - 触控操作应保持移动端路径（手势可用），不应误进入 TV 焦点模式。
+- Android TV：
+  - 遥控器方向键导航应保持 TV 路径（列表焦点可移动，确认可选集）。
+- 退出链路：
+  - 顶部返回、键盘 `Esc`、TV 返回键均应先触发确认（播放中）并完成顺序收尾再退出。
+- 全屏按钮：
+  - 初始状态与图标语义一致；点击后系统 UI 模式切换与按钮状态同步。

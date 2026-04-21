@@ -204,9 +204,9 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
     ]).then((_) {
-      // 设置全屏
-      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-      Logger.d("设置横屏和全屏模式", _tag);
+      // 初始与 _isFullScreen=false 保持一致，避免 UI 语义错位。
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      Logger.d("设置横屏和初始系统UI模式", _tag);
     });
     
     _initializePlayer();
@@ -232,7 +232,9 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         (platform == TargetPlatform.windows ||
             platform == TargetPlatform.linux ||
             platform == TargetPlatform.macOS);
-    _isTV = platform == TargetPlatform.android && width >= 960 && shortestSide >= 540;
+    final isDirectionalNavigation = MediaQuery.of(context).navigationMode == NavigationMode.directional;
+    _isTV = platform == TargetPlatform.android &&
+        (isDirectionalNavigation || (width >= 1100 && shortestSide >= 700));
     _isMobile = (platform == TargetPlatform.android || platform == TargetPlatform.iOS) && !_isTV;
     
     // 确保横屏
@@ -553,6 +555,56 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     }
   }
 
+  Future<bool> _confirmExitIfNeeded() async {
+    if (_controller?.value.isPlaying != true) {
+      return true;
+    }
+    final shouldPop = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.black87,
+        title: const Text(
+          '确认退出',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: const Text(
+          '是否要退出播放？',
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text(
+              '取消',
+              style: TextStyle(color: Colors.white70),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text(
+              '退出',
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+    return shouldPop ?? false;
+  }
+
+  Future<bool> _handleWillPop() async {
+    final confirmed = await _confirmExitIfNeeded();
+    if (!confirmed) return false;
+    await _finalizePlaybackSession();
+    return true;
+  }
+
+  Future<void> _requestExitFromUi() async {
+    final canPop = await _handleWillPop();
+    if (!canPop || !mounted) return;
+    Navigator.of(context).pop();
+  }
+
   Future<void> _switchToEpisodeWithFinalize(
     String itemId,
     String title, {
@@ -858,41 +910,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   Widget build(BuildContext context) {
     return WillPopScope(
       onWillPop: () async {
-        // 如果播放器正在播放，显示确认对话框
-        if (_controller?.value.isPlaying == true) {
-          final shouldPop = await showDialog<bool>(
-            context: context,
-            builder: (context) => AlertDialog(
-              backgroundColor: Colors.black87,
-              title: const Text(
-                '确认退出',
-                style: TextStyle(color: Colors.white),
-              ),
-              content: const Text(
-                '是否要退出播放？',
-                style: TextStyle(color: Colors.white70),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: const Text(
-                    '取消',
-                    style: TextStyle(color: Colors.white70),
-                  ),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(true),
-                  child: const Text(
-                    '退出',
-                    style: TextStyle(color: Colors.red),
-                  ),
-                ),
-              ],
-            ),
-          );
-          return shouldPop ?? false;
-        }
-        return true;
+        return _handleWillPop();
       },
       child: Scaffold(
         backgroundColor: Colors.black,
@@ -1230,7 +1248,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
             } else if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
               _adjustVolume(-_volumeStep);
             } else if (event.logicalKey == LogicalKeyboardKey.escape) {
-              Navigator.of(context).pop();
+              _requestExitFromUi();
             }
           }
         }
@@ -1395,7 +1413,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
           children: [
             IconButton(
               icon: const Icon(Icons.arrow_back, color: Colors.white),
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: _requestExitFromUi,
             ),
             Expanded(
               child: Row(
@@ -2778,7 +2796,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
           if (_showPlaylist) {
             _togglePlaylist();
           } else {
-            Navigator.of(context).pop();
+            _requestExitFromUi();
           }
           break;
       }
