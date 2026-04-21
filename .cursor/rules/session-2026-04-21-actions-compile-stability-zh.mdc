@@ -61,6 +61,9 @@ alwaysApply: false
 - 失误 4：曾尝试直接写 `${FLUTTER_ROOT}/version` 作为兜底。
   - 风险：`FLUTTER_ROOT` 在 hostedtoolcache 场景下可能存在权限/可写性不确定，可能引入新的 CI 失败点。
   - 纠正：改为在 `${RUNNER_TEMP}` 创建 `fvp-flutter-sdk` 临时目录，仅写入 `version` 文件，并让 `fvp` 的 `local.properties` 指向该临时目录。
+- 失误 5：`fvp` 目录匹配曾写成固定 `hosted/pub.dev/...`，忽略了镜像源目录（如 `pub.flutter-io.cn`）。
+  - 后果：准备步骤未命中真实插件目录，`fvp` 仍读取不到可用 `flutter.sdk`，报 `flutter version file not found`。
+  - 纠正：目录匹配统一使用 `${PUB_CACHE}/hosted/*/fvp-*/android`，并开启 `nullglob`，同时输出命中日志，禁止静默失败。
 
 ## 后续执行准则（避免重复犯错）
 - 改动 Android 构建链前，先确认三元组：Flutter / Gradle / AGP / Kotlin 版本兼容。
@@ -69,6 +72,7 @@ alwaysApply: false
 - 处理第三方 Flutter 插件（如 `fvp`）时，需先阅读其 `android/build.gradle` 的 SDK 解析逻辑，再改 workflow。
 - workflow shell 片段优先使用 `printf`/显式命令，避免 heredoc 缩进类语法风险。
 - 禁止直接改写 `${FLUTTER_ROOT}` 下文件做兜底；优先在 `${RUNNER_TEMP}` 构造可写 shim 目录并重定向插件读取路径。
+- 涉及 `PUB_CACHE` 路径匹配时，禁止写死单一源目录（如 `pub.dev`）；必须兼容 `hosted/*` 并打印匹配结果。
 
 ## 建议补充
 - 将 Android 构建拆成“快速预检 + release 构建”两阶段，减少每次调试等待。
