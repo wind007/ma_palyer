@@ -11,9 +11,6 @@ buildscript {
     }
 }
 
-// buildscript 内的 ext 不会自动出现在子工程引用的 rootProject.ext，这里同步一份
-ext.kotlin_version = buildscript.ext.kotlin_version
-
 allprojects {
     repositories {
         google()
