@@ -177,3 +177,55 @@ alwaysApply: false
   - 顶部返回、键盘 `Esc`、TV 返回键均应先触发确认（播放中）并完成顺序收尾再退出。
 - 全屏按钮：
   - 初始状态与图标语义一致；点击后系统 UI 模式切换与按钮状态同步。
+
+## 追加记录（账号安全与连接提示改造）
+- 目标：完成“密码不明文落盘 + 连接失败结构化提示”的首轮落地（`lib/services/server_manager.dart`、`lib/services/emby_api.dart`、`lib/pages/add_server_page.dart`、`lib/pages/edit_server_page.dart`）。
+- 存储安全改造：
+  - 在 `ServerManager` 引入 `flutter_secure_storage`，增加 `saveCredential/readCredential/deleteCredential` 接口。
+  - `SharedPreferences` 不再保存明文 `password`，仅保存元数据与 `credentialKey`。
+  - `ServerInfo` 增加 `credentialKey` 字段，新增/更新/删除服务器时同步处理 secure storage 凭据生命周期。
+- 旧数据迁移：
+  - `loadServers()` 检测到旧结构含 `password` 时自动迁移到 secure storage。
+  - 迁移成功后从本地 JSON 删除 `password` 并回写；迁移失败则保留旧值并记录告警，避免影响可用性。
+- API 错误模型：
+  - `EmbyApiService` 新增 `ApiErrorType` 与 `ApiException`，统一映射网络不可达、超时、SSL、认证失败、404、5xx 等错误。
+  - `_request()` 与 `authenticate()` 改为抛结构化错误；页面层不再依赖字符串 contains 判断异常类型。
+- UI 提示升级：
+  - 新增/编辑服务器页按错误类型展示“可读原因 + 下一步建议”，并统一“重试/返回编辑”交互。
+  - 覆盖场景：断网、超时、地址错误、证书异常、账号密码错误、服务器异常。
+- 回归结果：
+  - `flutter analyze`：本次改动文件无新增 lint error（工程内仍有既有 info/warning）。
+  - `flutter test`：现有默认 `widget_test.dart` 用例失败（与本次改造无直接关系，属既有测试模板不匹配现状）。
+
+## 追加记录（Windows secure storage 构建兼容修复）
+- 问题：Windows 构建报错 `flutter_secure_storage_windows_plugin.cpp` 无法找到 `atlstr.h`（环境缺少 ATL 头）。
+- 处理策略：采用仓库内 vendoring + `dependency_overrides`，避免要求开发机强制安装 ATL 组件。
+- 已落地内容：
+  - 新增 `third_party/flutter_secure_storage_windows`（基于 `4.1.0`）。
+  - `pubspec.yaml` 增加：
+    - `dependency_overrides.flutter_secure_storage_windows -> path: third_party/flutter_secure_storage_windows`
+  - 在 vendored 插件中移除 ATL 依赖：
+    - 删除 `#include <atlstr.h>`；
+    - 用 `MultiByteToWideChar/WideCharToMultiByte` 替换 `CA2W/CW2A`。
+- 影响评估：
+  - 仅替换 Windows 实现包来源，Dart API 与上层调用不变。
+  - `darwin/linux/web/platform_interface` 仍使用原来源包，非 Windows 端行为不应受该补丁影响。
+- 验证：
+  - `flutter pub get` 成功，锁文件显示 windows 实现来自本地 path。
+  - `flutter build windows --debug` 成功，`atlstr.h` 构建失败已消除。
+
+## 追加记录（连接失败白屏修复）
+- 问题现象：当服务器不可达或鉴权失败导致首页分区数据均加载失败时，页面仅显示空内容区域，用户感知为“白屏”。
+- 根因分析：
+  - `VideoListPage` 在各分区请求失败后会把分区数据置空并关闭 loading；
+  - 但“全部分区为空”的场景没有全局错误占位 UI，导致界面无反馈。
+- 修复方案（`lib/pages/video_list_page.dart`）：
+  - 新增 `_hadSectionLoadError` 标记，记录是否发生过分区级加载失败。
+  - 在 `_loadViews/_loadLatestItems/_loadContinueWatching/_loadFavorites` 失败分支中统一置位该标记。
+  - 在 `_loadAllSections()` 入口重置标记，避免重试后状态污染。
+  - 在 `_buildBody()` 增加兜底渲染条件：
+    - 当“无任何分区数据 + 无分区加载中 + 发生过加载失败”时，显示错误占位而非空白。
+  - 错误占位提供可操作入口：`重试`、`返回服务器列表`。
+- 结果：
+  - 连接失败场景下不再白屏，用户可看到明确提示并执行下一步操作。
+  - 已对修改文件执行 lint 检查，无新增 lint 错误。

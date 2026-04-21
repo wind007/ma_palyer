@@ -21,6 +21,52 @@ class _AddServerPageState extends State<AddServerPage> {
   bool _isLoading = false;
   bool _obscurePassword = true;
 
+  ({String title, String message}) _mapFriendlyError(Object error) {
+    if (error is ApiException) {
+      switch (error.type) {
+        case ApiErrorType.networkUnreachable:
+          return (
+            title: '连接失败',
+            message: '当前无法连接服务器。\n建议：检查网络连接、确认服务器地址和端口后重试。',
+          );
+        case ApiErrorType.timeout:
+          return (
+            title: '请求超时',
+            message: '服务器响应超时。\n建议：检查网络质量或稍后重试。',
+          );
+        case ApiErrorType.sslError:
+          return (
+            title: '证书错误',
+            message: 'HTTPS 证书校验失败。\n建议：检查服务器证书配置，或确认是否应使用 HTTP 地址。',
+          );
+        case ApiErrorType.authFailed:
+          return (
+            title: '认证失败',
+            message: '用户名或密码错误。\n建议：核对账号密码后重试。',
+          );
+        case ApiErrorType.serverNotFound:
+          return (
+            title: '地址错误',
+            message: '服务器地址无效或接口不存在。\n建议：检查服务器地址格式（含 http/https）并重试。',
+          );
+        case ApiErrorType.serverError:
+          return (
+            title: '服务器异常',
+            message: '服务器暂时不可用。\n建议：稍后重试，或检查服务器运行状态。',
+          );
+        case ApiErrorType.unknown:
+          return (
+            title: '登录失败',
+            message: '${error.userMessage}\n建议：稍后重试，若持续失败请检查服务器日志。',
+          );
+      }
+    }
+    return (
+      title: '登录失败',
+      message: '${error.toString().replaceAll('Exception: ', '')}\n建议：检查输入信息后重试。',
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -90,10 +136,13 @@ class _AddServerPageState extends State<AddServerPage> {
         return;
       }
       
+      final mapped = _mapFriendlyError(e);
       final retry = await ErrorDialog.show(
         context: context,
-        title: '登录失败',
-        message: e.toString(),
+        title: mapped.title,
+        message: mapped.message,
+        retryText: '重试',
+        closeText: '返回编辑',
       );
 
       if (retry && mounted) {

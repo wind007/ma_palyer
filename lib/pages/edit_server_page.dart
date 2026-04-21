@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/emby_api.dart';
 import '../services/server_manager.dart';
+import '../utils/error_dialog.dart';
 import '../utils/logger.dart';
 import '../widgets/adaptive_app_bar.dart';
 
@@ -22,6 +23,52 @@ class _EditServerPageState extends State<EditServerPage> {
   final _serverNameController = TextEditingController();
   bool _isLoading = false;
   bool _obscurePassword = true;
+
+  ({String title, String message}) _mapFriendlyError(Object error) {
+    if (error is ApiException) {
+      switch (error.type) {
+        case ApiErrorType.networkUnreachable:
+          return (
+            title: '连接失败',
+            message: '当前无法连接服务器。\n建议：检查网络连接、确认服务器地址和端口后重试。',
+          );
+        case ApiErrorType.timeout:
+          return (
+            title: '请求超时',
+            message: '服务器响应超时。\n建议：检查网络质量或稍后重试。',
+          );
+        case ApiErrorType.sslError:
+          return (
+            title: '证书错误',
+            message: 'HTTPS 证书校验失败。\n建议：检查服务器证书配置，或确认是否应使用 HTTP 地址。',
+          );
+        case ApiErrorType.authFailed:
+          return (
+            title: '认证失败',
+            message: '用户名或密码错误。\n建议：核对账号密码后重试。',
+          );
+        case ApiErrorType.serverNotFound:
+          return (
+            title: '地址错误',
+            message: '服务器地址无效或接口不存在。\n建议：检查服务器地址格式（含 http/https）并重试。',
+          );
+        case ApiErrorType.serverError:
+          return (
+            title: '服务器异常',
+            message: '服务器暂时不可用。\n建议：稍后重试，或检查服务器运行状态。',
+          );
+        case ApiErrorType.unknown:
+          return (
+            title: '更新失败',
+            message: '${error.userMessage}\n建议：稍后重试，若持续失败请检查服务器日志。',
+          );
+      }
+    }
+    return (
+      title: '更新失败',
+      message: '${error.toString().replaceAll('Exception: ', '')}\n建议：检查输入信息后重试。',
+    );
+  }
 
   @override
   void initState() {
@@ -61,15 +108,6 @@ class _EditServerPageState extends State<EditServerPage> {
         password: _passwordController.text,
       );
 
-      // 先检查服务器连接状态
-      Logger.d("检查服务器连接状态", _tag);
-      final isConnected = await api.checkServerConnection();
-      if (!isConnected) {
-        Logger.e("服务器连接失败", _tag);
-        throw Exception('无法连接到服务器，请检查服务器地址是否正确');
-      }
-      Logger.d("服务器连接成功", _tag);
-
       // 进行身份验证
       Logger.d("开始身份验证", _tag);
       final authResult = await api.authenticate();
@@ -101,31 +139,17 @@ class _EditServerPageState extends State<EditServerPage> {
         return;
       }
 
-      showDialog(
+      final mapped = _mapFriendlyError(e);
+      final retry = await ErrorDialog.show(
         context: context,
-        barrierDismissible: false,
-        builder: (context) => AlertDialog(
-          title: const Text('更新失败'),
-          content: Text(e.toString().replaceAll('Exception: ', '')),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Logger.d("用户选择重试", _tag);
-                Navigator.of(context).pop(); // 关闭对话框
-              },
-              child: const Text('重试'),
-            ),
-            TextButton(
-              onPressed: () {
-                Logger.d("用户选择返回上一页", _tag);
-                Navigator.of(context).pop(); // 关闭对话框
-                Navigator.of(context).pop(); // 返回上一页
-              },
-              child: const Text('返回上一页'),
-            ),
-          ],
-        ),
+        title: mapped.title,
+        message: mapped.message,
+        retryText: '重试',
+        closeText: '返回编辑',
       );
+      if (retry && mounted) {
+        _submitForm();
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:math';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/logger.dart';
 
@@ -9,6 +11,7 @@ class ServerInfo {
   final String name;
   final String accessToken;
   final String userId;
+  final String credentialKey;
 
   ServerInfo({
     required this.url,
@@ -17,24 +20,26 @@ class ServerInfo {
     required this.name,
     required this.accessToken,
     required this.userId,
+    required this.credentialKey,
   });
 
   Map<String, dynamic> toJson() => {
     'url': url,
     'username': username,
-    'password': password,
     'name': name,
     'accessToken': accessToken,
     'userId': userId,
+    'credentialKey': credentialKey,
   };
 
   factory ServerInfo.fromJson(Map<String, dynamic> json) => ServerInfo(
     url: json['url'],
     username: json['username'],
-    password: json['password'],
+    password: json['password'] ?? '',
     name: json['name'],
     accessToken: json['accessToken'],
     userId: json['userId'],
+    credentialKey: json['credentialKey'] ?? '',
   );
 
   @override
@@ -48,6 +53,8 @@ class ServerManager {
   static const _serversKey = 'emby_servers';
   static const _userAgentKey = 'custom_user_agent';
   static const _embyHeadersKey = 'custom_emby_headers';
+  static const _credentialPrefix = 'server_credential_';
+  static const FlutterSecureStorage _secureStorage = FlutterSecureStorage();
   static const String defaultUserAgent = 'ma_player/1.0.0';
   static const Map<String, String> defaultEmbyHeaders = {
     'X-Emby-Client': 'ma_player',
@@ -174,9 +181,52 @@ class ServerManager {
       final serversJson = _prefs.getStringList(_serversKey) ?? [];
       Logger.v("从SharedPreferences加载到${serversJson.length}条服务器记录", _tag);
       
-      _servers = serversJson
-          .map((json) => ServerInfo.fromJson(jsonDecode(json)))
-          .toList();
+      var hasLegacyMigration = false;
+      final loadedServers = <ServerInfo>[];
+
+      for (final serverRaw in serversJson) {
+        final map = jsonDecode(serverRaw) as Map<String, dynamic>;
+        final legacyPassword = (map['password'] ?? '').toString();
+        var credentialKey = (map['credentialKey'] ?? '').toString();
+        if (credentialKey.isEmpty) {
+          credentialKey = _generateCredentialKey(
+            url: map['url']?.toString() ?? '',
+            username: map['username']?.toString() ?? '',
+            name: map['name']?.toString() ?? '',
+          );
+          map['credentialKey'] = credentialKey;
+          hasLegacyMigration = true;
+        }
+
+        String password = '';
+        if (legacyPassword.isNotEmpty) {
+          try {
+            await saveCredential(credentialKey, legacyPassword);
+            map.remove('password');
+            hasLegacyMigration = true;
+            password = legacyPassword;
+            Logger.i('已迁移旧明文密码到安全存储: ${map['name']}', _tag);
+          } catch (e, stackTrace) {
+            password = legacyPassword;
+            Logger.w('迁移旧明文密码失败，保留旧值继续使用: ${map['name']}', _tag);
+            Logger.e('旧密码迁移失败详情', _tag, e, stackTrace);
+          }
+        } else {
+          password = await readCredential(credentialKey) ?? '';
+        }
+
+        loadedServers.add(
+          ServerInfo.fromJson(map).copyWith(
+            password: password,
+            credentialKey: credentialKey,
+          ),
+        );
+      }
+
+      _servers = loadedServers;
+      if (hasLegacyMigration) {
+        await _saveServers();
+      }
       
       Logger.d("服务器列表加载完成", _tag);
       for (var server in _servers) {
@@ -211,7 +261,8 @@ class ServerManager {
   Future<void> addServer(ServerInfo server) async {
     Logger.i("添加新服务器: ${server.toString()}", _tag);
     try {
-      _servers.add(server);
+      final normalizedServer = await _normalizeServer(server);
+      _servers.add(normalizedServer);
       await _saveServers();
       Logger.i("新服务器添加成功", _tag);
     } catch (e, stackTrace) {
@@ -225,7 +276,11 @@ class ServerManager {
     Logger.i("准备删除服务器: $serverName", _tag);
     try {
       final beforeCount = _servers.length;
+      final removedServers = _servers.where((server) => server.name == serverName).toList();
       _servers.removeWhere((server) => server.name == serverName);
+      for (final server in removedServers) {
+        await deleteCredential(server.credentialKey);
+      }
       await _saveServers();
       final removedCount = beforeCount - _servers.length;
       Logger.i("成功删除$removedCount个服务器", _tag);
@@ -247,7 +302,9 @@ class ServerManager {
     try {
       final index = _servers.indexWhere((s) => s.name == updatedServer.name);
       if (index != -1) {
-        _servers[index] = updatedServer;
+        final existing = _servers[index];
+        final normalizedServer = await _normalizeServer(updatedServer, existingServer: existing);
+        _servers[index] = normalizedServer;
         await _saveServers();
         Logger.i("服务器信息更新成功", _tag);
       } else {
@@ -258,5 +315,69 @@ class ServerManager {
       Logger.e("更新服务器信息失败", _tag, e, stackTrace);
       rethrow;
     }
+  }
+
+  Future<void> saveCredential(String key, String password) async {
+    if (key.trim().isEmpty) return;
+    await _secureStorage.write(key: key, value: password);
+  }
+
+  Future<String?> readCredential(String key) async {
+    if (key.trim().isEmpty) return null;
+    return _secureStorage.read(key: key);
+  }
+
+  Future<void> deleteCredential(String key) async {
+    if (key.trim().isEmpty) return;
+    await _secureStorage.delete(key: key);
+  }
+
+  Future<ServerInfo> _normalizeServer(
+    ServerInfo server, {
+    ServerInfo? existingServer,
+  }) async {
+    final credentialKey = server.credentialKey.isNotEmpty
+        ? server.credentialKey
+        : existingServer?.credentialKey.isNotEmpty == true
+            ? existingServer!.credentialKey
+            : _generateCredentialKey(
+                url: server.url,
+                username: server.username,
+                name: server.name,
+              );
+    await saveCredential(credentialKey, server.password);
+    return server.copyWith(credentialKey: credentialKey);
+  }
+
+  String _generateCredentialKey({
+    required String url,
+    required String username,
+    required String name,
+  }) {
+    final seed =
+        '${url.trim()}|${username.trim()}|${name.trim()}|${DateTime.now().microsecondsSinceEpoch}|${Random().nextInt(1 << 32)}';
+    return '$_credentialPrefix${seed.hashCode.abs()}';
+  }
+}
+
+extension on ServerInfo {
+  ServerInfo copyWith({
+    String? url,
+    String? username,
+    String? password,
+    String? name,
+    String? accessToken,
+    String? userId,
+    String? credentialKey,
+  }) {
+    return ServerInfo(
+      url: url ?? this.url,
+      username: username ?? this.username,
+      password: password ?? this.password,
+      name: name ?? this.name,
+      accessToken: accessToken ?? this.accessToken,
+      userId: userId ?? this.userId,
+      credentialKey: credentialKey ?? this.credentialKey,
+    );
   }
 }

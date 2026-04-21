@@ -55,6 +55,7 @@ class ApiServiceManager {
       name: server.name,
       accessToken: server.accessToken,
       userId: server.userId,
+      credentialKey: server.credentialKey,
     );
     
     // 只有当没有 accessToken 时才进行身份验证

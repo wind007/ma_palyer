@@ -55,6 +55,7 @@ class _VideoListPageState extends State<VideoListPage>
 
   bool _isInitializing = true;
   String? _error;
+  bool _hadSectionLoadError = false;
 
   @override
   void initState() {
@@ -123,6 +124,7 @@ class _VideoListPageState extends State<VideoListPage>
     
     // 重置所有分区的加载状态
     setState(() {
+      _hadSectionLoadError = false;
       for (var key in _sectionLoading.keys) {
         _sectionLoading[key] = true;
       }
@@ -141,6 +143,11 @@ class _VideoListPageState extends State<VideoListPage>
       Logger.i("所有分区数据加载完成", _tag);
     } catch (e) {
       Logger.e("部分分区加载失败", _tag, e);
+      if (mounted) {
+        setState(() {
+          _hadSectionLoadError = true;
+        });
+      }
       // 错误处理移到各个加载方法中，这里不再统一处理
     }
   }
@@ -171,6 +178,7 @@ class _VideoListPageState extends State<VideoListPage>
       Logger.e("加载媒体库视图失败", _tag, e);
       if (!mounted) return;
       setState(() {
+        _hadSectionLoadError = true;
         _videoSections['views'] = [];
         _sectionLoading['views'] = false;
       });
@@ -242,6 +250,7 @@ class _VideoListPageState extends State<VideoListPage>
       Logger.e("加载最新添加项目失败", _tag, e);
       if (!mounted) return;
       setState(() {
+        _hadSectionLoadError = true;
         _videoSections['latest'] = [];
         _hasMoreData['latest'] = false;
         _sectionLoading['latest'] = false;
@@ -283,6 +292,7 @@ class _VideoListPageState extends State<VideoListPage>
       Logger.e("加载继续观看项目失败", _tag, e);
       if (!mounted) return;
       setState(() {
+        _hadSectionLoadError = true;
         _videoSections['continue'] = [];
         _hasMoreData['continue'] = false;
         _sectionLoading['continue'] = false;
@@ -320,6 +330,7 @@ class _VideoListPageState extends State<VideoListPage>
       Logger.e("加载收藏项目失败", _tag, e);
       if (!mounted) return;
       setState(() {
+        _hadSectionLoadError = true;
         _videoSections['favorites'] = [];
         _hasMoreData['favorites'] = false;
         _sectionLoading['favorites'] = false;
@@ -484,6 +495,46 @@ class _VideoListPageState extends State<VideoListPage>
 
     if (_error != null) {
       return Center(child: Text(_error!));
+    }
+
+    final hasAnyData = _videoSections.values.any((items) => items.isNotEmpty);
+    final isAnySectionLoading = _sectionLoading.values.any((loading) => loading);
+    if (!hasAnyData && !isAnySectionLoading && _hadSectionLoadError) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.wifi_off_rounded, size: 64, color: Colors.grey),
+              const SizedBox(height: 16),
+              const Text(
+                '服务器连接失败',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                '请检查网络、服务器地址或账号状态后重试。',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 12,
+                children: [
+                  FilledButton(
+                    onPressed: _loadAllSections,
+                    child: const Text('重试'),
+                  ),
+                  OutlinedButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('返回服务器列表'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
     }
 
     return RefreshIndicator(

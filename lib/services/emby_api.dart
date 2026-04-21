@@ -1,12 +1,42 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
 import '../services/server_manager.dart';
 import '../utils/logger.dart';
 
+enum ApiErrorType {
+  networkUnreachable,
+  timeout,
+  sslError,
+  authFailed,
+  serverNotFound,
+  serverError,
+  unknown,
+}
+
+class ApiException implements Exception {
+  final ApiErrorType type;
+  final String userMessage;
+  final String technicalDetails;
+  final int? statusCode;
+
+  const ApiException({
+    required this.type,
+    required this.userMessage,
+    required this.technicalDetails,
+    this.statusCode,
+  });
+
+  @override
+  String toString() => userMessage;
+}
+
 class EmbyApiService {
   static const String _tag = "EmbyApi";
   static const int _maxAuthRetryCount = 1;
+  static const Duration _requestTimeout = Duration(seconds: 15);
   String baseUrl;
   String username;
   String password;
@@ -53,21 +83,27 @@ class EmbyApiService {
       http.Response response;
       switch (method.toUpperCase()) {
         case 'GET':
-          response = await _client.get(uri, headers: headers);
+          response = await _client
+              .get(uri, headers: headers)
+              .timeout(_requestTimeout);
           break;
         case 'POST':
-          response = await _client.post(
-            uri,
-            headers: headers,
-            body: body != null ? json.encode(body) : null,
-          );
+          response = await _client
+              .post(
+                uri,
+                headers: headers,
+                body: body != null ? json.encode(body) : null,
+              )
+              .timeout(_requestTimeout);
           break;
         case 'DELETE':
-          response = await _client.delete(
-            uri,
-            headers: headers,
-            body: body != null ? json.encode(body) : null,
-          );
+          response = await _client
+              .delete(
+                uri,
+                headers: headers,
+                body: body != null ? json.encode(body) : null,
+              )
+              .timeout(_requestTimeout);
           break;
         default:
           throw Exception('不支持的请求方法: $method');
@@ -76,7 +112,12 @@ class EmbyApiService {
       // 处理401状态码，token失效时自动重试
       if (response.statusCode == 401 && requiresAuth) {
         if (authRetryCount >= _maxAuthRetryCount) {
-          throw Exception('认证重试超限: $path');
+          throw ApiException(
+            type: ApiErrorType.authFailed,
+            userMessage: '认证失败，请重新检查账号信息',
+            technicalDetails: '认证重试超限: path=$path',
+            statusCode: 401,
+          );
         }
         // 清除旧token
         accessToken = null;
@@ -102,7 +143,11 @@ class EmbyApiService {
       }
 
       if (response.statusCode != 200 && response.statusCode != 204) {
-        throw Exception('请求失败: ${response.statusCode}');
+        throw _mapHttpStatusToException(
+          statusCode: response.statusCode,
+          path: path,
+          body: response.body,
+        );
       }
 
       if (response.body.isEmpty) {
@@ -110,8 +155,44 @@ class EmbyApiService {
       }
 
       return json.decode(response.body);
+    } on ApiException {
+      rethrow;
+    } on SocketException catch (e) {
+      throw ApiException(
+        type: ApiErrorType.networkUnreachable,
+        userMessage: '无法连接服务器，请检查网络或地址后重试',
+        technicalDetails: e.toString(),
+      );
+    } on HandshakeException catch (e) {
+      throw ApiException(
+        type: ApiErrorType.sslError,
+        userMessage: 'HTTPS 证书校验失败，请检查服务器证书配置',
+        technicalDetails: e.toString(),
+      );
+    } on HttpException catch (e) {
+      throw ApiException(
+        type: ApiErrorType.networkUnreachable,
+        userMessage: '网络连接异常，请稍后重试',
+        technicalDetails: e.toString(),
+      );
+    } on FormatException catch (e) {
+      throw ApiException(
+        type: ApiErrorType.unknown,
+        userMessage: '服务器返回数据格式异常，请稍后重试',
+        technicalDetails: e.toString(),
+      );
+    } on TimeoutException catch (e) {
+      throw ApiException(
+        type: ApiErrorType.timeout,
+        userMessage: '请求超时，请检查网络后重试',
+        technicalDetails: e.toString(),
+      );
     } catch (e) {
-      throw Exception('请求失败: $e');
+      throw ApiException(
+        type: ApiErrorType.unknown,
+        userMessage: '请求失败，请稍后重试',
+        technicalDetails: e.toString(),
+      );
     }
   }
 
@@ -145,23 +226,65 @@ class EmbyApiService {
         'userInfo': authData['User'],
         'serverInfo': authData['Server'] ?? {},
       };
-    } catch (e) {
+    } on ApiException catch (e) {
       // 清除可能存在的旧数据
       accessToken = null;
       userId = null;
-      
-      if (e.toString().contains('SocketException')) {
-        throw Exception('无法连接到服务器，请检查网络或服务器地址');
-      } else if (e.toString().contains('400')) {
-        throw Exception('用户名或密码错误');
-      } else if (e.toString().contains('404')) {
-        throw Exception('服务器地址错误');
-      } else if (e.toString().contains('证书')) {
-        throw Exception('服务器证书验证失败，请检查服务器配置');
+      if (e.statusCode == 400 || e.statusCode == 401) {
+        throw ApiException(
+          type: ApiErrorType.authFailed,
+          userMessage: '用户名或密码错误，请重新输入',
+          technicalDetails: e.technicalDetails,
+          statusCode: e.statusCode,
+        );
       }
-      
-      throw Exception('认证失败: ${e.toString()}');
+      rethrow;
+    } catch (e) {
+      accessToken = null;
+      userId = null;
+      throw ApiException(
+        type: ApiErrorType.unknown,
+        userMessage: '认证失败，请稍后重试',
+        technicalDetails: e.toString(),
+      );
     }
+  }
+
+  ApiException _mapHttpStatusToException({
+    required int statusCode,
+    required String path,
+    required String body,
+  }) {
+    if (statusCode == 400 || statusCode == 401 || statusCode == 403) {
+      return ApiException(
+        type: ApiErrorType.authFailed,
+        userMessage: '认证失败，请检查用户名和密码',
+        technicalDetails: 'HTTP $statusCode: $path, body=$body',
+        statusCode: statusCode,
+      );
+    }
+    if (statusCode == 404) {
+      return ApiException(
+        type: ApiErrorType.serverNotFound,
+        userMessage: '服务器地址无效或接口不存在，请检查地址',
+        technicalDetails: 'HTTP 404: $path, body=$body',
+        statusCode: statusCode,
+      );
+    }
+    if (statusCode >= 500) {
+      return ApiException(
+        type: ApiErrorType.serverError,
+        userMessage: '服务器暂时不可用，请稍后重试',
+        technicalDetails: 'HTTP $statusCode: $path, body=$body',
+        statusCode: statusCode,
+      );
+    }
+    return ApiException(
+      type: ApiErrorType.unknown,
+      userMessage: '请求失败，请稍后重试',
+      technicalDetails: 'HTTP $statusCode: $path, body=$body',
+      statusCode: statusCode,
+    );
   }
 
   // 检查服务器连接状态

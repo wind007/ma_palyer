@@ -130,12 +130,18 @@ class _ServerListPageState extends State<ServerListPage> {
           name: result['name']!,
           accessToken: result['accessToken']!,
           userId: result['userId']!,
+          credentialKey: '',
         );
         await _serverManager.addServer(serverInfo);
+        await _serverManager.loadServers();
+        final persistedServer = _serverManager.servers.firstWhere(
+          (s) => s.name == serverInfo.name,
+          orElse: () => serverInfo,
+        );
         Logger.i("服务器添加成功: ${serverInfo.name}", _tag);
         
         setState(() {
-          _servers.add(serverInfo);
+          _servers.add(persistedServer);
           _listKey.currentState?.insertItem(_servers.length - 1);
         });
       } catch (e) {
@@ -178,14 +184,20 @@ class _ServerListPageState extends State<ServerListPage> {
           name: result['name']!,
           accessToken: result['accessToken']!,
           userId: result['userId']!,
+          credentialKey: server.credentialKey,
         );
         await _serverManager.updateServer(updatedServer);
+        await _serverManager.loadServers();
+        final persistedServer = _serverManager.servers.firstWhere(
+          (s) => s.name == updatedServer.name,
+          orElse: () => updatedServer,
+        );
         Logger.i("服务器更新成功: ${updatedServer.name}", _tag);
         
         final index = _servers.indexWhere((s) => s.name == server.name);
         if (index != -1) {
           setState(() {
-            _servers[index] = updatedServer;
+            _servers[index] = persistedServer;
           });
         }
       } catch (e) {
