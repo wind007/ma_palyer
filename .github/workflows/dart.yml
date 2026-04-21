@@ -50,14 +50,14 @@ jobs:
       - name: Prepare fvp Flutter SDK path for CI
         shell: bash
         run: |
-          if [ ! -f "${FLUTTER_ROOT}/version" ]; then
-            FLUTTER_SEMVER="$(flutter --version | head -n 1 | sed -E 's/.*Flutter ([0-9]+\.[0-9]+\.[0-9]+).*/\1/')"
-            echo "${FLUTTER_SEMVER}" > "${FLUTTER_ROOT}/version"
-          fi
+          FLUTTER_SEMVER="$(flutter --version | head -n 1 | sed -E 's/.*Flutter ([0-9]+\.[0-9]+\.[0-9]+).*/\1/')"
+          FVP_FLUTTER_SDK_SHIM="${RUNNER_TEMP}/fvp-flutter-sdk"
+          mkdir -p "${FVP_FLUTTER_SDK_SHIM}"
+          printf '%s\n' "${FLUTTER_SEMVER}" > "${FVP_FLUTTER_SDK_SHIM}/version"
 
           for FVP_ANDROID_DIR in "${PUB_CACHE}"/hosted/pub.dev/fvp-*/android; do
             if [ -d "${FVP_ANDROID_DIR}" ]; then
-              printf '%s\n' "flutter.sdk=${FLUTTER_ROOT}" > "${FVP_ANDROID_DIR}/local.properties"
+              printf '%s\n' "flutter.sdk=${FVP_FLUTTER_SDK_SHIM}" > "${FVP_ANDROID_DIR}/local.properties"
             fi
           done
 

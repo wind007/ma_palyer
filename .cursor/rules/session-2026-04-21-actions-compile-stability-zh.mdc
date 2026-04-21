@@ -58,6 +58,9 @@ alwaysApply: false
 - 失误 3：`fvp` 目录最初写死为 `fvp-0.30.0`。
   - 后果：插件小版本变化后兜底步骤可能失效。
   - 纠正：统一使用通配目录 `fvp-*/android` 处理。
+- 失误 4：曾尝试直接写 `${FLUTTER_ROOT}/version` 作为兜底。
+  - 风险：`FLUTTER_ROOT` 在 hostedtoolcache 场景下可能存在权限/可写性不确定，可能引入新的 CI 失败点。
+  - 纠正：改为在 `${RUNNER_TEMP}` 创建 `fvp-flutter-sdk` 临时目录，仅写入 `version` 文件，并让 `fvp` 的 `local.properties` 指向该临时目录。
 
 ## 后续执行准则（避免重复犯错）
 - 改动 Android 构建链前，先确认三元组：Flutter / Gradle / AGP / Kotlin 版本兼容。
@@ -65,6 +68,7 @@ alwaysApply: false
 - 优先以 CI（Linux）日志为准，不以本机 Windows 构建行为作为最终依据。
 - 处理第三方 Flutter 插件（如 `fvp`）时，需先阅读其 `android/build.gradle` 的 SDK 解析逻辑，再改 workflow。
 - workflow shell 片段优先使用 `printf`/显式命令，避免 heredoc 缩进类语法风险。
+- 禁止直接改写 `${FLUTTER_ROOT}` 下文件做兜底；优先在 `${RUNNER_TEMP}` 构造可写 shim 目录并重定向插件读取路径。
 
 ## 建议补充
 - 将 Android 构建拆成“快速预检 + release 构建”两阶段，减少每次调试等待。
