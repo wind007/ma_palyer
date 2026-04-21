@@ -28,7 +28,10 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
-          cache: true
+          cache: false
+
+      - name: Print Flutter version
+        run: flutter --version
 
       - name: Flutter pub get
         run: flutter pub get
@@ -54,7 +57,10 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
-          cache: true
+          cache: false
+
+      - name: Print Flutter version
+        run: flutter --version
 
       - name: Enable Windows desktop
         run: flutter config --enable-windows-desktop
