@@ -1,0 +1,59 @@
+---
+description: 2026-04-21 GitHub Actions 编译链路稳定性与排障记录（中文）
+alwaysApply: false
+---
+
+# 今日工作记录（GitHub Actions 编译稳定性）
+
+## 背景
+- 项目在 GitHub Actions 中进行 Android APK / Windows EXE 构建。
+- 连续出现多类构建错误：Flutter 主题 API 兼容、Gradle/Kotlin 版本冲突、Flutter 插件加载链异常、`fvp` 读取 Flutter SDK 失败。
+
+## 关键问题与根因
+
+### 1) `CardThemeData` 报错
+- 现象：`lib/main.dart` 中 `CardThemeData` 在 CI 报未定义。
+- 根因：CI 中 Flutter 版本与本地/代码 API 不一致（版本漂移）。
+- 结论：涉及 Flutter SDK API 的写法，必须先固定或显式确认 CI Flutter 版本。
+
+### 2) `FlutterPlugin.kt` 的 `filePermissions` 未解析
+- 现象：Flutter tools 的 Gradle Kotlin 代码编译失败。
+- 根因：项目 Gradle Wrapper 版本过低，无法满足较新 Flutter 工具链使用的 Gradle API。
+- 结论：升级 Flutter 时要同步核对 Gradle/AGP/Kotlin 组合兼容矩阵。
+
+### 3) `MainActivity.kt` 找不到 `io.flutter.embedding.android.FlutterActivity`
+- 现象：Kotlin 编译期 unresolved reference。
+- 根因：`android/settings.gradle` 插件声明层级错误，Flutter 插件加载器未按官方模板生效。
+- 修复要点：
+  - `pluginManagement { ... }` 中只放仓库与 includeBuild。
+  - 顶层 `plugins { ... }` 中声明 `dev.flutter.flutter-plugin-loader`、`com.android.application`、`org.jetbrains.kotlin.android`。
+  - `android/app/build.gradle` 使用 `id "org.jetbrains.kotlin.android"` 与 `id "dev.flutter.flutter-gradle-plugin"`。
+
+### 4) `fvp` 报 `flutter version file not found`
+- 现象：`/home/runner/.pub-cache/.../fvp-0.30.0/android/build.gradle` 断言失败。
+- 根因：
+  - `fvp` 构建脚本会读取 `flutter.sdk` 并强依赖 `${flutter.sdk}/version`。
+  - 若 `local.properties` 指向本机路径（如 Windows）或插件目录缺少可读配置，Linux runner 会失败。
+- 修复要点：
+  - 绝不提交 `android/local.properties`（尤其是本机绝对路径）。
+  - CI 中动态生成 `android/local.properties`。
+  - 对 `fvp` 增加 CI 兜底：写入插件目录 `local.properties`，并确保 `${FLUTTER_ROOT}/version` 文件存在。
+
+## 已落地的 CI 防护策略
+- Android job 中动态生成 `android/local.properties`：
+  - `sdk.dir=${ANDROID_SDK_ROOT}`
+  - `flutter.sdk=${FLUTTER_ROOT}`
+- Android job 中新增 `fvp` 兜底步骤：
+  - 缺少 `${FLUTTER_ROOT}/version` 时自动生成版本号文件。
+  - 给 `${PUB_CACHE}/hosted/pub.dev/fvp-0.30.0/android/local.properties` 写入 `flutter.sdk`。
+- 增加 `flutter --version` 输出，便于失败时确认真实 SDK 版本。
+
+## 后续执行准则（避免重复犯错）
+- 改动 Android 构建链前，先确认三元组：Flutter / Gradle / AGP / Kotlin 版本兼容。
+- 不在仓库中提交环境绑定文件：`android/local.properties`。
+- 优先以 CI（Linux）日志为准，不以本机 Windows 构建行为作为最终依据。
+- 处理第三方 Flutter 插件（如 `fvp`）时，需先阅读其 `android/build.gradle` 的 SDK 解析逻辑，再改 workflow。
+
+## 建议补充
+- 将 Android 构建拆成“快速预检 + release 构建”两阶段，减少每次调试等待。
+- 在 workflow 中加入失败时的诊断输出（`java -version`、`flutter --version`、`./gradlew -version`）。

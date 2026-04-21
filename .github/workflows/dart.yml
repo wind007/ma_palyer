@@ -46,6 +46,21 @@ jobs:
           flutter.versionCode=1
           EOF
 
+      - name: Prepare fvp Flutter SDK path for CI
+        shell: bash
+        run: |
+          if [ ! -f "${FLUTTER_ROOT}/version" ]; then
+            FLUTTER_SEMVER="$(flutter --version | head -n 1 | sed -E 's/.*Flutter ([0-9]+\.[0-9]+\.[0-9]+).*/\1/')"
+            echo "${FLUTTER_SEMVER}" > "${FLUTTER_ROOT}/version"
+          fi
+
+          FVP_ANDROID_DIR="${PUB_CACHE}/hosted/pub.dev/fvp-0.30.0/android"
+          if [ -d "${FVP_ANDROID_DIR}" ]; then
+            cat > "${FVP_ANDROID_DIR}/local.properties" <<EOF
+            flutter.sdk=${FLUTTER_ROOT}
+            EOF
+          fi
+
       - name: Build release APK
         run: flutter build apk --release
 
