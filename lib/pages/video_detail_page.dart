@@ -30,6 +30,8 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
   String? _error;
   late ScrollController _scrollController;
   int _currentMediaSourceIndex = 0;
+  final Map<int, int?> _selectedAudioStreamBySource = {};
+  final Map<int, int> _selectedSubtitleStreamBySource = {};
 
   @override
   void initState() {
@@ -99,6 +101,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
         _videoDetails = details;
         _playbackPosition = position;
         _currentMediaSourceIndex = _resolveInitialMediaSourceIndex(details);
+        _initializeStreamSelections(details);
         _isLoading = false;
       });
       }
@@ -146,12 +149,16 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
     final mediaType = _videoDetails!['MediaType']?.toString().toLowerCase() ?? '';
     final parentType = _videoDetails!['ParentType']?.toString().toLowerCase() ?? '';
     
+    final targetMediaSourceIndex = mediaSourceIndex ?? _currentMediaSourceIndex;
+    final targetAudioIndex = audioStreamIndex ?? _selectedAudioStreamBySource[targetMediaSourceIndex];
+    final targetSubtitleIndex = subtitleStreamIndex ?? _selectedSubtitleStreamBySource[targetMediaSourceIndex];
+
     Logger.i(
       "开始播放视频: ${_videoDetails!['Name']}, "
       "${fromStart ? '从头开始' : '继续播放'}, "
-      "版本: $mediaSourceIndex, "
-      "音频: $audioStreamIndex, "
-      "字幕: $subtitleStreamIndex, "
+      "版本: $targetMediaSourceIndex, "
+      "音频: $targetAudioIndex, "
+      "字幕: $targetSubtitleIndex, "
       "剧集信息 - seriesId: $seriesId, seasonNumber: $seasonNumber, episodeNumber: $episodeNumber, "
       "合集信息 - type: $type, mediaType: $mediaType, parentType: $parentType, "
       "原始数据 - video: ${widget.video}, "
@@ -167,9 +174,9 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
           title: _videoDetails!['Name'],
           embyApi: _api!,
           fromStart: fromStart,
-          mediaSourceIndex: mediaSourceIndex,
-          initialAudioStreamIndex: audioStreamIndex,
-          initialSubtitleStreamIndex: subtitleStreamIndex,
+          mediaSourceIndex: targetMediaSourceIndex,
+          initialAudioStreamIndex: targetAudioIndex,
+          initialSubtitleStreamIndex: targetSubtitleIndex,
           seriesId: seriesId,
           seasonNumber: seasonNumber,
           episodeNumber: episodeNumber,
@@ -709,28 +716,6 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                           setState(() {
                             _currentMediaSourceIndex = index;
                           });
-                          final mediaStreams = source['MediaStreams'] as List? ?? const [];
-                          final audioStreams = mediaStreams
-                              .where((s) => s is Map<String, dynamic> && s['Type'] == 'Audio')
-                              .toList();
-                          final subtitleStreams = mediaStreams
-                              .where((s) => s is Map<String, dynamic> && s['Type'] == 'Subtitle')
-                              .toList();
-
-                          final hasAudioChoices = audioStreams.length > 1;
-                          // 字幕只有在 >=2 条时才有真实选择；0/1 条都不需要打断用户
-                          final hasSubtitleChoices = subtitleStreams.length > 1;
-
-                          if (!hasAudioChoices && !hasSubtitleChoices) {
-                            _playVideo(
-                              mediaSourceIndex: index,
-                              audioStreamIndex: _resolveDefaultAudioIndex(source, audioStreams),
-                              subtitleStreamIndex: _resolveDefaultSubtitleIndex(source, subtitleStreams),
-                            );
-                            return;
-                          }
-
-                          _showStreamSelectionDialog(source, index);
                         },
                         child: Padding(
                           padding: const EdgeInsets.all(12),
@@ -823,6 +808,8 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                     );
                   },
                 ),
+                const SizedBox(height: 12),
+                _buildSubtitlePreferenceSection(),
                 const SizedBox(height: 24),
               ],
               
@@ -996,6 +983,81 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
       }
     }
     return 0;
+  }
+
+  void _initializeStreamSelections(Map<String, dynamic> details) {
+    final mediaSources = details['MediaSources'];
+    if (mediaSources is! List) return;
+    _selectedAudioStreamBySource.clear();
+    _selectedSubtitleStreamBySource.clear();
+
+    for (var i = 0; i < mediaSources.length; i++) {
+      final source = mediaSources[i];
+      if (source is! Map<String, dynamic>) continue;
+      final mediaStreams = source['MediaStreams'] as List? ?? const [];
+      final audioStreams = mediaStreams
+          .where((s) => s is Map<String, dynamic> && s['Type'] == 'Audio')
+          .toList();
+      final subtitleStreams = mediaStreams
+          .where((s) => s is Map<String, dynamic> && s['Type'] == 'Subtitle')
+          .toList();
+
+      _selectedAudioStreamBySource[i] = _resolveDefaultAudioIndex(source, audioStreams);
+      _selectedSubtitleStreamBySource[i] =
+          _resolveDefaultSubtitleIndex(source, subtitleStreams) ?? -1;
+    }
+  }
+
+  Widget _buildSubtitlePreferenceSection() {
+    if (_videoDetails == null) return const SizedBox.shrink();
+    final mediaSources = _videoDetails!['MediaSources'];
+    if (mediaSources is! List || mediaSources.isEmpty) return const SizedBox.shrink();
+
+    final source = mediaSources[_currentMediaSourceIndex];
+    if (source is! Map<String, dynamic>) return const SizedBox.shrink();
+    final subtitleStreams = (source['MediaStreams'] as List? ?? const [])
+        .where((s) => s is Map<String, dynamic> && s['Type'] == 'Subtitle')
+        .cast<Map<String, dynamic>>()
+        .toList();
+    if (subtitleStreams.isEmpty) return const SizedBox.shrink();
+
+    final currentSelected = _selectedSubtitleStreamBySource[_currentMediaSourceIndex] ?? -1;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '默认字幕（进入播放前生效）',
+          style: Theme.of(context).textTheme.titleSmall,
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            ChoiceChip(
+              label: const Text('关闭字幕'),
+              selected: currentSelected == -1,
+              onSelected: (_) {
+                setState(() {
+                  _selectedSubtitleStreamBySource[_currentMediaSourceIndex] = -1;
+                });
+              },
+            ),
+            for (final stream in subtitleStreams)
+              ChoiceChip(
+                label: Text(stream['DisplayTitle']?.toString() ?? '字幕 ${stream['Index']}'),
+                selected: currentSelected == stream['Index'],
+                onSelected: (_) {
+                  setState(() {
+                    _selectedSubtitleStreamBySource[_currentMediaSourceIndex] =
+                        stream['Index'] as int? ?? -1;
+                  });
+                },
+              ),
+          ],
+        ),
+      ],
+    );
   }
 
   String get _currentMediaSourceLabel {

@@ -213,6 +213,7 @@ class EmbyApiService {
     final mediaSource = mediaSources[mediaSourceIndex ?? 0];
     final sourceId = mediaSource['Id'];
     final container = mediaSource['Container'];
+    final mediaStreams = mediaSource['MediaStreams'] as List? ?? const [];
     
     // 构建直接流URL
     final streamUrl = '$baseUrl/Videos/$itemId/stream';
@@ -223,15 +224,39 @@ class EmbyApiService {
       'Container': container,
       'AudioCodec': 'aac,mp3,ac3',
       'VideoCodec': 'h264,hevc,h265',
-      'SubtitleMethod': subtitleMethod,
     };
 
-    if (audioStreamIndex != null) {
+    final hasAudioStreamIndex = mediaStreams.any(
+      (s) => s is Map<String, dynamic> &&
+          s['Type']?.toString().toLowerCase() == 'audio' &&
+          s['Index'] == audioStreamIndex,
+    );
+    if (audioStreamIndex != null && hasAudioStreamIndex) {
       params['AudioStreamIndex'] = audioStreamIndex.toString();
     }
 
-    if (subtitleStreamIndex != null) {
+    final hasSubtitleStreamIndex = mediaStreams.any(
+      (s) => s is Map<String, dynamic> &&
+          s['Type']?.toString().toLowerCase() == 'subtitle' &&
+          s['Index'] == subtitleStreamIndex,
+    );
+    if (subtitleStreamIndex != null && subtitleStreamIndex >= 0 && hasSubtitleStreamIndex) {
+      if (subtitleMethod.isNotEmpty) {
+        params['SubtitleMethod'] = subtitleMethod;
+      }
       params['SubtitleStreamIndex'] = subtitleStreamIndex.toString();
+    } else if (subtitleStreamIndex != null && subtitleStreamIndex >= 0 && !hasSubtitleStreamIndex) {
+      Logger.w(
+        '字幕索引不在当前媒体源中，已回退到默认字幕策略: subtitleIndex=$subtitleStreamIndex, sourceId=$sourceId',
+        _tag,
+      );
+    } else if (subtitleMethod.toLowerCase() == 'none') {
+      // 某些服务端/媒体组合在 direct stream 下不接受 SubtitleMethod=None，
+      // 这里不传字幕参数，交给服务端默认关闭/不加载字幕策略。
+      Logger.d(
+        '请求关闭字幕：跳过 SubtitleMethod 参数以避免媒体打开失败, sourceId=$sourceId',
+        _tag,
+      );
     }
     
     final uri = Uri.parse(streamUrl).replace(queryParameters: params);

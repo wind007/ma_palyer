@@ -284,7 +284,10 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       _currentVersionLabel = _buildVersionLabel(mediaSource);
       
       _currentAudioStreamIndex = widget.initialAudioStreamIndex ?? mediaSource['DefaultAudioStreamIndex'];
-      _currentSubtitleStreamIndex = widget.initialSubtitleStreamIndex ?? mediaSource['DefaultSubtitleStreamIndex'];
+      _currentSubtitleStreamIndex = _resolveInitialSubtitleIndex(
+        preferredIndex: widget.initialSubtitleStreamIndex,
+        mediaSource: mediaSource,
+      );
       
       Logger.d("音频流数量: ${_audioStreams?.length}, 字幕流数量: ${_subtitleStreams?.length}", _tag);
       Logger.d("当前音频流: $_currentAudioStreamIndex, 当前字幕流: $_currentSubtitleStreamIndex", _tag);
@@ -293,7 +296,11 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         widget.itemId,
         mediaSourceIndex: _currentMediaSourceIndex,
         audioStreamIndex: _currentAudioStreamIndex,
-        subtitleStreamIndex: _currentSubtitleStreamIndex,
+        subtitleStreamIndex:
+            (_currentSubtitleStreamIndex != null && _currentSubtitleStreamIndex! >= 0)
+                ? _currentSubtitleStreamIndex
+                : null,
+        subtitleMethod: _resolveInitialSubtitleMethod(),
       );
       if (url.isEmpty) {
         Logger.e("获取播放地址失败：地址为空", _tag);
@@ -326,6 +333,9 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       }
 
       // 设置初始位置和开始播放
+      if (_currentSubtitleStreamIndex != null && _currentSubtitleStreamIndex! >= 0) {
+        await _applySubtitleSelection(_currentSubtitleStreamIndex!);
+      }
       if (!widget.fromStart && position > 0) {
         Logger.d("设置初始播放位置: ${position ~/ 10}微秒", _tag);
         await _controller?.seekTo(Duration(microseconds: (position ~/ 10)));
@@ -2024,7 +2034,10 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         subtitleStreams.any((s) => s['Index'] == _currentSubtitleStreamIndex)) {
       nextSubtitleIndex = _currentSubtitleStreamIndex!;
     } else {
-      nextSubtitleIndex = targetSource['DefaultSubtitleStreamIndex'] ?? -1;
+      nextSubtitleIndex = _resolveInitialSubtitleIndex(
+        preferredIndex: null,
+        mediaSource: targetSource,
+      );
     }
 
     final currentPosition = _controller?.value.position;
@@ -2224,32 +2237,127 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
 
   Future<void> _switchSubtitleStream(int index) async {
     Logger.i("切换字幕流: $index", _tag);
+    if (_isControllerSwitching) {
+      Logger.w("正在切换播放源，忽略重复操作", _tag);
+      return;
+    }
     try {
       if (_playbackInfo == null) {
         Logger.e("无法切换字幕：播放信息为空", _tag);
         return;
       }
-
-      if (index == -1) {
-        // 关闭字幕
-        setState(() {
-          _currentSubtitleStreamIndex = -1;
-        });
-        await _disableSubtitleSafely();
-        Logger.i("字幕已关闭", _tag);
+      if (index < 0) {
+        await _switchSubtitleStreamByRebuild(index);
         return;
       }
 
-      // 获取字幕 URL
-      await _applySubtitleSelection(index);
+      // 先尝试外挂字幕注入，兼容性更好；失败再回退重建流。
       setState(() {
         _currentSubtitleStreamIndex = index;
       });
-
-      Logger.i("字幕切换完成", _tag);
-    } catch (e) {
-      Logger.e("切换字幕失败", _tag, e);
+      await _applySubtitleSelection(index);
+      final activeTracks = _controller?.getActiveSubtitleTracks() ?? const [];
+      if (activeTracks.isEmpty) {
+        Logger.w("外挂字幕未激活，回退重建播放流切换字幕", _tag);
+        await _switchSubtitleStreamByRebuild(index);
+      } else {
+        Logger.i("字幕切换完成（外挂字幕）", _tag);
+      }
+    } catch (e, stackTrace) {
+      Logger.e("切换字幕失败", _tag, e, stackTrace);
     }
+  }
+
+  Future<void> _switchSubtitleStreamByRebuild(int index) async {
+    final session = ++_switchSession;
+    _isControllerSwitching = true;
+    try {
+      final currentPosition = _controller?.value.position;
+      final wasPlaying = _controller?.value.isPlaying ?? false;
+      final targetSubtitleIndex = index >= 0 ? index : -1;
+
+      final url = await widget.embyApi.getPlaybackUrl(
+        widget.itemId,
+        mediaSourceIndex: _currentMediaSourceIndex,
+        audioStreamIndex: _currentAudioStreamIndex,
+        subtitleStreamIndex: targetSubtitleIndex >= 0 ? targetSubtitleIndex : null,
+        subtitleMethod: targetSubtitleIndex >= 0 ? 'Embed' : 'None',
+      );
+      if (url.isEmpty) {
+        Logger.e("切换字幕失败：播放地址为空", _tag);
+        return;
+      }
+
+      final newController = VideoPlayerController.networkUrl(
+        Uri.parse(url),
+        videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+      );
+      await newController.initialize();
+      if (!mounted || session != _switchSession) {
+        await newController.dispose();
+        return;
+      }
+
+      final oldController = _controller;
+      setState(() {
+        _controller = newController;
+        _currentSubtitleStreamIndex = targetSubtitleIndex;
+      });
+
+      await _controller?.setVolume(_currentVolume);
+      await _controller?.setPlaybackSpeed(_playbackSpeed);
+      if (currentPosition != null) {
+        await _controller?.seekTo(currentPosition);
+      }
+      if (wasPlaying) {
+        await _controller?.play();
+      }
+
+      oldController?.removeListener(_onPlayerStateChanged);
+      oldController?.removeListener(_onVideoControllerValueChanged);
+      await oldController?.dispose();
+
+      _controller?.addListener(_onPlayerStateChanged);
+      _addVideoListeners();
+      Logger.i("字幕切换完成: $targetSubtitleIndex", _tag);
+    } finally {
+      _isControllerSwitching = false;
+    }
+  }
+
+  int _resolveInitialSubtitleIndex({
+    required int? preferredIndex,
+    required Map<String, dynamic> mediaSource,
+  }) {
+    if (preferredIndex != null) return preferredIndex;
+
+    final defaultIndex = mediaSource['DefaultSubtitleStreamIndex'];
+    if (defaultIndex is int) return defaultIndex;
+
+    final subtitleStreams = mediaSource['MediaStreams']
+        ?.where((s) => s['Type'] == 'Subtitle')
+        ?.toList();
+    if (subtitleStreams is List && subtitleStreams.isNotEmpty) {
+      final first = subtitleStreams.first;
+      if (first is Map<String, dynamic> && first['Index'] is int) {
+        return first['Index'] as int;
+      }
+    }
+    return -1;
+  }
+
+  String _resolveInitialSubtitleMethod() {
+    final subtitleIndex = _currentSubtitleStreamIndex;
+    if (subtitleIndex != null && subtitleIndex >= 0) {
+      return 'Embed';
+    }
+
+    // 只有外部明确传了 -1（用户主动关闭字幕）才强制禁用字幕，
+    // 否则交给服务端默认策略，避免部分服务端在初始化时拒绝 None。
+    if (widget.initialSubtitleStreamIndex == -1) {
+      return 'None';
+    }
+    return '';
   }
 
   Future<void> _playNextEpisode() async {
