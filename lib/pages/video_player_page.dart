@@ -1,6 +1,7 @@
 // ignore_for_file: unused_field
 
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fvp/fvp.dart';
@@ -183,6 +184,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   bool _showPlaylist = false;
   ScrollController _playlistScrollController = ScrollController();
   bool _isMobile = false;
+  bool _isDesktop = false;
   bool _isTV = false;
   
   // TV 端焦点相关
@@ -222,10 +224,16 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // 在这里初始化平台相关变量
+    // 在这里初始化平台相关变量，避免仅依赖宽度导致横屏手机误判。
+    final platform = Theme.of(context).platform;
     final width = MediaQuery.of(context).size.width;
-    _isMobile = width < 600;
-    _isTV = Theme.of(context).platform == TargetPlatform.android && width > 960;
+    final shortestSide = MediaQuery.of(context).size.shortestSide;
+    _isDesktop = !kIsWeb &&
+        (platform == TargetPlatform.windows ||
+            platform == TargetPlatform.linux ||
+            platform == TargetPlatform.macOS);
+    _isTV = platform == TargetPlatform.android && width >= 960 && shortestSide >= 540;
+    _isMobile = (platform == TargetPlatform.android || platform == TargetPlatform.iOS) && !_isTV;
     
     // 确保横屏
     _setLandscape();
@@ -1161,8 +1169,22 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     setState(() {
       _showPlaylist = !_showPlaylist;
       if (_showPlaylist) {
-        _focusedEpisodeIndex = _currentEpisodeIndex;
+        final currentIndex = _currentEpisodeIndex;
+        if (_episodeList != null && _episodeList!.isNotEmpty) {
+          _focusedEpisodeIndex = currentIndex >= 0 ? currentIndex : 0;
+        } else {
+          _focusedEpisodeIndex = null;
+        }
         _scrollToCurrentEpisode();
+        if (_isTV) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && _showPlaylist) {
+              _playlistFocusNode.requestFocus();
+            }
+          });
+        }
+      } else if (_isTV) {
+        _playlistFocusNode.unfocus();
       }
     });
   }
@@ -1186,6 +1208,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       return _buildLoadingView();
     }
 
+    final enableTouchGestures = _isMobile && !_isDesktop;
     return KeyboardListener(
       focusNode: _keyboardFocusNode,
       autofocus: true,
@@ -1214,72 +1237,80 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       },
       child: GestureDetector(
         onTap: _toggleControls,
-        onDoubleTapDown: (details) {
-          final screenWidth = MediaQuery.of(context).size.width;
-          if (details.globalPosition.dx < screenWidth / 3) {
-            _seekRelative(const Duration(seconds: -10));
-            _showSeekAnimation(-10);
-          } else if (details.globalPosition.dx > screenWidth * 2 / 3) {
-            _seekRelative(const Duration(seconds: 10));
-            _showSeekAnimation(10);
-          }
-        },
-        onHorizontalDragStart: onHorizontalDragStart,
-        onHorizontalDragUpdate: onHorizontalDragUpdate,
-        onHorizontalDragEnd: onHorizontalDragEnd,
-        onVerticalDragStart: (details) {
-          final screenWidth = MediaQuery.of(context).size.width;
-          _dragStartY = details.globalPosition.dy;
-          
-          if (details.globalPosition.dx < screenWidth / 2) {
-            _isDraggingBrightness = true;
-            setState(() {
-              _showBrightnessIndicator = true;
-            });
-          } else {
-            _isDraggingVolume = true;
-            setState(() {
-              _showVolumeIndicator = true;
-            });
-          }
-        },
-        onVerticalDragUpdate: (details) {
-          if (_dragStartY == null) return;
-          
-          final height = MediaQuery.of(context).size.height;
-          final dy = _dragStartY! - details.globalPosition.dy;
-          final percentage = dy / height;
-          
-          if (_isDraggingVolume) {
-            setState(() {
-              _currentVolume = (_currentVolume + percentage).clamp(0.0, 1.0);
-              _controller?.setVolume(_currentVolume);
-            });
-          } else if (_isDraggingBrightness) {
-            setState(() {
-              _applyBrightness(_brightness + percentage);
-              SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
-                statusBarBrightness: _brightness > 0.5 ? Brightness.dark : Brightness.light,
-              ));
-            });
-          }
-          
-          _dragStartY = details.globalPosition.dy;
-        },
-        onVerticalDragEnd: (_) {
-          _dragStartY = null;
-          _isDraggingVolume = false;
-          _isDraggingBrightness = false;
-          
-          Future.delayed(const Duration(seconds: 1), () {
-            if (mounted) {
-              setState(() {
-                _showVolumeIndicator = false;
-                _showBrightnessIndicator = false;
-              });
-            }
-          });
-        },
+        onDoubleTapDown: enableTouchGestures
+            ? (details) {
+                final screenWidth = MediaQuery.of(context).size.width;
+                if (details.globalPosition.dx < screenWidth / 3) {
+                  _seekRelative(const Duration(seconds: -10));
+                  _showSeekAnimation(-10);
+                } else if (details.globalPosition.dx > screenWidth * 2 / 3) {
+                  _seekRelative(const Duration(seconds: 10));
+                  _showSeekAnimation(10);
+                }
+              }
+            : null,
+        onHorizontalDragStart: enableTouchGestures ? onHorizontalDragStart : null,
+        onHorizontalDragUpdate: enableTouchGestures ? onHorizontalDragUpdate : null,
+        onHorizontalDragEnd: enableTouchGestures ? onHorizontalDragEnd : null,
+        onVerticalDragStart: enableTouchGestures
+            ? (details) {
+                final screenWidth = MediaQuery.of(context).size.width;
+                _dragStartY = details.globalPosition.dy;
+
+                if (details.globalPosition.dx < screenWidth / 2) {
+                  _isDraggingBrightness = true;
+                  setState(() {
+                    _showBrightnessIndicator = true;
+                  });
+                } else {
+                  _isDraggingVolume = true;
+                  setState(() {
+                    _showVolumeIndicator = true;
+                  });
+                }
+              }
+            : null,
+        onVerticalDragUpdate: enableTouchGestures
+            ? (details) {
+                if (_dragStartY == null) return;
+
+                final height = MediaQuery.of(context).size.height;
+                final dy = _dragStartY! - details.globalPosition.dy;
+                final percentage = dy / height;
+
+                if (_isDraggingVolume) {
+                  setState(() {
+                    _currentVolume = (_currentVolume + percentage).clamp(0.0, 1.0);
+                    _controller?.setVolume(_currentVolume);
+                  });
+                } else if (_isDraggingBrightness) {
+                  setState(() {
+                    _applyBrightness(_brightness + percentage);
+                    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
+                      statusBarBrightness: _brightness > 0.5 ? Brightness.dark : Brightness.light,
+                    ));
+                  });
+                }
+
+                _dragStartY = details.globalPosition.dy;
+              }
+            : null,
+        onVerticalDragEnd: enableTouchGestures
+            ? (_) {
+                _dragStartY = null;
+                _isDraggingVolume = false;
+                _isDraggingBrightness = false;
+
+                Future.delayed(const Duration(seconds: 1), () {
+                  if (mounted) {
+                    setState(() {
+                      _showVolumeIndicator = false;
+                      _showBrightnessIndicator = false;
+                    });
+                  }
+                });
+              }
+            : null,
         child: Stack(
           children: [
             Center(
@@ -2671,7 +2702,11 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     if (event is KeyDownEvent) {
       switch (event.logicalKey) {
         case LogicalKeyboardKey.select:
-          if (_showPlaylist && _focusedEpisodeIndex != null) {
+          if (_showPlaylist &&
+              _focusedEpisodeIndex != null &&
+              _episodeList != null &&
+              _focusedEpisodeIndex! >= 0 &&
+              _focusedEpisodeIndex! < _episodeList!.length) {
             final episode = _episodeList![_focusedEpisodeIndex!];
             _onEpisodeSelected(episode);
           } else {
@@ -2699,10 +2734,15 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
           if (!_showPlaylist) {
             _seekRelative(const Duration(seconds: 10));
             _showSeekAnimation(10);
+          } else if (!_isPlaylistFocused) {
+            _playlistFocusNode.requestFocus();
           }
           break;
         case LogicalKeyboardKey.arrowUp:
-          if (_showPlaylist && _isPlaylistFocused) {
+          if (_showPlaylist &&
+              _isPlaylistFocused &&
+              _episodeList != null &&
+              _episodeList!.isNotEmpty) {
             setState(() {
               _focusedEpisodeIndex = (_focusedEpisodeIndex ?? 0) - 1;
               if (_focusedEpisodeIndex! < 0) {
@@ -2715,7 +2755,10 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
           }
           break;
         case LogicalKeyboardKey.arrowDown:
-          if (_showPlaylist && _isPlaylistFocused) {
+          if (_showPlaylist &&
+              _isPlaylistFocused &&
+              _episodeList != null &&
+              _episodeList!.isNotEmpty) {
             setState(() {
               _focusedEpisodeIndex = (_focusedEpisodeIndex ?? -1) + 1;
               if (_focusedEpisodeIndex! >= _episodeList!.length) {
