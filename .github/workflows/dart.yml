@@ -10,9 +10,6 @@ on:
 permissions:
   contents: read
 
-env:
-  FLUTTER_VERSION: "3.24.5"
-
 jobs:
   build-android-apk:
     name: Build Android APK
@@ -30,7 +27,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
           cache: true
 
       - name: Flutter pub get
@@ -56,7 +53,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
           cache: true
 
       - name: Enable Windows desktop

@@ -85,6 +85,12 @@ class _MyAppState extends State<MyApp> {
         ),
         pageTransitionsTheme: _desktopPageTransitions,
         useMaterial3: true,
+        cardTheme: CardThemeData(
+          elevation: 2,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
         appBarTheme: const AppBarTheme(
           centerTitle: true,
           elevation: 0,
@@ -97,6 +103,12 @@ class _MyAppState extends State<MyApp> {
         ),
         pageTransitionsTheme: _desktopPageTransitions,
         useMaterial3: true,
+        cardTheme: CardThemeData(
+          elevation: 2,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
         appBarTheme: const AppBarTheme(
           centerTitle: true,
           elevation: 0,
