@@ -2,6 +2,10 @@
 
 `ma_player` 是一个基于 Flutter 的 Emby 客户端播放器项目，使用 `video_player + fvp` 作为核心播放能力，支持多端（Android / iOS / Windows）媒体播放与基础媒体库浏览。
 
+## 开发说明
+
+本项目主要使用 [Cursor](https://www.cursor.com/) 进行开发与协作。
+
 ## 项目特性
 
 - Emby 服务器管理：支持添加、保存与切换服务器信息。
