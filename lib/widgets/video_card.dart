@@ -117,6 +117,7 @@ class _VideoCardState extends State<VideoCard> {
                                 ? Image.network(
                                     imageUrl,
                                     headers: {
+                                      'User-Agent': ServerManager.effectiveUserAgent,
                                       'X-Emby-Token': widget.server.accessToken,
                                     },
                                     fit: BoxFit.cover,

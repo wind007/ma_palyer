@@ -41,11 +41,8 @@ class EmbyApiService {
       // 准备请求头
       final headers = {
         'Content-Type': 'application/json',
-        'X-Emby-Client': 'ma_player',
-        'X-Emby-Device-Name': 'ma_player',
-        'X-Emby-Device-Id': 'ma_player',
-        'X-Emby-Client-Version': '1.0.0',
-        'X-Emby-Language': 'zh-cn',
+        'User-Agent': ServerManager.effectiveUserAgent,
+        ...ServerManager.effectiveEmbyHeaders,
       };
 
       // 如果需要认证且有token，添加token

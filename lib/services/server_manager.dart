@@ -46,6 +46,18 @@ class ServerInfo {
 class ServerManager {
   static const String _tag = "ServerManager";
   static const _serversKey = 'emby_servers';
+  static const _userAgentKey = 'custom_user_agent';
+  static const _embyHeadersKey = 'custom_emby_headers';
+  static const String defaultUserAgent = 'ma_player/1.0.0';
+  static const Map<String, String> defaultEmbyHeaders = {
+    'X-Emby-Client': 'ma_player',
+    'X-Emby-Device-Name': 'ma_player',
+    'X-Emby-Device-Id': 'ma_player',
+    'X-Emby-Client-Version': '1.0.0',
+    'X-Emby-Language': 'zh-cn',
+  };
+  static String? _customUserAgent;
+  static Map<String, String> _customEmbyHeaders = {};
   late SharedPreferences _prefs;
   List<ServerInfo> _servers = [];
   bool _initialized = false;
@@ -67,6 +79,16 @@ class ServerManager {
     
     try {
       _prefs = await SharedPreferences.getInstance();
+      _customUserAgent = _prefs.getString(_userAgentKey);
+      final rawEmbyHeaders = _prefs.getString(_embyHeadersKey);
+      if (rawEmbyHeaders != null && rawEmbyHeaders.isNotEmpty) {
+        final decoded = jsonDecode(rawEmbyHeaders);
+        if (decoded is Map) {
+          _customEmbyHeaders = decoded.map(
+            (key, value) => MapEntry(key.toString(), value.toString()),
+          );
+        }
+      }
       await loadServers();
       _initialized = true;
       Logger.i("ServerManager初始化完成，已加载${_servers.length}个服务器", _tag);
@@ -75,6 +97,74 @@ class ServerManager {
       _initialized = false;
       rethrow;
     }
+  }
+
+  static String get effectiveUserAgent {
+    final custom = _customUserAgent?.trim();
+    if (custom == null || custom.isEmpty) {
+      return defaultUserAgent;
+    }
+    return custom;
+  }
+
+  static Map<String, String> get effectiveEmbyHeaders {
+    final merged = <String, String>{...defaultEmbyHeaders};
+    for (final entry in _customEmbyHeaders.entries) {
+      if (entry.value.trim().isEmpty) continue;
+      merged[entry.key] = entry.value.trim();
+    }
+    return merged;
+  }
+
+  Future<void> setCustomUserAgent(String? value) async {
+    final normalized = value?.trim();
+    if (normalized == null || normalized.isEmpty) {
+      await _prefs.remove(_userAgentKey);
+      _customUserAgent = null;
+      Logger.i("已清除自定义 User-Agent，回退默认: $defaultUserAgent", _tag);
+      return;
+    }
+
+    await _prefs.setString(_userAgentKey, normalized);
+    _customUserAgent = normalized;
+    Logger.i("已设置自定义 User-Agent: $normalized", _tag);
+  }
+
+  String? get customUserAgent => _customUserAgent;
+
+  Map<String, String> get customEmbyHeaders => Map.unmodifiable(_customEmbyHeaders);
+
+  Future<void> setCustomEmbyHeader(String key, String? value) async {
+    final normalizedKey = key.trim();
+    if (normalizedKey.isEmpty) return;
+
+    final normalizedValue = value?.trim();
+    if (normalizedValue == null || normalizedValue.isEmpty) {
+      _customEmbyHeaders.remove(normalizedKey);
+    } else {
+      _customEmbyHeaders[normalizedKey] = normalizedValue;
+    }
+    await _prefs.setString(_embyHeadersKey, jsonEncode(_customEmbyHeaders));
+    Logger.i("已更新自定义 Emby Header: $normalizedKey", _tag);
+  }
+
+  Future<void> setCustomEmbyHeaders(Map<String, String>? headers) async {
+    if (headers == null || headers.isEmpty) {
+      _customEmbyHeaders.clear();
+      await _prefs.remove(_embyHeadersKey);
+      Logger.i("已清除所有自定义 Emby Headers，回退默认值", _tag);
+      return;
+    }
+
+    _customEmbyHeaders = {};
+    for (final entry in headers.entries) {
+      final key = entry.key.trim();
+      final value = entry.value.trim();
+      if (key.isEmpty || value.isEmpty) continue;
+      _customEmbyHeaders[key] = value;
+    }
+    await _prefs.setString(_embyHeadersKey, jsonEncode(_customEmbyHeaders));
+    Logger.i("已批量更新自定义 Emby Headers: ${_customEmbyHeaders.length} 项", _tag);
   }
 
   // 加载服务器列表

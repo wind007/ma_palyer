@@ -451,7 +451,10 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                   return imageUrl != null && imageUrl.startsWith('http')
                       ? Image.network(
                           imageUrl,
-                headers: {'X-Emby-Token': widget.server.accessToken},
+                headers: {
+                  'User-Agent': ServerManager.effectiveUserAgent,
+                  'X-Emby-Token': widget.server.accessToken,
+                },
                           width: double.infinity,
                           height: 400,
                 fit: BoxFit.cover,

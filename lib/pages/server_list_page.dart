@@ -5,6 +5,7 @@ import '../utils/logger.dart';
 import '../widgets/adaptive_app_bar.dart';
 import 'add_server_page.dart';
 import 'edit_server_page.dart';
+import 'request_headers_settings_page.dart';
 import 'video_list_page.dart';
 
 class ServerListPage extends StatefulWidget {
@@ -266,7 +267,19 @@ class _ServerListPageState extends State<ServerListPage> {
               ThemeManager().toggleTheme();
             },
             tooltip: '切换主题',
-          )
+          ),
+          IconButton(
+            icon: const Icon(Icons.settings),
+            tooltip: '请求头设置',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const RequestHeadersSettingsPage(),
+                ),
+              );
+            },
+          ),
         ],
       ),
       body: _servers.isEmpty
