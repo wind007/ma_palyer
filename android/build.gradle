@@ -1,6 +1,5 @@
-ext.kotlin_version = '2.0.21'
-
 buildscript {
+    ext.kotlin_version = '2.0.21'
     repositories {
         google()
         mavenCentral()
@@ -11,6 +10,9 @@ buildscript {
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
     }
 }
+
+// buildscript 内的 ext 不会自动出现在子工程引用的 rootProject.ext，这里同步一份
+ext.kotlin_version = buildscript.ext.kotlin_version
 
 allprojects {
     repositories {
