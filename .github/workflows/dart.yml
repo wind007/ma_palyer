@@ -50,23 +50,16 @@ jobs:
       - name: Prepare fvp Flutter SDK path for CI
         shell: bash
         run: |
-          FLUTTER_SEMVER="$(flutter --version | head -n 1 | sed -E 's/.*Flutter ([0-9]+\.[0-9]+\.[0-9]+).*/\1/')"
-          FVP_FLUTTER_SDK_SHIM="${RUNNER_TEMP}/fvp-flutter-sdk"
-          mkdir -p "${FVP_FLUTTER_SDK_SHIM}"
-          printf '%s\n' "${FLUTTER_SEMVER}" > "${FVP_FLUTTER_SDK_SHIM}/version"
+          if [ ! -f "${FLUTTER_ROOT}/version" ]; then
+            FLUTTER_SEMVER="$(flutter --version | head -n 1 | sed -E 's/.*Flutter ([0-9]+\.[0-9]+\.[0-9]+).*/\1/')"
+            echo "${FLUTTER_SEMVER}" > "${FLUTTER_ROOT}/version"
+          fi
 
-          shopt -s nullglob
-          FOUND_FVP=0
-          for FVP_ANDROID_DIR in "${PUB_CACHE}"/hosted/*/fvp-*/android; do
+          for FVP_ANDROID_DIR in "${PUB_CACHE}"/hosted/pub.dev/fvp-*/android; do
             if [ -d "${FVP_ANDROID_DIR}" ]; then
-              printf '%s\n' "flutter.sdk=${FVP_FLUTTER_SDK_SHIM}" > "${FVP_ANDROID_DIR}/local.properties"
-              echo "Prepared fvp local.properties: ${FVP_ANDROID_DIR}/local.properties"
-              FOUND_FVP=1
+              printf '%s\n' "flutter.sdk=${FLUTTER_ROOT}" > "${FVP_ANDROID_DIR}/local.properties"
             fi
           done
-          if [ "${FOUND_FVP}" -eq 0 ]; then
-            echo "No fvp android plugin directory found under ${PUB_CACHE}/hosted/*/fvp-*/android"
-          fi
 
       - name: Build release APK
         run: flutter build apk --release
