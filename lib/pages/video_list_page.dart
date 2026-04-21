@@ -10,6 +10,7 @@ import '../utils/logger.dart';
 import './video_list_more_page.dart';
 import '../widgets/video_card.dart';
 import '../widgets/adaptive_app_bar.dart';
+import '../app_route_observer.dart';
 
 class VideoListPage extends StatefulWidget {
   final ServerInfo server;
@@ -20,9 +21,11 @@ class VideoListPage extends StatefulWidget {
   State<VideoListPage> createState() => _VideoListPageState();
 }
 
-class _VideoListPageState extends State<VideoListPage> with SingleTickerProviderStateMixin {
+class _VideoListPageState extends State<VideoListPage>
+    with RouteAware, SingleTickerProviderStateMixin {
   static const String _tag = "VideoList";
   late final EmbyApiService _api;
+  bool _routeAwareSubscribed = false;
   final ScrollController _scrollController = ScrollController();
   late AnimationController _shimmerController;
   
@@ -67,7 +70,30 @@ class _VideoListPageState extends State<VideoListPage> with SingleTickerProvider
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_routeAwareSubscribed) {
+      final route = ModalRoute.of(context);
+      if (route is PageRoute<dynamic>) {
+        appRouteObserver.subscribe(this, route);
+        _routeAwareSubscribed = true;
+      }
+    }
+  }
+
+  @override
+  void didPopNext() {
+    if (_isInitializing || _error != null) return;
+    Logger.i('从子页面返回首页，仅刷新继续观看', _tag);
+    _loadContinueWatching();
+  }
+
+  @override
   void dispose() {
+    if (_routeAwareSubscribed) {
+      appRouteObserver.unsubscribe(this);
+      _routeAwareSubscribed = false;
+    }
     Logger.d("释放视频列表页面资源", _tag);
     _scrollController.dispose();
     _shimmerController.dispose();
@@ -224,6 +250,11 @@ class _VideoListPageState extends State<VideoListPage> with SingleTickerProvider
   }
 
   Future<void> _loadContinueWatching() async {
+    if (mounted) {
+      setState(() {
+        _sectionLoading['continue'] = true;
+      });
+    }
     try {
       Logger.d("加载继续观看项目", _tag);
       _isLoadingMore['continue'] = false;

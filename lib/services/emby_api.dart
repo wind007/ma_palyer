@@ -6,6 +6,7 @@ import '../utils/logger.dart';
 
 class EmbyApiService {
   static const String _tag = "EmbyApi";
+  static const int _maxAuthRetryCount = 1;
   String baseUrl;
   String username;
   String password;
@@ -30,6 +31,7 @@ class EmbyApiService {
     dynamic body,
     bool requiresAuth = true,
     bool allowNoContent = false,
+    int authRetryCount = 0,
   }) async {
     try {
       final uri = Uri.parse('$baseUrl$path').replace(
@@ -76,10 +78,15 @@ class EmbyApiService {
 
       // 处理401状态码，token失效时自动重试
       if (response.statusCode == 401 && requiresAuth) {
+        if (authRetryCount >= _maxAuthRetryCount) {
+          throw Exception('认证重试超限: $path');
+        }
         // 清除旧token
         accessToken = null;
         // 重新认证
         await authenticate();
+        // 短暂退避，避免认证异常时高频打满服务端
+        await Future.delayed(const Duration(milliseconds: 300));
         // 重试请求
         return _request(
           path: path,
@@ -88,6 +95,7 @@ class EmbyApiService {
           body: body,
           requiresAuth: requiresAuth,
           allowNoContent: allowNoContent,
+          authRetryCount: authRetryCount + 1,
         );
       }
 

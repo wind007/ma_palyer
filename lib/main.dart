@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'services/server_manager.dart';
 import 'services/theme_manager.dart';
 import 'pages/server_list_page.dart';
+import 'app_route_observer.dart';
 import 'package:fvp/fvp.dart' as fvp;
 import 'utils/http_client.dart';
 import 'package:intl/intl.dart';
@@ -75,6 +76,7 @@ class _MyAppState extends State<MyApp> {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Emby Client',
+      navigatorObservers: [appRouteObserver],
       themeMode: _themeManager.isDarkMode ? ThemeMode.dark : ThemeMode.light,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(

@@ -27,6 +27,8 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
   EmbyApiService? _api;
   Map<String, dynamic>? _tvShowDetails;
   List<dynamic>? _seasons;
+  final Map<int, List<dynamic>> _seasonEpisodes = {};
+  final Set<int> _seasonLoading = <int>{};
   bool _isLoading = true;
   String? _error;
   int _selectedSeasonNumber = 1;
@@ -100,57 +102,20 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
         throw Exception('季列表数据格式错误');
       }
 
-      // 获取每一季的剧集列表
-      final Map<int, List<dynamic>> seasonEpisodes = {};
-      for (var season in seasons) {
-        final seasonId = season['Id'];
-        if (seasonId == null) {
-          Logger.w("跳过无效的季: ${season['Name'] ?? '未知'}", _tag);
-          continue;
-        }
-
-        final indexNumber = season['IndexNumber'];
-        if (indexNumber == null) {
-          Logger.w("跳过缺少季数的季: ${season['Name'] ?? '未知'}", _tag);
-          continue;
-        }
-
-        final seasonNumber = indexNumber is int ? indexNumber : int.tryParse(indexNumber.toString()) ?? 0;
-        if (seasonNumber <= 0) {
-          Logger.w("跳过无效季数的季: ${season['Name'] ?? '未知'}", _tag);
-          continue;
-        }
-
-        try {
-          final episodesResponse = await _api!.getEpisodes(
-            seriesId: tvShowId,
-            seasonId: seasonId,
-            userId: _api!.userId!,
-            fields: 'PrimaryImageAspectRatio,Overview,Path,MediaStreams,MediaSources,IndexNumber,ParentIndexNumber,Type,Status,UserData',
-          );
-
-          if (episodesResponse['Items'] is List) {
-            seasonEpisodes[seasonNumber] = episodesResponse['Items'] as List;
-          } else {
-            Logger.w("季 $seasonNumber 的剧集列表为空或格式错误", _tag);
-            seasonEpisodes[seasonNumber] = [];
-          }
-        } catch (e) {
-          Logger.e("加载季 $seasonNumber 的剧集失败", _tag, e);
-          seasonEpisodes[seasonNumber] = [];
-        }
-      }
-
       Logger.i("电视剧详情加载完成: ${details['Name']}", _tag);
       if (mounted) {
       setState(() {
+          _seasonEpisodes.clear();
+          _seasonLoading.clear();
+          _selectedSeasonNumber = _resolveInitialSeasonNumber(seasons);
           _tvShowDetails = {
             ...details,
-            'Seasons': seasonEpisodes,
+            'Seasons': _seasonEpisodes,
           };
           _seasons = seasons;
         _isLoading = false;
       });
+        _ensureSeasonEpisodesLoaded(_selectedSeasonNumber);
       }
     } catch (e) {
       Logger.e("加载电视剧详情失败", _tag, e);
@@ -160,6 +125,55 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
           _isLoading = false;
         });
       }
+    }
+  }
+
+  int _resolveInitialSeasonNumber(List seasons) {
+    if (seasons.isEmpty) return 1;
+    final sortedSeasons = List<Map<String, dynamic>>.from(seasons)
+      ..sort((a, b) {
+        final aNumber = a['IndexNumber'] is int ? a['IndexNumber'] : int.tryParse(a['IndexNumber'].toString()) ?? 0;
+        final bNumber = b['IndexNumber'] is int ? b['IndexNumber'] : int.tryParse(b['IndexNumber'].toString()) ?? 0;
+        return aNumber.compareTo(bNumber);
+      });
+    final first = sortedSeasons.first['IndexNumber'];
+    return first is int ? first : int.tryParse(first.toString()) ?? 1;
+  }
+
+  Future<void> _ensureSeasonEpisodesLoaded(int seasonNumber) async {
+    if (_api == null || _seasons == null) return;
+    if (_seasonEpisodes.containsKey(seasonNumber) || _seasonLoading.contains(seasonNumber)) {
+      return;
+    }
+    final season = _seasons!.cast<Map<String, dynamic>>().firstWhere(
+      (s) {
+        final value = s['IndexNumber'];
+        final index = value is int ? value : int.tryParse(value.toString()) ?? 0;
+        return index == seasonNumber;
+      },
+      orElse: () => {},
+    );
+    final seasonId = season['Id'];
+    if (seasonId == null) return;
+
+    _seasonLoading.add(seasonNumber);
+    if (mounted) setState(() {});
+    try {
+      final episodesResponse = await _api!.getEpisodes(
+        seriesId: widget.tvShow['Id'],
+        seasonId: seasonId,
+        userId: _api!.userId!,
+        fields: 'PrimaryImageAspectRatio,Overview,Path,MediaStreams,MediaSources,IndexNumber,ParentIndexNumber,Type,Status,UserData',
+      );
+      final episodes = episodesResponse['Items'] is List ? episodesResponse['Items'] as List : <dynamic>[];
+      _seasonEpisodes[seasonNumber] = episodes;
+      _tvShowDetails?['Seasons'] = _seasonEpisodes;
+    } catch (e) {
+      Logger.e("加载季 $seasonNumber 的剧集失败", _tag, e);
+      _seasonEpisodes[seasonNumber] = <dynamic>[];
+    } finally {
+      _seasonLoading.remove(seasonNumber);
+      if (mounted) setState(() {});
     }
   }
 
@@ -222,6 +236,7 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
                     setState(() {
                       _selectedSeasonNumber = seasonNumber;
                     });
+                    _ensureSeasonEpisodesLoaded(seasonNumber);
                   },
                   borderRadius: BorderRadius.circular(20),
                   child: Container(
@@ -308,6 +323,12 @@ class _TvShowDetailPageState extends State<TvShowDetailPage> {
   }
 
   Widget _buildEpisodeList() {
+    if (_seasonLoading.contains(_selectedSeasonNumber)) {
+      return const SizedBox(
+        height: 240,
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
     return SizedBox(
       height: 240,
       child: ScrollConfiguration(

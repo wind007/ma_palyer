@@ -48,7 +48,9 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   // 常量定义
   static const _maxRetries = 3;         // 最大重试次数
   static const _volumeStep = 0.05;      // 音量调节步长
-  static const _progressInterval = 30;   // 进度更新间隔（秒）
+  static const _progressInterval = 60;   // 进度更新间隔（秒）
+  static const _minProgressReportDeltaSeconds = 10; // 最小上报位移阈值
+  static const _ticksPerSecond = Duration.microsecondsPerSecond * 10;
   static const _controlsTimeout = 3;     // 控制栏显示时间（秒）
   static const _indicatorTopPosition = 6.0; // 提示块位置系数（1/6）
   static const _seekButtonSize = 40.0;   // 快进快退按钮大小
@@ -159,6 +161,8 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   bool _isSessionFinalized = false;
   bool _isFinalizingSession = false;
   bool _isNavigatingToEpisode = false;
+  bool _isReportingProgress = false;
+  int? _lastReportedPositionTicks;
 
   // 添加新的状态变量
   Map<String, dynamic>? _playbackInfo;
@@ -648,6 +652,9 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     Logger.v("更新播放进度 - isPaused: $isPaused", _tag);
     try {
       if (_controller == null || !mounted) return;
+      if (_isReportingProgress && !isPaused) {
+        return;
+      }
       final position = _controller!.value.position;
       final duration = _controller!.value.duration;
       final mediaSourceId = _currentMediaSourceId;
@@ -655,21 +662,34 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         Logger.w("更新播放进度失败：缺少有效 MediaSourceId", _tag);
         return;
       }
+      final positionTicks = position.inMicroseconds * 10;
+      final deltaTicks = _lastReportedPositionTicks == null
+          ? null
+          : (positionTicks - _lastReportedPositionTicks!).abs();
+      final minDeltaTicks = _minProgressReportDeltaSeconds * _ticksPerSecond;
+      if (!isPaused && deltaTicks != null && deltaTicks < minDeltaTicks) {
+        return;
+      }
+
+      _isReportingProgress = true;
       await widget.embyApi.updatePlaybackProgress(
         itemId: widget.itemId,
         mediaSourceId: mediaSourceId,
         playSessionId: _playSessionId,
-        positionTicks: position.inMicroseconds * 10,
+        positionTicks: positionTicks,
         isPaused: isPaused,
         audioStreamIndex: _currentAudioStreamIndex,
         subtitleStreamIndex: _currentSubtitleStreamIndex,
         volumeLevel: (_currentVolume * 100).round().clamp(0, 100),
         isMuted: _currentVolume <= 0,
       );
+      _lastReportedPositionTicks = positionTicks;
       _syncCurrentEpisodeProgress(position, duration);
       Logger.v("播放进度更新成功 - 位置: ${position.inSeconds}秒", _tag);
     } catch (e, stackTrace) {
       Logger.e("更新播放进度失败", _tag, e, stackTrace);
+    } finally {
+      _isReportingProgress = false;
     }
   }
 
