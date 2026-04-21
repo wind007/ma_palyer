@@ -36,6 +36,16 @@ jobs:
       - name: Flutter pub get
         run: flutter pub get
 
+      - name: Generate Android local.properties for CI
+        run: |
+          cat > android/local.properties <<EOF
+          sdk.dir=${ANDROID_SDK_ROOT}
+          flutter.sdk=${FLUTTER_ROOT}
+          flutter.buildMode=release
+          flutter.versionName=1.0.0
+          flutter.versionCode=1
+          EOF
+
       - name: Build release APK
         run: flutter build apk --release
 
