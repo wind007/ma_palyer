@@ -1626,7 +1626,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          '${_playbackSpeed}x',
+                          _formatPlaybackSpeed(_playbackSpeed),
                           style: _timeTextStyle,
                         ),
                       ],
@@ -1733,11 +1733,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
               for (var speed in [0.5, 0.75, 1.0, 1.25, 1.5, 2.0])
                 InkWell(
                   onTap: () {
-                    Logger.d("设置播放速度: ${speed}x", _tag);
-                    setState(() {
-                      _playbackSpeed = speed;
-                      _controller?.setPlaybackSpeed(speed);
-                    });
+                    _applyPlaybackSpeed(speed);
                     Navigator.pop(context);
                     _startHideControlsTimer();
                   },
@@ -1752,7 +1748,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                           : Colors.transparent,
                     ),
                     child: Text(
-                      '${speed}x',
+                      _formatPlaybackSpeed(speed),
                       style: TextStyle(
                         color: _playbackSpeed == speed
                             ? Colors.red
@@ -1763,11 +1759,123 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                     ),
                   ),
                 ),
+              const Divider(color: Colors.white24, height: 20),
+              InkWell(
+                onTap: () {
+                  Navigator.pop(context);
+                  _showCustomPlaybackSpeedDialog();
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 12,
+                    horizontal: 24,
+                  ),
+                  child: const Text(
+                    '自定义倍速',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  void _showCustomPlaybackSpeedDialog() {
+    final textController = TextEditingController(
+      text: _playbackSpeed.toStringAsFixed(
+        _playbackSpeed.truncateToDouble() == _playbackSpeed ? 0 : 2,
+      ),
+    );
+    const minSpeed = 0.25;
+    const maxSpeed = 8.0;
+    String? errorText;
+    Logger.d("显示自定义倍速输入对话框", _tag);
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: Colors.black87,
+          title: const Text(
+            '自定义倍速',
+            style: TextStyle(color: Colors.white),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: textController,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+                ],
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  labelText: '倍速值',
+                  hintText: '例如 1.15',
+                  helperText: '支持范围 $minSpeed ~ $maxSpeed',
+                  errorText: errorText,
+                  labelStyle: const TextStyle(color: Colors.white70),
+                  hintStyle: const TextStyle(color: Colors.white38),
+                  helperStyle: const TextStyle(color: Colors.white54),
+                  enabledBorder: const UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.white54),
+                  ),
+                  focusedBorder: const UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.redAccent),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('取消'),
+            ),
+            TextButton(
+              onPressed: () {
+                final parsed = double.tryParse(textController.text.trim());
+                if (parsed == null || parsed < minSpeed || parsed > maxSpeed) {
+                  setDialogState(() {
+                    errorText = '请输入 $minSpeed ~ $maxSpeed 之间的数字';
+                  });
+                  return;
+                }
+                final customSpeed = double.parse(parsed.toStringAsFixed(2));
+                _applyPlaybackSpeed(customSpeed);
+                Navigator.pop(context);
+                _startHideControlsTimer();
+              },
+              child: const Text('确定'),
+            ),
+          ],
+        ),
+      ),
+    ).whenComplete(textController.dispose);
+  }
+
+  void _applyPlaybackSpeed(double speed) {
+    Logger.d("设置播放速度: ${_formatPlaybackSpeed(speed)}", _tag);
+    setState(() {
+      _playbackSpeed = speed;
+    });
+    _controller?.setPlaybackSpeed(speed);
+  }
+
+  String _formatPlaybackSpeed(double speed) {
+    final value = speed.truncateToDouble() == speed
+        ? speed.toStringAsFixed(0)
+        : speed.toStringAsFixed(2).replaceFirst(RegExp(r'0+$'), '').replaceFirst(RegExp(r'\.$'), '');
+    return '${value}x';
   }
 
   String _formatDuration(Duration duration) {
