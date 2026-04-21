@@ -1,0 +1,51 @@
+---
+description: 2026-04-21 播放器实时网速估算叠层实现记录（中文）
+alwaysApply: false
+---
+
+# 今日工作记录（实时网速显示）
+
+## 目标
+- 在播放器中提供“实时网速”可视化，先用可落地的估算方案验证体验。
+
+## 背景结论
+- `fvp` / `video_player` 当前公开接口没有直接的“实时下载速率”字段可直接显示。
+- 因此采用“码率 + 缓冲变化”估算方法，在 UI 侧实现可用指标。
+
+## 实现内容
+- 文件：`lib/pages/video_player_page.dart`
+
+### 1) 新增网速采样状态与定时器
+- `Timer? _networkStatsTimer`
+- `double _estimatedNetworkSpeedBps`
+- `Duration? _lastBufferedForSpeed`
+- `Duration? _lastPositionForSpeed`
+
+### 2) 启停逻辑
+- 播放器初始化成功后启动 `_startNetworkStatsTimer()`（1 秒采样）。
+- 页面销毁时在 `_clearTimers()` 中统一 cancel，避免残留任务。
+
+### 3) 估算逻辑
+- 读取当前媒体源 `Bitrate` 作为基准。
+- 每秒计算：
+  - `deltaBufferedMs`（缓冲时长增量）
+  - `deltaPositionMs`（播放消耗时长增量）
+  - `effectiveDeltaMs = deltaBufferedMs + deltaPositionMs`
+- 估算网速：
+  - `estimatedBps = bitrate * (effectiveDeltaMs / 1000)`
+- 结果做上限裁剪与抖动过滤，避免 UI 频繁闪动。
+
+### 4) UI 展示
+- 在播放器顶部栏（版本标签旁）增加：
+  - `网速 xx KB/s` 或 `网速 xx MB/s`
+  - 无有效数据时显示 `网速 --`
+
+## 说明
+- 该值为“估算网速”，用于观察趋势（网络抖动、是否吃满码率），不是底层 socket 精确吞吐。
+- 若后续接入底层统计（若 fvp/mdk 提供稳定字段），可替换为精确值。
+
+## 回归建议
+- 本地文件播放：应长期显示 `--` 或接近 0（无网络下载）。
+- 远程流播放：应随网络/缓冲变化波动。
+- 切换版本后：网速显示应继续更新，不出现卡死。
+- 退出播放器后：无额外定时器日志持续刷出。
