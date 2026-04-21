@@ -37,14 +37,15 @@ jobs:
         run: flutter pub get
 
       - name: Generate Android local.properties for CI
+        shell: bash
         run: |
-          cat > android/local.properties <<EOF
-          sdk.dir=${ANDROID_SDK_ROOT}
-          flutter.sdk=${FLUTTER_ROOT}
-          flutter.buildMode=release
-          flutter.versionName=1.0.0
-          flutter.versionCode=1
-          EOF
+          printf '%s\n' \
+            "sdk.dir=${ANDROID_SDK_ROOT}" \
+            "flutter.sdk=${FLUTTER_ROOT}" \
+            "flutter.buildMode=release" \
+            "flutter.versionName=1.0.0" \
+            "flutter.versionCode=1" \
+            > android/local.properties
 
       - name: Prepare fvp Flutter SDK path for CI
         shell: bash
@@ -54,12 +55,11 @@ jobs:
             echo "${FLUTTER_SEMVER}" > "${FLUTTER_ROOT}/version"
           fi
 
-          FVP_ANDROID_DIR="${PUB_CACHE}/hosted/pub.dev/fvp-0.30.0/android"
-          if [ -d "${FVP_ANDROID_DIR}" ]; then
-            cat > "${FVP_ANDROID_DIR}/local.properties" <<EOF
-            flutter.sdk=${FLUTTER_ROOT}
-            EOF
-          fi
+          for FVP_ANDROID_DIR in "${PUB_CACHE}"/hosted/pub.dev/fvp-*/android; do
+            if [ -d "${FVP_ANDROID_DIR}" ]; then
+              printf '%s\n' "flutter.sdk=${FLUTTER_ROOT}" > "${FVP_ANDROID_DIR}/local.properties"
+            fi
+          done
 
       - name: Build release APK
         run: flutter build apk --release

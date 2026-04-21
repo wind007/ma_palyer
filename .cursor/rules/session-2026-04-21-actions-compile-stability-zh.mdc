@@ -45,14 +45,26 @@ alwaysApply: false
   - `flutter.sdk=${FLUTTER_ROOT}`
 - Android job 中新增 `fvp` 兜底步骤：
   - 缺少 `${FLUTTER_ROOT}/version` 时自动生成版本号文件。
-  - 给 `${PUB_CACHE}/hosted/pub.dev/fvp-0.30.0/android/local.properties` 写入 `flutter.sdk`。
+  - 给 `${PUB_CACHE}/hosted/pub.dev/fvp-*/android/local.properties` 写入 `flutter.sdk`（不再写死插件版本目录）。
 - 增加 `flutter --version` 输出，便于失败时确认真实 SDK 版本。
+
+## 本次明确失误记录（必须避免）
+- 失误 1：把 `settings.gradle` 的 `plugins` 块错误放进 `pluginManagement` 内，导致 Flutter 插件加载链异常。
+  - 后果：`MainActivity.kt` 中 `io.flutter.embedding.android.FlutterActivity` unresolved。
+  - 纠正：严格对齐 Flutter 官方模板层级；`pluginManagement` 仅负责仓库/includeBuild，插件版本声明放顶层 `plugins`。
+- 失误 2：在 workflow 中使用 heredoc（`cat <<EOF`）时保留了缩进，导致 Bash here-document 提前终止并语法报错。
+  - 后果：CI 在准备 `local.properties` 步骤直接中断，未进入真实编译阶段。
+  - 纠正：改用 `printf` 写文件，禁止在 Actions 脚本里继续使用易受缩进影响的 heredoc 写法。
+- 失误 3：`fvp` 目录最初写死为 `fvp-0.30.0`。
+  - 后果：插件小版本变化后兜底步骤可能失效。
+  - 纠正：统一使用通配目录 `fvp-*/android` 处理。
 
 ## 后续执行准则（避免重复犯错）
 - 改动 Android 构建链前，先确认三元组：Flutter / Gradle / AGP / Kotlin 版本兼容。
 - 不在仓库中提交环境绑定文件：`android/local.properties`。
 - 优先以 CI（Linux）日志为准，不以本机 Windows 构建行为作为最终依据。
 - 处理第三方 Flutter 插件（如 `fvp`）时，需先阅读其 `android/build.gradle` 的 SDK 解析逻辑，再改 workflow。
+- workflow shell 片段优先使用 `printf`/显式命令，避免 heredoc 缩进类语法风险。
 
 ## 建议补充
 - 将 Android 构建拆成“快速预检 + release 构建”两阶段，减少每次调试等待。
