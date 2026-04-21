@@ -1,37 +1,37 @@
 ---
-description: Guardrails for dependency, startup, and build safety in this Flutter player project
+description: 此 Flutter 播放器项目中关于依赖、启动与构建安全的护栏规则
 alwaysApply: true
 ---
 
-# Flutter Player Guardrails
+# Flutter 播放器护栏规则
 
-## Dependency changes
-- Do not upgrade/downgrade `fvp` or `video_player` automatically.
-- Before changing media-related dependencies, reproduce the current error first and explain compatibility impact.
-- Ask for confirmation before any dependency upgrade that may trigger native SDK download or toolchain changes.
+## 依赖变更
+- 不要自动升级或降级 `fvp` 或 `video_player`。
+- 在修改媒体相关依赖前，先复现当前错误，并说明兼容性影响。
+- 任何可能触发原生 SDK 下载或工具链变更的依赖升级，都必须先征求确认。
 
-## Startup safety (`lib/main.dart`)
-- Keep `fvp.registerWith(...)` in place unless user explicitly requests refactor.
-- Do not remove or alter global init order (`ensureInitialized`, managers init, then `runApp`) without confirmation.
-- Any change to startup config must include a compile/run verification step.
+## 启动安全（`lib/main.dart`）
+- 保留 `fvp.registerWith(...)`，除非用户明确要求重构。
+- 未经确认，不要移除或更改全局初始化顺序（`ensureInitialized`、各管理器初始化、然后 `runApp`）。
+- 对启动配置的任何修改都必须包含一次编译/运行验证步骤。
 
-## Build artifacts and generated files
-- Never commit or intentionally edit generated folders/files like `.dart_tool/`, `build/`, `**/flutter/ephemeral/`, `GeneratedPluginRegistrant*`.
-- Prefer fixing ignore rules and source code; do not treat generated outputs as source-of-truth.
+## 构建产物与生成文件
+- 绝不要提交或有意编辑生成目录/文件，例如 `.dart_tool/`、`build/`、`**/flutter/ephemeral/`、`GeneratedPluginRegistrant*`。
+- 优先修复忽略规则与源代码；不要把生成产物当作真实来源（source of truth）。
 
-## Safe workflow
-- Reproduce -> identify root cause -> minimal fix -> verify with `flutter pub get` and platform build/run.
-- Avoid destructive commands (`reset --hard`, force cleanup) unless user explicitly asks.
-- If environment/network causes third-party download failures, explain fallback options and ask before risky workaround.
+## 安全工作流
+- 复现问题 -> 定位根因 -> 最小修复 -> 使用 `flutter pub get` 与平台构建/运行进行验证。
+- 除非用户明确要求，否则避免使用破坏性命令（`reset --hard`、强制清理）。
+- 如果环境/网络导致第三方下载失败，先说明备选方案，再在采取高风险绕过方式前征求确认。
 
-## External reference requirements
-- When media playback behavior, stream URLs, subtitles, transcoding, or auth/session logic is unclear, consult Emby API documentation before changing code.
-- When `fvp` behavior/API/native build integration is unclear, inspect `fvp` source code (package source and/or plugin CMake/native bridge) before changing code.
-- For fixes that rely on external docs/source, record what was consulted and why in the response (or project note/changelog when requested), so future changes have traceable rationale.
+## 外部参考要求
+- 当媒体播放行为、流 URL、字幕、转码或鉴权/会话逻辑不明确时，修改代码前先查阅 Emby API 文档。
+- 当 `fvp` 的行为/API/原生构建集成不明确时，修改代码前先检查 `fvp` 源码（包源码和/或插件 CMake/原生桥接实现）。
+- 对依赖外部文档/源码的修复，需要在回复中记录“查阅了什么、为什么查阅”（或按要求记录到项目说明/变更日志），以便后续变更可追溯。
 
-## Reference links (preferred)
-- Emby API docs: `https://dev.emby.media/reference/RestAPI.html`
-- Emby API examples: `https://github.com/MediaBrowser/Emby/wiki/Api`
-- fvp package page: `https://pub.dev/packages/fvp`
-- fvp source repository: `https://github.com/wang-bin/fvp`
-- mdk-sdk wiki (fvp backend details): `https://github.com/wang-bin/mdk-sdk/wiki`
+## 参考链接（优先）
+- Emby API 文档：`https://dev.emby.media/reference/RestAPI.html`
+- Emby API 示例：`https://github.com/MediaBrowser/Emby/wiki/Api`
+- fvp 包页面：`https://pub.dev/packages/fvp`
+- fvp 源码仓库：`https://github.com/wang-bin/fvp`
+- mdk-sdk wiki（fvp 后端细节）：`https://github.com/wang-bin/mdk-sdk/wiki`
