@@ -229,3 +229,30 @@ alwaysApply: false
 - 结果：
   - 连接失败场景下不再白屏，用户可看到明确提示并执行下一步操作。
   - 已对修改文件执行 lint 检查，无新增 lint 错误。
+
+## 追加记录（全平台 UI/播放器视觉焕新）
+- 目标：完成主题模块化、浏览页去硬编码、播放器控制层 tokens 化，并保持播放逻辑不变。
+- 主题模块：
+  - 新增 `lib/theme/app_theme.dart`，提供 `buildAppTheme(...)` 与 `ThemeExtension<PlayerChrome)`。
+  - `main.dart` 改为统一接入 light/dark 主题，保留原有启动顺序与 `fvp.registerWith(...)`。
+- 顶栏与系统状态栏：
+  - `lib/widgets/adaptive_app_bar.dart` 改为根据 `brightness` 动态设置 `SystemUiOverlayStyle`；
+  - `AppBar/SliverAppBar` 前景色与图标色跟随主题，避免深色模式对比错误。
+- 浏览页主题化：
+  - `lib/widgets/video_card.dart` 去除固定浅色与 Apple 字体依赖，标题/占位/进度改为 `ColorScheme/TextTheme`。
+  - `lib/pages/video_list_page.dart` 分区标题、错误态、加载指示、骨架屏颜色改为主题驱动。
+  - `lib/pages/server_list_page.dart` 空状态、按钮、删除色与头像色改为主题色。
+- 播放器视觉统一：
+  - `lib/pages/video_player_page.dart` 将顶部/底部渐变、胶囊控件、对话框选中色等改为读取 `PlayerChrome`。
+  - `lib/widgets/video_progress_slider.dart` 轨道/拇指/高亮由主题强调色驱动，替换固定红色。
+
+## 追加记录（analyze 与 third_party 配置修复）
+- 问题：根目录执行 `flutter analyze` 时，`third_party/flutter_secure_storage_windows` 子包配置引用 `package:very_good_analysis`，在根工程解析不到，导致全仓库分析报错。
+- 处理：
+  - 根 `analysis_options.yaml` 增加 `analyzer.exclude: third_party/**`；
+  - `third_party/flutter_secure_storage_windows/analysis_options.yaml` 改为自包含最小配置，避免依赖子包 dev-only include。
+  - 顺手移除 `lib/pages/video_detail_page.dart` 未使用方法 `_showStreamSelectionDialog`，减少无效告警。
+- 结果：
+  - 全仓库 `flutter analyze` 已不再出现 third_party 相关错误；
+  - 当前剩余均为工程既有 `info` 级提示（默认 analyze 在本环境仍可能返回非 0）；
+  - `flutter build windows --debug` 通过。

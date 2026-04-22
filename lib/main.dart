@@ -9,6 +9,7 @@ import 'package:fvp/fvp.dart' as fvp;
 import 'utils/http_client.dart';
 import 'package:intl/intl.dart';
 import 'package:logging/logging.dart';
+import 'theme/app_theme.dart';
 
 void main() async {
   
@@ -78,41 +79,13 @@ class _MyAppState extends State<MyApp> {
       title: 'Emby Client',
       navigatorObservers: [appRouteObserver],
       themeMode: _themeManager.isDarkMode ? ThemeMode.dark : ThemeMode.light,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.blue,
-          brightness: Brightness.light,
-        ),
+      theme: buildAppTheme(
+        brightness: Brightness.light,
         pageTransitionsTheme: _desktopPageTransitions,
-        useMaterial3: true,
-        cardTheme: CardThemeData(
-          elevation: 2,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-        appBarTheme: const AppBarTheme(
-          centerTitle: true,
-          elevation: 0,
-        ),
       ),
-      darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.blue,
-          brightness: Brightness.dark,
-        ),
+      darkTheme: buildAppTheme(
+        brightness: Brightness.dark,
         pageTransitionsTheme: _desktopPageTransitions,
-        useMaterial3: true,
-        cardTheme: CardThemeData(
-          elevation: 2,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-        appBarTheme: const AppBarTheme(
-          centerTitle: true,
-          elevation: 0,
-        ),
       ),
       home: const ServerListPage(),
     );

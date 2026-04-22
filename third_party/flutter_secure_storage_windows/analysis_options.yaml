@@ -1,1 +1,5 @@
-include: package:very_good_analysis/analysis_options.yaml
+# Vendored Windows 实现：根工程 `analysis_options.yaml` 已将 `third_party/**` 排除在 analyze 之外。
+# 不在此使用 `include: package:very_good_analysis/...`：从应用根目录解析时子包 dev_dependencies 不可用。
+analyzer:
+  exclude:
+    - example/**

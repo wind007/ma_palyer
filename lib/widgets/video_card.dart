@@ -42,6 +42,8 @@ class _VideoCardState extends State<VideoCard> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
     String? imageUrl;
     
     // 按优先级尝试获取不同类型的图片
@@ -124,23 +126,24 @@ class _VideoCardState extends State<VideoCard> {
                                     loadingBuilder: (context, child, loadingProgress) {
                                       if (loadingProgress == null) return child;
                                       return Container(
-                                        color: Colors.grey[200],
+                                        color: colorScheme.surfaceContainerHighest,
                                         child: Center(
                                           child: CircularProgressIndicator(
                                             value: loadingProgress.expectedTotalBytes != null
                                                 ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
                                                 : null,
                                             strokeWidth: 2,
+                                            color: colorScheme.primary,
                                           ),
                                         ),
                                       );
                                     },
                                     errorBuilder: (context, error, stackTrace) {
                                       Logger.e('加载图片失败: $imageUrl', _tag, error);
-                                      return _buildPlaceholder();
+                                      return _buildPlaceholder(context);
                                     },
                                   )
-                                : _buildPlaceholder(),
+                                : _buildPlaceholder(context),
                             ),
                             // 渐变遮罩
                             Positioned.fill(
@@ -174,9 +177,9 @@ class _VideoCardState extends State<VideoCard> {
                                           color: Colors.black38,
                                           borderRadius: BorderRadius.circular(12),
                                         ),
-                                        child: const Icon(
+                                        child: Icon(
                                           Icons.favorite,
-                                          color: Colors.red,
+                                          color: colorScheme.primary,
                                           size: 14,
                                         ),
                                       ),
@@ -246,9 +249,9 @@ class _VideoCardState extends State<VideoCard> {
                                   enableFeedback: true,
                                   excludeFromSemantics: true,
                                   canRequestFocus: false,
-                                  hoverColor: Colors.black12,
-                                  splashColor: Colors.black12,
-                                  highlightColor: Colors.black12,
+                                  hoverColor: colorScheme.onSurface.withAlpha(20),
+                                  splashColor: colorScheme.onSurface.withAlpha(20),
+                                  highlightColor: colorScheme.onSurface.withAlpha(20),
                                 ),
                               ),
                             ),
@@ -266,8 +269,8 @@ class _VideoCardState extends State<VideoCard> {
                             value: widget.video['UserData']?['PlaybackPositionTicks'] /
                                 widget.video['RunTimeTicks'],
                             backgroundColor: Colors.black45,
-                            valueColor: const AlwaysStoppedAnimation<Color>(
-                              Colors.red,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              colorScheme.primary,
                             ),
                             minHeight: 2,
                           ),
@@ -284,16 +287,15 @@ class _VideoCardState extends State<VideoCard> {
                   widget.video['Name'] ?? '未知标题',
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: (textTheme.bodySmall ?? textTheme.bodyMedium!).copyWith(
                     inherit: false,
-                    fontSize: 12.0,
-                    height: 1.3, // 稍微增加行高
+                    fontSize: 12,
+                    height: 1.3,
                     letterSpacing: 0.3,
                     fontWeight: FontWeight.w500,
-                    color: Color(0xff191c20),
+                    color: colorScheme.onSurface,
                     leadingDistribution: TextLeadingDistribution.even,
                     textBaseline: TextBaseline.alphabetic,
-                    fontFamily: '.AppleSystemUIFont',
                   ),
                 ),
               ),
@@ -304,24 +306,26 @@ class _VideoCardState extends State<VideoCard> {
     );
   }
 
-  Widget _buildPlaceholder() {
+  Widget _buildPlaceholder(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
     return Container(
-      color: Colors.grey[300],
+      color: colorScheme.surfaceContainerHighest,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(
+          Icon(
             Icons.image_not_supported_outlined,
             size: 32,
-            color: Colors.black45,
+            color: colorScheme.onSurfaceVariant,
           ),
           const SizedBox(height: 8),
           Padding(
             padding: const EdgeInsets.all(8.0),
             child: Text(
               widget.video['Name'] ?? '未知标题',
-              style: const TextStyle(
-                color: Colors.black54,
+              style: (textTheme.bodySmall ?? textTheme.bodyMedium!).copyWith(
+                color: colorScheme.onSurfaceVariant,
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
               ),
@@ -341,7 +345,7 @@ class _VideoCardState extends State<VideoCard> {
     
     showDialog(
       context: context,
-      builder: (context) => Dialog(
+      builder: (dialogContext) => Dialog(
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: Column(
@@ -353,12 +357,12 @@ class _VideoCardState extends State<VideoCard> {
                       ? Icons.favorite
                       : Icons.favorite_border,
                   color: widget.video['UserData']?['IsFavorite'] == true
-                      ? Colors.red
-                      : null,
+                      ? Theme.of(dialogContext).colorScheme.primary
+                      : Theme.of(dialogContext).colorScheme.onSurfaceVariant,
                 ),
                 title: const Text('收藏'),
                 onTap: () async {
-                  Navigator.pop(context);
+                  Navigator.pop(dialogContext);
                   final isFavorite = widget.video['UserData']?['IsFavorite'] == true;
                   final currentContext = context;
                   try {
@@ -384,12 +388,12 @@ class _VideoCardState extends State<VideoCard> {
                       ? Icons.check_circle
                       : Icons.check_circle_outline,
                   color: widget.video['UserData']?['Played'] == true
-                      ? Colors.green
-                      : null,
+                      ? Theme.of(dialogContext).colorScheme.tertiary
+                      : Theme.of(dialogContext).colorScheme.onSurfaceVariant,
                 ),
                 title: const Text('标记为已播放'),
                 onTap: () async {
-                  Navigator.pop(context);
+                  Navigator.pop(dialogContext);
                   final isPlayed = widget.video['UserData']?['Played'] == true;
                   final currentContext = context;
                   try {

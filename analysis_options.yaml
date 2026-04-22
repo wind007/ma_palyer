@@ -9,6 +9,12 @@
 # packages, and plugins designed to encourage good coding practices.
 include: package:flutter_lints/flutter.yaml
 
+analyzer:
+  exclude:
+    # path 依赖的 vendored 插件自带 example/integration_test 与独立 analysis_options；
+    # 根工程不会安装其子包 dev_dependencies（如 very_good_analysis），全仓库 analyze 会误报。
+    - third_party/**
+
 linter:
   # The lint rules applied to this project can be customized in the
   # section below to disable rules from the `package:flutter_lints/flutter.yaml`

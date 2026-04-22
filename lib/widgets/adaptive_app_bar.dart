@@ -31,16 +31,32 @@ class AdaptiveAppBar extends StatelessWidget implements PreferredSizeWidget {
     this.flexibleSpace,
   });
 
+  SystemUiOverlayStyle _overlayStyle(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+      statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final appBarTheme = theme.appBarTheme;
+    final overlay = _overlayStyle(context);
+    final foreground =
+        appBarTheme.foregroundColor ?? colorScheme.onSurface;
+    final iconTheme =
+        appBarTheme.iconTheme ?? IconThemeData(color: colorScheme.onSurface);
+
     final appBarWidget = AppBar(
       backgroundColor: Colors.transparent,
       elevation: 0,
-      systemOverlayStyle: const SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.dark,
-        statusBarBrightness: Brightness.light,
-      ),
+      foregroundColor: foreground,
+      iconTheme: iconTheme,
+      systemOverlayStyle: overlay,
       title: titleWidget ?? (title != null ? Text(title!) : null),
       actions: actions,
       leading: leading,
@@ -53,11 +69,9 @@ class AdaptiveAppBar extends StatelessWidget implements PreferredSizeWidget {
       return SliverAppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        systemOverlayStyle: const SystemUiOverlayStyle(
-          statusBarColor: Colors.transparent,
-          statusBarIconBrightness: Brightness.dark,
-          statusBarBrightness: Brightness.light,
-        ),
+        foregroundColor: foreground,
+        iconTheme: iconTheme,
+        systemOverlayStyle: overlay,
         title: titleWidget ?? (title != null ? Text(title!) : null),
         actions: actions,
         leading: leading,

@@ -66,6 +66,7 @@ class _ServerListPageState extends State<ServerListPage> {
   }
 
   Widget _buildServerItem(ServerInfo server, Animation<double> animation) {
+    final colorScheme = Theme.of(context).colorScheme;
     return SlideTransition(
       position: animation.drive(Tween(
         begin: const Offset(-1, 0),
@@ -78,10 +79,10 @@ class _ServerListPageState extends State<ServerListPage> {
         ),
         child: ListTile(
           leading: CircleAvatar(
-            backgroundColor: Theme.of(context).primaryColor,
-            child: const Icon(
+            backgroundColor: colorScheme.primary,
+            child: Icon(
               Icons.computer,
-              color: Colors.white,
+              color: colorScheme.onPrimary,
             ),
           ),
           title: Text(
@@ -101,7 +102,7 @@ class _ServerListPageState extends State<ServerListPage> {
               ),
               IconButton(
                 icon: const Icon(Icons.delete),
-                color: Colors.red[300],
+                color: colorScheme.error,
                 onPressed: () => _deleteServer(server),
                 tooltip: '删除服务器',
               ),
@@ -267,6 +268,8 @@ class _ServerListPageState extends State<ServerListPage> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AdaptiveAppBar(
@@ -302,18 +305,17 @@ class _ServerListPageState extends State<ServerListPage> {
                   Icon(
                     Icons.computer_outlined,
                     size: 64,
-                    color: Colors.grey[400],
+                    color: colorScheme.onSurfaceVariant,
                   ),
                   const SizedBox(height: 16),
                   Text(
                     '暂无服务器',
-                    style: TextStyle(
-                      color: Colors.grey[600],
-                      fontSize: 16,
+                    style: textTheme.titleMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
                     ),
                   ),
                   const SizedBox(height: 24),
-                  ElevatedButton.icon(
+                  FilledButton.icon(
                     onPressed: () => _addServer(),
                     icon: const Icon(Icons.add),
                     label: const Text('添加服务器'),

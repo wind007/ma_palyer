@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
 
 class VideoProgressSlider extends StatelessWidget {
   final Duration position;
@@ -22,10 +23,15 @@ class VideoProgressSlider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final accent = Theme.of(context).extension<PlayerChrome>()?.accent ??
+        Theme.of(context).colorScheme.primary;
+    final onDarkTrack = Colors.white.withOpacity(0.5);
+    final onDarkTrackSecondary = Colors.white.withOpacity(0.3);
+
     final value = duration.inMilliseconds > 0
         ? position.inMilliseconds / duration.inMilliseconds
         : 0.0;
-        
+
     final bufferedValue = duration.inMilliseconds > 0
         ? buffered.inMilliseconds / duration.inMilliseconds
         : 0.0;
@@ -33,20 +39,17 @@ class VideoProgressSlider extends StatelessWidget {
     return SliderTheme(
       data: SliderThemeData(
         trackHeight: 2.0,
-        activeTrackColor: Colors.red,
-        // 已缓冲但未播放的部分显示为灰色
-        inactiveTrackColor: Colors.white.withOpacity(0.5),
-        // 未缓冲的部分显示为深灰色
-        secondaryActiveTrackColor: Colors.white.withOpacity(0.3),
-        thumbColor: Colors.red,
+        activeTrackColor: accent,
+        inactiveTrackColor: onDarkTrack,
+        secondaryActiveTrackColor: onDarkTrackSecondary,
+        thumbColor: accent,
         thumbShape: const RoundSliderThumbShape(
           enabledThumbRadius: 6.0,
         ),
-        overlayColor: Colors.red.withOpacity(0.3),
+        overlayColor: accent.withOpacity(0.3),
         overlayShape: const RoundSliderOverlayShape(
           overlayRadius: 12.0,
         ),
-        // 自定义轨道形状以支持缓冲进度显示
         trackShape: _CustomTrackShape(bufferedValue: bufferedValue),
       ),
       child: Slider(
@@ -89,10 +92,11 @@ class _CustomTrackShape extends RoundedRectSliderTrackShape {
 
     // 计算缓冲进度的位置
     final double bufferedX = trackRect.left + trackRect.width * bufferedValue;
-    
+
     // 绘制未缓冲的背景
     final Paint unBufferedPaint = Paint()
-      ..color = sliderTheme.secondaryActiveTrackColor ?? Colors.grey.withOpacity(0.3)
+      ..color = sliderTheme.secondaryActiveTrackColor ??
+          Colors.grey.withOpacity(0.3)
       ..style = PaintingStyle.fill;
     context.canvas.drawRect(trackRect, unBufferedPaint);
 
@@ -119,9 +123,9 @@ class _CustomTrackShape extends RoundedRectSliderTrackShape {
         trackRect.bottom,
       );
       final Paint activePaint = Paint()
-        ..color = sliderTheme.activeTrackColor ?? Colors.red
+        ..color = sliderTheme.activeTrackColor ?? Colors.grey
         ..style = PaintingStyle.fill;
       context.canvas.drawRect(activeRect, activePaint);
     }
   }
-} 
+}

@@ -10,6 +10,7 @@ import 'package:video_player/video_player.dart';
 import '../services/emby_api.dart';
 import '../utils/logger.dart';
 import '../widgets/video_progress_slider.dart';
+import '../theme/app_theme.dart';
 
 class VideoPlayerPage extends StatefulWidget {
   final String itemId;
@@ -57,29 +58,6 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   static const _seekButtonSize = 40.0;   // 快进快退按钮大小
   static const _volumeControlWidth = 80.0; // 音量控制条宽度
 
-  // 样式常量
-  static const _controlBarGradient = LinearGradient(
-    begin: Alignment.bottomCenter,
-    end: Alignment.topCenter,
-    colors: [Colors.black54, Colors.transparent],
-  );
-
-  static const _topBarGradient = LinearGradient(
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
-    colors: [Colors.black87, Colors.transparent],
-  );
-
-  static const _indicatorDecoration = BoxDecoration(
-    color: Colors.black54,
-    borderRadius: BorderRadius.all(Radius.circular(6)),
-  );
-
-  static const _buttonDecoration = BoxDecoration(
-    color: Colors.black38,
-    borderRadius: BorderRadius.all(Radius.circular(4)),
-  );
-
   static const _indicatorPadding = EdgeInsets.symmetric(
     horizontal: 12,
     vertical: 8,
@@ -100,25 +78,38 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     fontSize: 14,
   );
 
-  static final _sliderThemeData = SliderThemeData(
-    activeTrackColor: Colors.red,
-    inactiveTrackColor: Colors.white.withAlpha(77),
-    thumbColor: Colors.red,
-    trackHeight: 2.0,
-    thumbShape: const RoundSliderThumbShape(
-      enabledThumbRadius: 6.0,
-    ),
-    overlayColor: Colors.red.withAlpha(32),
-    overlayShape: const RoundSliderOverlayShape(
-      overlayRadius: 12.0,
-    ),
-  );
-
   static const _errorMessages = {
     'no_url': '无法获取播放地址',
     'no_media': '无法获取媒体信息',
     'init_failed': '初始化失败，请检查网络连接',
   };
+
+  PlayerChrome _chrome(BuildContext context) =>
+      Theme.of(context).extension<PlayerChrome>() ??
+      PlayerChrome.fromScheme(Theme.of(context).colorScheme);
+
+  BoxDecoration _buttonDecoration(BuildContext context) =>
+      _chrome(context).pillDecoration;
+
+  BoxDecoration _indicatorDecoration(BuildContext context) =>
+      _chrome(context).indicatorDecoration;
+
+  SliderThemeData _volumeSliderTheme(BuildContext context) {
+    final c = _chrome(context);
+    return SliderThemeData(
+      activeTrackColor: c.accent,
+      inactiveTrackColor: Colors.white.withAlpha(77),
+      thumbColor: c.accent,
+      trackHeight: 2.0,
+      thumbShape: const RoundSliderThumbShape(
+        enabledThumbRadius: 6.0,
+      ),
+      overlayColor: c.accent.withAlpha(32),
+      overlayShape: const RoundSliderOverlayShape(
+        overlayRadius: 12.0,
+      ),
+    );
+  }
 
   // 播放器控制器
   VideoPlayerController? _controller;
@@ -561,33 +552,36 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     }
     final shouldPop = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.black87,
-        title: const Text(
-          '确认退出',
-          style: TextStyle(color: Colors.white),
-        ),
-        content: const Text(
-          '是否要退出播放？',
-          style: TextStyle(color: Colors.white70),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text(
-              '取消',
-              style: TextStyle(color: Colors.white70),
-            ),
+      builder: (dialogContext) {
+        final chrome = _chrome(context);
+        return AlertDialog(
+          backgroundColor: chrome.dialogBackground,
+          title: Text(
+            '确认退出',
+            style: TextStyle(color: chrome.osdOnScrim),
           ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text(
-              '退出',
-              style: TextStyle(color: Colors.red),
-            ),
+          content: Text(
+            '是否要退出播放？',
+            style: TextStyle(color: chrome.osdOnScrimMuted),
           ),
-        ],
-      ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(
+                '取消',
+                style: TextStyle(color: chrome.osdOnScrimMuted),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(
+                '退出',
+                style: TextStyle(color: chrome.accent),
+              ),
+            ),
+          ],
+        );
+      },
     );
     return shouldPop ?? false;
   }
@@ -1000,6 +994,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   }
 
   Widget _buildPlaylistPanel() {
+    final chrome = _chrome(context);
     final size = MediaQuery.of(context).size;
     final isMobile = _isMobile;
     final isTV = _isTV;
@@ -1069,7 +1064,11 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                   // 剧集列表
                   Expanded(
                     child: _episodeList == null
-                        ? const Center(child: CircularProgressIndicator())
+                        ? Center(
+                            child: CircularProgressIndicator(
+                              color: chrome.accent,
+                            ),
+                          )
                         : ListView.builder(
                             controller: _playlistScrollController,
                             itemExtent: _playlistItemExtent,
@@ -1093,8 +1092,8 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                                   child: Container(
                                     decoration: BoxDecoration(
                                       color: isFocused
-                                          ? Colors.red.withOpacity(0.3)
-                                          : (isPlaying ? Colors.red.withOpacity(0.2) : null),
+                                          ? chrome.accent.withOpacity(0.3)
+                                          : (isPlaying ? chrome.accent.withOpacity(0.2) : null),
                                     ),
                                     child: ListTile(
                                       title: Text(
@@ -1119,7 +1118,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                                       leading: isPlaying
                                           ? Icon(
                                               Icons.play_arrow,
-                                              color: Colors.red,
+                                              color: chrome.accent,
                                               size: isTV ? 32 : 24,
                                             )
                                           : Text(
@@ -1355,6 +1354,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                 top: MediaQuery.of(context).size.height / _indicatorTopPosition,
                 child: Center(
                   child: _buildIndicator(
+                    context,
                     icon: _seekSeconds < 0 ? Icons.fast_rewind : Icons.fast_forward,
                     text: '${_seekSeconds.abs()}秒',
                   ),
@@ -1364,26 +1364,32 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
               Positioned(
                 right: MediaQuery.of(context).size.width / 4,
                 top: MediaQuery.of(context).size.height / _indicatorTopPosition,
-                child: _buildIndicator(
-                  icon: _currentVolume == 0
-                      ? Icons.volume_off
-                      : _currentVolume < 0.5
-                          ? Icons.volume_down
-                          : Icons.volume_up,
-                  text: '${(_currentVolume * 100).round()}%',
+                child: Center(
+                  child: _buildIndicator(
+                    context,
+                    icon: _currentVolume == 0
+                        ? Icons.volume_off
+                        : _currentVolume < 0.5
+                            ? Icons.volume_down
+                            : Icons.volume_up,
+                    text: '${(_currentVolume * 100).round()}%',
+                  ),
                 ),
               ),
             if (_showBrightnessIndicator)
               Positioned(
                 left: MediaQuery.of(context).size.width / 4,
                 top: MediaQuery.of(context).size.height / _indicatorTopPosition,
-                child: _buildIndicator(
+                child: Center(
+                  child: _buildIndicator(
+                  context,
                   icon: _brightness < 0.3
                       ? Icons.brightness_low
                       : _brightness < 0.7
                           ? Icons.brightness_medium
                           : Icons.brightness_high,
-                  text: '${(_brightness * 100).round()}%',
+                    text: '${(_brightness * 100).round()}%',
+                  ),
                 ),
               ),
             if (_showControls) ...[
@@ -1400,14 +1406,15 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   }
 
   Widget _buildTopBar() {
+    final chrome = _chrome(context);
     return Positioned(
       top: 0,
       left: 0,
       right: 0,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: const BoxDecoration(
-          gradient: _topBarGradient,
+        decoration: BoxDecoration(
+          gradient: chrome.topBarGradient,
         ),
         child: Row(
           children: [
@@ -1434,9 +1441,9 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                         margin: const EdgeInsets.only(left: 8),
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: Colors.black.withAlpha(120),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: Colors.white24),
+                          color: chrome.chipBackground,
+                          borderRadius: BorderRadius.circular(chrome.chipRadius),
+                          border: Border.all(color: chrome.chipBorder),
                         ),
                         child: Text(
                           _currentVersionLabel,
@@ -1454,9 +1461,9 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                     margin: const EdgeInsets.only(left: 8),
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: Colors.black.withAlpha(120),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.white24),
+                      color: chrome.chipBackground,
+                      borderRadius: BorderRadius.circular(chrome.chipRadius),
+                      border: Border.all(color: chrome.chipBorder),
                     ),
                     child: Text(
                       '网速 $_estimatedNetworkSpeedText',
@@ -1496,7 +1503,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
           decoration: BoxDecoration(
-            color: Colors.black.withAlpha(102),
+            color: _chrome(context).volumeRailBackground,
             borderRadius: BorderRadius.circular(20),
           ),
           child: Column(
@@ -1536,7 +1543,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                 child: SizedBox(
                   width: 80,
                   child: SliderTheme(
-                    data: _sliderThemeData,
+                    data: _volumeSliderTheme(context),
                     child: Slider(
                       value: _currentVolume,
                       onChanged: (value) {
@@ -1591,8 +1598,8 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       right: 0,
       child: Container(
         padding: const EdgeInsets.all(16),
-        decoration: const BoxDecoration(
-          gradient: _controlBarGradient,
+        decoration: BoxDecoration(
+          gradient: _chrome(context).bottomBarGradient,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1650,7 +1657,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
             // 左侧时间显示
             Container(
               padding: _buttonPadding,
-              decoration: _buttonDecoration,
+              decoration: _buttonDecoration(context),
               child: Text(
                 '${_formatDuration(value.position)} / ${_formatDuration(value.duration)}',
                 style: _timeTextStyle,
@@ -1663,7 +1670,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                   Container(
                     margin: const EdgeInsets.only(right: 8),
                     padding: _buttonPadding,
-                    decoration: _buttonDecoration,
+                    decoration: _buttonDecoration(context),
                     child: IconButton(
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(
@@ -1683,7 +1690,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                   Container(
                     margin: const EdgeInsets.only(right: 8),
                     padding: _buttonPadding,
-                    decoration: _buttonDecoration,
+                    decoration: _buttonDecoration(context),
                     child: IconButton(
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(
@@ -1703,7 +1710,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                   Container(
                     margin: const EdgeInsets.only(right: 8),
                     padding: _buttonPadding,
-                    decoration: _buttonDecoration,
+                    decoration: _buttonDecoration(context),
                     child: IconButton(
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(
@@ -1722,7 +1729,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                 Container(
                   margin: const EdgeInsets.only(right: 8),
                   padding: _buttonPadding,
-                  decoration: _buttonDecoration,
+                  decoration: _buttonDecoration(context),
                   child: IconButton(
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(
@@ -1750,7 +1757,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                 // 全屏按钮
                 Container(
                   padding: _buttonPadding,
-                  decoration: _buttonDecoration,
+                  decoration: _buttonDecoration(context),
                   child: IconButton(
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(
@@ -1784,10 +1791,10 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
           child: Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.black.withAlpha(77),
+              color: _chrome(context).playPauseBackground,
               shape: BoxShape.circle,
               border: Border.all(
-                color: Colors.white.withAlpha(128),
+                color: _chrome(context).playPauseBorder,
                 width: 2,
               ),
             ),
@@ -1826,78 +1833,81 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     Logger.d("显示播放速度选择对话框", _tag);
     showDialog(
       context: context,
-      builder: (context) => Dialog(
-        backgroundColor: Colors.black87,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Padding(
-                padding: EdgeInsets.only(bottom: 16),
-                child: Text(
-                  '播放速度',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
+      builder: (dialogContext) {
+        final chrome = _chrome(context);
+        return Dialog(
+          backgroundColor: chrome.dialogBackground,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Text(
+                    '播放速度',
+                    style: TextStyle(
+                      color: chrome.osdOnScrim,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
-              ),
-              for (var speed in [0.5, 0.75, 1.0, 1.25, 1.5, 2.0])
+                for (var speed in [0.5, 0.75, 1.0, 1.25, 1.5, 2.0])
+                  InkWell(
+                    onTap: () {
+                      _applyPlaybackSpeed(speed);
+                      Navigator.pop(dialogContext);
+                      _startHideControlsTimer();
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 12,
+                        horizontal: 24,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _playbackSpeed == speed
+                            ? chrome.selectionHighlight
+                            : Colors.transparent,
+                      ),
+                      child: Text(
+                        _formatPlaybackSpeed(speed),
+                        style: TextStyle(
+                          color: _playbackSpeed == speed
+                              ? chrome.accent
+                              : chrome.osdOnScrim,
+                          fontSize: 15,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+                Divider(color: chrome.chipBorder, height: 20),
                 InkWell(
                   onTap: () {
-                    _applyPlaybackSpeed(speed);
-                    Navigator.pop(context);
-                    _startHideControlsTimer();
+                    Navigator.pop(dialogContext);
+                    _showCustomPlaybackSpeedDialog();
                   },
                   child: Container(
                     padding: const EdgeInsets.symmetric(
                       vertical: 12,
                       horizontal: 24,
                     ),
-                    decoration: BoxDecoration(
-                      color: _playbackSpeed == speed
-                          ? Colors.red.withAlpha(77)
-                          : Colors.transparent,
-                    ),
                     child: Text(
-                      _formatPlaybackSpeed(speed),
+                      '自定义倍速',
                       style: TextStyle(
-                        color: _playbackSpeed == speed
-                            ? Colors.red
-                            : Colors.white,
+                        color: chrome.osdOnScrim,
                         fontSize: 15,
                       ),
                       textAlign: TextAlign.center,
                     ),
                   ),
                 ),
-              const Divider(color: Colors.white24, height: 20),
-              InkWell(
-                onTap: () {
-                  Navigator.pop(context);
-                  _showCustomPlaybackSpeedDialog();
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 12,
-                    horizontal: 24,
-                  ),
-                  child: const Text(
-                    '自定义倍速',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -1914,66 +1924,69 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
 
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          backgroundColor: Colors.black87,
-          title: const Text(
-            '自定义倍速',
-            style: TextStyle(color: Colors.white),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              TextField(
-                controller: textController,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
-                ],
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  labelText: '倍速值',
-                  hintText: '例如 1.15',
-                  helperText: '支持范围 $minSpeed ~ $maxSpeed',
-                  errorText: errorText,
-                  labelStyle: const TextStyle(color: Colors.white70),
-                  hintStyle: const TextStyle(color: Colors.white38),
-                  helperStyle: const TextStyle(color: Colors.white54),
-                  enabledBorder: const UnderlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white54),
-                  ),
-                  focusedBorder: const UnderlineInputBorder(
-                    borderSide: BorderSide(color: Colors.redAccent),
+      builder: (dialogContext) {
+        final chrome = _chrome(context);
+        return StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            backgroundColor: chrome.dialogBackground,
+            title: Text(
+              '自定义倍速',
+              style: TextStyle(color: chrome.osdOnScrim),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: textController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+                  ],
+                  style: TextStyle(color: chrome.osdOnScrim),
+                  decoration: InputDecoration(
+                    labelText: '倍速值',
+                    hintText: '例如 1.15',
+                    helperText: '支持范围 $minSpeed ~ $maxSpeed',
+                    errorText: errorText,
+                    labelStyle: TextStyle(color: chrome.osdOnScrimMuted),
+                    hintStyle: TextStyle(color: chrome.osdOnScrimMuted.withAlpha(120)),
+                    helperStyle: TextStyle(color: chrome.osdOnScrimMuted.withAlpha(180)),
+                    enabledBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: chrome.chipBorder),
+                    ),
+                    focusedBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: chrome.accent),
+                    ),
                   ),
                 ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: Text('取消', style: TextStyle(color: chrome.osdOnScrimMuted)),
+              ),
+              TextButton(
+                onPressed: () {
+                  final parsed = double.tryParse(textController.text.trim());
+                  if (parsed == null || parsed < minSpeed || parsed > maxSpeed) {
+                    setDialogState(() {
+                      errorText = '请输入 $minSpeed ~ $maxSpeed 之间的数字';
+                    });
+                    return;
+                  }
+                  final customSpeed = double.parse(parsed.toStringAsFixed(2));
+                  _applyPlaybackSpeed(customSpeed);
+                  Navigator.pop(dialogContext);
+                  _startHideControlsTimer();
+                },
+                child: Text('确定', style: TextStyle(color: chrome.accent)),
               ),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('取消'),
-            ),
-            TextButton(
-              onPressed: () {
-                final parsed = double.tryParse(textController.text.trim());
-                if (parsed == null || parsed < minSpeed || parsed > maxSpeed) {
-                  setDialogState(() {
-                    errorText = '请输入 $minSpeed ~ $maxSpeed 之间的数字';
-                  });
-                  return;
-                }
-                final customSpeed = double.parse(parsed.toStringAsFixed(2));
-                _applyPlaybackSpeed(customSpeed);
-                Navigator.pop(context);
-                _startHideControlsTimer();
-              },
-              child: const Text('确定'),
-            ),
-          ],
-        ),
-      ),
+        );
+      },
     ).whenComplete(textController.dispose);
   }
 
@@ -2027,14 +2040,15 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   }
 
   // 辅助方法
-  Widget _buildIndicator({
+  Widget _buildIndicator(
+    BuildContext context, {
     required IconData icon,
     required String text,
     EdgeInsetsGeometry? padding,
   }) {
     return Container(
       padding: padding ?? _indicatorPadding,
-      decoration: _indicatorDecoration,
+      decoration: _indicatorDecoration(context),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -2106,42 +2120,45 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     Logger.d("显示音频流选择对话框", _tag);
     showDialog(
       context: context,
-      builder: (context) => Dialog(
-        backgroundColor: Colors.black87,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                '选择音频',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+      builder: (dialogContext) {
+        final chrome = _chrome(context);
+        return Dialog(
+          backgroundColor: chrome.dialogBackground,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '选择音频',
+                  style: TextStyle(
+                    color: chrome.osdOnScrim,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              if (_audioStreams != null)
-                ..._audioStreams!.map((stream) {
-                  final isSelected = stream['Index'] == _currentAudioStreamIndex;
-                  return ListTile(
-                    title: Text(
-                      stream['DisplayTitle'] ?? '未知音轨',
-                      style: TextStyle(
-                        color: isSelected ? Colors.red : Colors.white,
+                const SizedBox(height: 16),
+                if (_audioStreams != null)
+                  ..._audioStreams!.map((stream) {
+                    final isSelected = stream['Index'] == _currentAudioStreamIndex;
+                    return ListTile(
+                      title: Text(
+                        stream['DisplayTitle'] ?? '未知音轨',
+                        style: TextStyle(
+                          color: isSelected ? chrome.accent : chrome.osdOnScrim,
+                        ),
                       ),
-                    ),
-                    onTap: () async {
-                      Navigator.pop(context);
-                      await _switchAudioStream(stream['Index']);
-                    },
-                  );
-                }).toList(),
-            ],
+                      onTap: () async {
+                        Navigator.pop(dialogContext);
+                        await _switchAudioStream(stream['Index']);
+                      },
+                    );
+                  }).toList(),
+              ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -2149,54 +2166,59 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     Logger.d("显示字幕流选择对话框", _tag);
     showDialog(
       context: context,
-      builder: (context) => Dialog(
-        backgroundColor: Colors.black87,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                '选择字幕',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 16),
-              if (_subtitleStreams != null && _subtitleStreams!.isNotEmpty)
-                ..._subtitleStreams!.map((stream) {
-                  final isSelected = stream['Index'] == _currentSubtitleStreamIndex;
-                  return ListTile(
-                    title: Text(
-                      stream['DisplayTitle'] ?? '未知字幕',
-                      style: TextStyle(
-                        color: isSelected ? Colors.red : Colors.white,
-                      ),
-                    ),
-                    onTap: () async {
-                      Navigator.pop(context);
-                      await _switchSubtitleStream(stream['Index']);
-                    },
-                  );
-                }).toList(),
-              ListTile(
-                title: Text(
-                  '关闭字幕',
+      builder: (dialogContext) {
+        final chrome = _chrome(context);
+        return Dialog(
+          backgroundColor: chrome.dialogBackground,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '选择字幕',
                   style: TextStyle(
-                    color: _currentSubtitleStreamIndex == -1 ? Colors.red : Colors.white,
+                    color: chrome.osdOnScrim,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-                onTap: () async {
-                  Navigator.pop(context);
-                  await _switchSubtitleStream(-1);
-                },
-              ),
-            ],
+                const SizedBox(height: 16),
+                if (_subtitleStreams != null && _subtitleStreams!.isNotEmpty)
+                  ..._subtitleStreams!.map((stream) {
+                    final isSelected = stream['Index'] == _currentSubtitleStreamIndex;
+                    return ListTile(
+                      title: Text(
+                        stream['DisplayTitle'] ?? '未知字幕',
+                        style: TextStyle(
+                          color: isSelected ? chrome.accent : chrome.osdOnScrim,
+                        ),
+                      ),
+                      onTap: () async {
+                        Navigator.pop(dialogContext);
+                        await _switchSubtitleStream(stream['Index']);
+                      },
+                    );
+                  }).toList(),
+                ListTile(
+                  title: Text(
+                    '关闭字幕',
+                    style: TextStyle(
+                      color: _currentSubtitleStreamIndex == -1
+                          ? chrome.accent
+                          : chrome.osdOnScrim,
+                    ),
+                  ),
+                  onTap: () async {
+                    Navigator.pop(dialogContext);
+                    await _switchSubtitleStream(-1);
+                  },
+                ),
+              ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -2205,47 +2227,50 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     if (mediaSources.length <= 1) return;
     showDialog(
       context: context,
-      builder: (context) => Dialog(
-        backgroundColor: Colors.black87,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                '选择版本',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 12),
-              ...List.generate(mediaSources.length, (index) {
-                final source = mediaSources[index];
-                final isSelected = index == _currentMediaSourceIndex;
-                final label = _buildVersionLabel(source);
-                return ListTile(
-                  title: Text(
-                    label.isEmpty ? '版本 ${index + 1}' : label,
-                    style: TextStyle(
-                      color: isSelected ? Colors.red : Colors.white,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                    ),
+      builder: (dialogContext) {
+        final chrome = _chrome(context);
+        return Dialog(
+          backgroundColor: chrome.dialogBackground,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '选择版本',
+                  style: TextStyle(
+                    color: chrome.osdOnScrim,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
                   ),
-                  trailing: isSelected
-                      ? const Icon(Icons.check_circle, color: Colors.red, size: 18)
-                      : null,
-                  onTap: () async {
-                    Navigator.pop(context);
-                    await _switchMediaSource(index);
-                  },
-                );
-              }),
-            ],
+                ),
+                const SizedBox(height: 12),
+                ...List.generate(mediaSources.length, (index) {
+                  final source = mediaSources[index];
+                  final isSelected = index == _currentMediaSourceIndex;
+                  final label = _buildVersionLabel(source);
+                  return ListTile(
+                    title: Text(
+                      label.isEmpty ? '版本 ${index + 1}' : label,
+                      style: TextStyle(
+                        color: isSelected ? chrome.accent : chrome.osdOnScrim,
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                    trailing: isSelected
+                        ? Icon(Icons.check_circle, color: chrome.accent, size: 18)
+                        : null,
+                    onTap: () async {
+                      Navigator.pop(dialogContext);
+                      await _switchMediaSource(index);
+                    },
+                  );
+                }),
+              ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -2671,13 +2696,14 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   }
 
   Widget _buildErrorView() {
+    final scheme = Theme.of(context).colorScheme;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(
+          Icon(
             Icons.error_outline,
-            color: Colors.red,
+            color: scheme.error,
             size: 48,
           ),
           const SizedBox(height: 16),
@@ -2694,18 +2720,19 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   }
 
   Widget _buildLoadingView() {
-    return const Center(
+    final chrome = _chrome(context);
+    return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           CircularProgressIndicator(
-            color: Colors.red,
+            color: chrome.accent,
           ),
-          SizedBox(height: 16),
+          const SizedBox(height: 16),
           Text(
             '正在加载视频...',
             style: TextStyle(
-              color: Colors.white,
+              color: chrome.osdOnScrim,
               fontSize: 16,
             ),
           ),

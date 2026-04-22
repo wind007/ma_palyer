@@ -489,12 +489,23 @@ class _VideoListPageState extends State<VideoListPage>
   }
 
   Widget _buildBody() {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
     if (_isInitializing) {
-      return const Center(child: CircularProgressIndicator());
+      return Center(
+        child: CircularProgressIndicator(color: colorScheme.primary),
+      );
     }
 
     if (_error != null) {
-      return Center(child: Text(_error!));
+      return Center(
+        child: Text(
+          _error!,
+          style: textTheme.bodyLarge?.copyWith(color: colorScheme.error),
+          textAlign: TextAlign.center,
+        ),
+      );
     }
 
     final hasAnyData = _videoSections.values.any((items) => items.isNotEmpty);
@@ -506,16 +517,26 @@ class _VideoListPageState extends State<VideoListPage>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.wifi_off_rounded, size: 64, color: Colors.grey),
+              Icon(
+                Icons.wifi_off_rounded,
+                size: 64,
+                color: colorScheme.onSurfaceVariant,
+              ),
               const SizedBox(height: 16),
-              const Text(
+              Text(
                 '服务器连接失败',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                style: textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: colorScheme.onSurface,
+                ),
               ),
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 '请检查网络、服务器地址或账号状态后重试。',
                 textAlign: TextAlign.center,
+                style: textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
               ),
               const SizedBox(height: 16),
               Wrap(
@@ -587,9 +608,9 @@ class _VideoListPageState extends State<VideoListPage>
             children: [
               Text(
                 title,
-                style: const TextStyle(
-                  fontSize: 20,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
               ),
               if (viewId != null)
@@ -672,10 +693,12 @@ class _VideoListPageState extends State<VideoListPage>
   }
 
   Widget _buildLoadingIndicator() {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
     return Container(
       width: 160,
       margin: const EdgeInsets.symmetric(horizontal: 8),
-      child: const Column(
+      child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           SizedBox(
@@ -683,15 +706,15 @@ class _VideoListPageState extends State<VideoListPage>
             height: 24,
             child: CircularProgressIndicator(
               strokeWidth: 2,
-              valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+              valueColor: AlwaysStoppedAnimation<Color>(colorScheme.primary),
             ),
           ),
-          SizedBox(height: 8),
+          const SizedBox(height: 8),
           Text(
             '加载中...',
-            style: TextStyle(
+            style: (textTheme.bodySmall ?? textTheme.bodyMedium!).copyWith(
               fontSize: 12,
-              color: Colors.grey,
+              color: colorScheme.onSurfaceVariant,
             ),
           ),
         ],
@@ -733,6 +756,9 @@ class _VideoListPageState extends State<VideoListPage>
   }
 
   Widget _buildSkeletonSectionWidget(String title) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final base = colorScheme.surfaceContainerHighest;
+    final mid = Color.lerp(base, colorScheme.primary, 0.06)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -746,9 +772,9 @@ class _VideoListPageState extends State<VideoListPage>
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Colors.grey[300]!,
-                  Colors.grey[200]!,
-                  Colors.grey[300]!,
+                  base,
+                  mid,
+                  base,
                 ],
                 stops: const [0.0, 0.5, 1.0],
               ),
@@ -856,10 +882,13 @@ class _VideoListPageState extends State<VideoListPage>
     return AnimatedBuilder(
       animation: _shimmerController,
       builder: (context, child) {
+        final colorScheme = Theme.of(context).colorScheme;
+        final base = colorScheme.surfaceContainerHighest;
+        final mid = Color.lerp(base, colorScheme.primary, 0.08)!;
         return Container(
           width: 130,
           decoration: BoxDecoration(
-            color: Colors.grey[200],
+            color: colorScheme.surfaceContainerHigh,
             borderRadius: BorderRadius.circular(8),
           ),
           child: Column(
@@ -873,9 +902,9 @@ class _VideoListPageState extends State<VideoListPage>
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      Colors.grey[300]!,
-                      Colors.grey[200]!,
-                      Colors.grey[300]!,
+                      base,
+                      mid,
+                      base,
                     ],
                     stops: [
                       0.0,
@@ -891,7 +920,7 @@ class _VideoListPageState extends State<VideoListPage>
                   child: Icon(
                     Icons.movie_outlined,
                     size: 32,
-                    color: Colors.grey[400],
+                    color: colorScheme.onSurfaceVariant.withAlpha(120),
                   ),
                 ),
               ),
@@ -909,9 +938,9 @@ class _VideoListPageState extends State<VideoListPage>
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                           colors: [
-                            Colors.grey[300]!,
-                            Colors.grey[200]!,
-                            Colors.grey[300]!,
+                            base,
+                            mid,
+                            base,
                           ],
                           stops: [
                             0.0,
@@ -931,9 +960,9 @@ class _VideoListPageState extends State<VideoListPage>
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                           colors: [
-                            Colors.grey[300]!,
-                            Colors.grey[200]!,
-                            Colors.grey[300]!,
+                            base,
+                            mid,
+                            base,
                           ],
                           stops: [
                             0.0,
