@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
+import 'dart:convert';
+import 'dart:math';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/emby_api.dart';
 import '../services/server_manager.dart';
 import '../services/api_service_manager.dart';
@@ -24,10 +27,17 @@ class VideoListPage extends StatefulWidget {
 class _VideoListPageState extends State<VideoListPage>
     with RouteAware, SingleTickerProviderStateMixin {
   static const String _tag = "VideoList";
+  static const String _genrePreviewCachePrefix = 'genre_preview_cache_v1';
+  // 与首页普通视频卡片保持一致的视觉尺寸
+  static const double _genreSectionHeight = 240;
+  static const double _genreCardWidth = 130;
+  static const double _genreMetaAreaHeight = 40;
+  static const double _genreCardGap = 4;
   late final EmbyApiService _api;
   bool _routeAwareSubscribed = false;
   final ScrollController _scrollController = ScrollController();
   late AnimationController _shimmerController;
+  final Random _random = Random();
   
   // 分区数据
   final Map<String, List<dynamic>> _videoSections = {
@@ -42,6 +52,7 @@ class _VideoListPageState extends State<VideoListPage>
   final Map<String, bool> _isLoadingMore = {};
   final Map<String, bool> _hasMoreData = {};
   final Map<String, int> _sectionStartIndexes = {};
+  final Map<String, Map<String, dynamic>> _genrePreviewItems = {};
   // 为每个部分创建独立的滚动控制器
   final Map<String, ScrollController> _sectionScrollControllers = {};
   static const int _pageSize = 10;
@@ -355,6 +366,7 @@ class _VideoListPageState extends State<VideoListPage>
         _videoSections['genres'] = items;
         _sectionLoading['genres'] = false;
       });
+      await _loadGenrePreviewItems(items);
     } catch (e) {
       Logger.e("加载分类项目失败", _tag, e);
       if (!mounted) return;
@@ -363,6 +375,121 @@ class _VideoListPageState extends State<VideoListPage>
         _videoSections['genres'] = [];
         _sectionLoading['genres'] = false;
       });
+    }
+  }
+
+  Future<void> _loadGenrePreviewItems(List<dynamic> genres) async {
+    final cachedPreviewMap = await _loadGenrePreviewCache();
+    final currentGenreIds = genres
+        .whereType<Map<String, dynamic>>()
+        .map((genre) => genre['Id']?.toString())
+        .whereType<String>()
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    final previewMap = <String, Map<String, dynamic>>{
+      for (final entry in cachedPreviewMap.entries)
+        if (currentGenreIds.contains(entry.key)) entry.key: entry.value,
+    };
+    if (mounted) {
+      setState(() {
+        _genrePreviewItems
+          ..clear()
+          ..addAll(previewMap);
+      });
+    }
+
+    final updatedCacheMap = <String, Map<String, dynamic>>{
+      ...cachedPreviewMap,
+    };
+    bool hasCacheUpdate = false;
+
+    // 风险收敛：限制总请求量，避免分类缩略图引发突发并发请求。
+    final sampledGenres = genres.take(12);
+    for (final genre in sampledGenres) {
+      if (genre is! Map<String, dynamic>) continue;
+      final genreId = genre['Id']?.toString();
+      if (genreId == null || genreId.isEmpty) continue;
+      if (previewMap.containsKey(genreId)) continue;
+      try {
+        final response = await _api.getVideos(
+          startIndex: 0,
+          limit: 12,
+          includeItemTypes: 'Movie',
+          sortBy: 'DateCreated',
+          sortOrder: 'Descending',
+          genreIds: genreId,
+        );
+        final items = response['Items'] as List<dynamic>? ?? const <dynamic>[];
+        final candidates = items
+            .where((item) => item is Map<String, dynamic> && item['Id'] != null)
+            .cast<Map<String, dynamic>>()
+            .toList();
+        if (candidates.isEmpty) continue;
+        final previewItem = candidates[_random.nextInt(candidates.length)];
+        previewMap[genreId] = previewItem;
+        updatedCacheMap[genreId] = previewItem;
+        hasCacheUpdate = true;
+      } catch (e) {
+        Logger.w('加载分类缩略图失败: genreId=$genreId, error=$e', _tag);
+      }
+      // 轻微退避，减少短时请求密度。
+      await Future.delayed(const Duration(milliseconds: 80));
+    }
+    if (!mounted) return;
+    setState(() {
+      _genrePreviewItems
+        ..clear()
+        ..addAll(previewMap);
+    });
+
+    if (hasCacheUpdate) {
+      await _saveGenrePreviewCache(updatedCacheMap);
+    }
+  }
+
+  String get _genrePreviewCacheKey {
+    final serverFingerprint = '${widget.server.url}|${widget.server.userId}';
+    return '$_genrePreviewCachePrefix:${serverFingerprint.hashCode}';
+  }
+
+  Future<Map<String, Map<String, dynamic>>> _loadGenrePreviewCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_genrePreviewCacheKey);
+      if (raw == null || raw.isEmpty) {
+        return <String, Map<String, dynamic>>{};
+      }
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) {
+        return <String, Map<String, dynamic>>{};
+      }
+      final result = <String, Map<String, dynamic>>{};
+      for (final entry in decoded.entries) {
+        final value = entry.value;
+        if (value is Map<String, dynamic>) {
+          result[entry.key] = value;
+        } else if (value is Map) {
+          result[entry.key] = value.map(
+            (k, v) => MapEntry(k.toString(), v),
+          );
+        }
+      }
+      return result;
+    } catch (e) {
+      Logger.w('读取分类缩略图缓存失败: $e', _tag);
+      return <String, Map<String, dynamic>>{};
+    }
+  }
+
+  Future<void> _saveGenrePreviewCache(
+    Map<String, Map<String, dynamic>> cacheMap,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final encoded = jsonEncode(cacheMap);
+      await prefs.setString(_genrePreviewCacheKey, encoded);
+    } catch (e) {
+      Logger.w('保存分类缩略图缓存失败: $e', _tag);
     }
   }
 
@@ -719,7 +846,7 @@ class _VideoListPageState extends State<VideoListPage>
           ),
         ),
         SizedBox(
-          height: 56,
+          height: _genreSectionHeight,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -727,11 +854,11 @@ class _VideoListPageState extends State<VideoListPage>
               final genre = genres[index] as Map<String, dynamic>;
               final genreName = genre['Name']?.toString() ?? '未知分类';
               final genreId = genre['Id']?.toString();
-              return ActionChip(
-                label: Text(genreName),
-                onPressed: genreId == null || genreId.isEmpty
-                    ? null
-                    : () => _openGenrePage(genreId, genreName),
+              final previewItem = genreId == null ? null : _genrePreviewItems[genreId];
+              return _buildGenreThumbnailCard(
+                genreName: genreName,
+                genreId: genreId,
+                previewItem: previewItem,
               );
             },
             separatorBuilder: (_, __) => const SizedBox(width: 8),
@@ -740,6 +867,129 @@ class _VideoListPageState extends State<VideoListPage>
         ),
       ],
     );
+  }
+
+  Widget _buildGenreThumbnailCard({
+    required String genreName,
+    required String? genreId,
+    required Map<String, dynamic>? previewItem,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final imageUrl = _buildGenrePreviewImageUrl(previewItem);
+    final disabled = genreId == null || genreId.isEmpty;
+    const imageHeight = _genreSectionHeight - _genreMetaAreaHeight - _genreCardGap;
+    return SizedBox(
+      width: _genreCardWidth,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: disabled ? null : () => _openGenrePage(genreId, genreName),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: SizedBox(
+                  height: imageHeight,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (imageUrl != null)
+                        Image.network(
+                          imageUrl,
+                          headers: {
+                            'User-Agent': ServerManager.effectiveUserAgent,
+                            'X-Emby-Token': widget.server.accessToken,
+                          },
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => _buildGenrePlaceholder(colorScheme),
+                        )
+                      else
+                        _buildGenrePlaceholder(colorScheme),
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.transparent,
+                              Colors.black.withAlpha(170),
+                            ],
+                            stops: const [0.45, 1.0],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: _genreCardGap),
+              SizedBox(
+                height: _genreMetaAreaHeight,
+                child: Text(
+                  genreName,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontSize: 12,
+                        height: 1.3,
+                        letterSpacing: 0.3,
+                        fontWeight: FontWeight.w500,
+                        color: colorScheme.onSurface,
+                      ),
+                  strutStyle: const StrutStyle(
+                    forceStrutHeight: true,
+                    height: 1.2,
+                  ),
+                  textAlign: TextAlign.left,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGenrePlaceholder(ColorScheme colorScheme) {
+    return Container(
+      color: colorScheme.surfaceContainerHighest,
+      child: Icon(
+        Icons.local_movies_outlined,
+        color: colorScheme.onSurfaceVariant,
+      ),
+    );
+  }
+
+  String? _buildGenrePreviewImageUrl(Map<String, dynamic>? item) {
+    if (item == null) return null;
+    final itemId = item['Id']?.toString();
+    if (itemId == null || itemId.isEmpty) return null;
+    final imageTags = item['ImageTags'] as Map<String, dynamic>?;
+    final primaryTag = imageTags?['Primary']?.toString();
+    if (primaryTag != null && primaryTag.isNotEmpty) {
+      return _api.getImageUrl(
+        itemId: itemId,
+        imageType: 'Primary',
+        width: 280,
+        height: 400,
+        quality: 75,
+        tag: primaryTag,
+      );
+    }
+    final thumbTag = imageTags?['Thumb']?.toString();
+    if (thumbTag != null && thumbTag.isNotEmpty) {
+      return _api.getImageUrl(
+        itemId: itemId,
+        imageType: 'Thumb',
+        width: 280,
+        height: 400,
+        quality: 75,
+        tag: thumbTag,
+      );
+    }
+    return null;
   }
 
   void _openGenrePage(String genreId, String genreName) {

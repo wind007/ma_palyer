@@ -1,0 +1,51 @@
+# 2026-04-22 首页分类缩略图缓存优先实现记录（中文）
+
+## 背景与目标
+- 用户需求：首页“分类缩略图”优先使用本地缓存，仅在无缓存时请求后端。
+- 目的：降低首页进入时的后端请求量与首屏等待，避免每次都为分类缩略图触发网络请求。
+
+## 改动范围
+- 文件：`lib/pages/video_list_page.dart`
+- 类型：Dart 业务逻辑改动（无平台原生工程改动、无依赖升级）。
+
+## 具体实现
+- 新增缓存键前缀：`_genrePreviewCachePrefix = 'genre_preview_cache_v1'`。
+- 缓存隔离策略：
+  - 缓存 key 基于 `server.url + userId` 组合指纹生成；
+  - 避免不同服务器或不同账号之间缓存串用。
+- 新增方法：
+  - `_loadGenrePreviewCache()`：从 `SharedPreferences` 读取 `genreId -> previewItem`；
+  - `_saveGenrePreviewCache(...)`：写回最新缓存映射。
+- 调整 `_loadGenrePreviewItems(List<dynamic> genres)` 流程：
+  1. 先读取缓存并过滤当前仍存在的分类；
+  2. 先 `setState` 应用缓存（优先展示已有缩略图）；
+  3. 仅对“无缓存”的分类请求后端；
+  4. 请求成功后更新内存映射并回写本地缓存。
+- 保留既有风控逻辑：
+  - 仅采样前 `12` 个分类；
+  - 每次请求后 `80ms` 轻微退避，控制短时请求密度。
+
+## 数据与兼容性说明
+- 使用现有依赖 `shared_preferences`，未新增依赖。
+- 缓存内容为 JSON 字符串，按 `Map<String, Map<String, dynamic>>` 解析。
+- 读写缓存异常时仅记录日志并回退到网络流程，不阻断页面渲染。
+
+## 验证记录
+- 已执行：`flutter analyze`
+- 结果：无本次改动引入的错误；仓库内存在既有 info 级提示（与本次改动无直接关联）。
+
+## 跨平台影响评估
+- 影响平台：`Windows / Android / iOS / macOS / Linux / Web`（共享 Dart 层逻辑）。
+- 未影响：插件版本、原生构建脚本、平台特定初始化流程。
+- 当前环境完成：静态分析验证（`flutter analyze`）。
+- 建议用户侧补充最小运行验证：
+  - `flutter run -d windows`
+  - `flutter run -d macos`
+  - `flutter run -d ios`
+  - `flutter run -d android`
+  - `flutter run -d linux`
+  - `flutter run -d chrome`
+
+## 后续可选优化
+- 增加缓存 TTL（如 24h）以平衡“命中率”与“内容新鲜度”。
+- 在后台静默刷新缓存，避免用户感知到缩略图延后更新。

@@ -1,0 +1,69 @@
+---
+description: 2026-04-22 iPhone 播放器界面密度收敛记录（中文）
+alwaysApply: false
+---
+
+# 今日工作记录（iPhone 播放器 UI 空间协调）
+
+## 目标
+- 解决 iPhone 下播放器“整体 UI 空间偏大、不协调”的问题。
+- 保持交互与功能逻辑不变，仅收敛视觉密度与间距。
+
+## 影响文件
+- `lib/pages/video_player_page.dart`
+
+## 实现方案
+
+### 1) 新增 iPhone 小屏识别与统一缩放因子
+- 新增 `_isCompactIphoneUi`：
+  - 仅在 `iOS + Mobile + 非TV` 条件下生效；
+  - 使用 `MediaQuery` 的 `width/height/shortestSide` 判定小屏场景。
+- 新增 `_uiScale`：
+  - 小屏 iPhone 使用 `0.86`；
+  - 其他平台/尺寸保持 `1.0`。
+
+### 2) 抽象自适配尺寸参数（统一由 `_uiScale` 驱动）
+- 新增以下 getter：
+  - `_controlIconSize`
+  - `_seekButtonDisplaySize`
+  - `_overlayIconSize`
+  - `_adaptiveTopBarPadding`
+  - `_adaptiveBottomBarPadding`
+  - `_adaptiveButtonPadding`
+  - `_adaptiveIndicatorPadding`
+  - `_adaptiveTimeTextStyle`
+  - `_adaptiveIndicatorTextStyle`
+
+### 3) 顶部栏收敛
+- 顶栏容器 padding 改为 `_adaptiveTopBarPadding`。
+- 版本标签与网速标签的 padding 和字体随 `_uiScale` 缩放。
+
+### 4) 侧边音量栏收敛
+- 音量容器 padding、图标大小、组件间距、滑杆长度按比例缩小。
+- 保留原有交互逻辑（静音切换、滑动音量）。
+
+### 5) 中央控件收敛
+- 快进/快退按钮尺寸改为 `_seekButtonDisplaySize`。
+- 播放/暂停按钮的容器内边距与图标尺寸按比例缩放。
+- 控件垂直定位基于缩放后尺寸重新计算，保持视觉居中。
+
+### 6) 底部控制栏收敛
+- 底栏容器 padding 改为 `_adaptiveBottomBarPadding`。
+- 时间文本、功能按钮容器 padding、图标大小统一使用自适配参数。
+- 倍速按钮中图标与文本间距按比例收敛。
+
+### 7) 手势提示浮层收敛
+- `_buildIndicator` 使用 `_adaptiveIndicatorPadding`。
+- 浮层图标、文本字号、内部间距随 `_uiScale` 缩放。
+
+## 验证记录
+- `flutter analyze`：通过（仅存在项目内既有 info 级提示，无新增错误）。
+- `flutter build ios --simulator`：通过（成功产出 `build/ios/iphonesimulator/Runner.app`）。
+
+## 跨平台影响评估
+- `iOS`：受影响（仅 iPhone 小屏触发），已完成构建验证。
+- `iPadOS/macOS/Android/Windows/Linux/Web`：逻辑上不受影响（缩放条件限定 iOS Mobile 小屏）；未做逐平台构建，本轮以静态检查覆盖。
+
+## 变更性质
+- UI 视觉密度优化（非功能改动）。
+- 风险等级：低（条件门控明确，且改动集中在渲染尺寸参数层）。
