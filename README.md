@@ -40,6 +40,10 @@
 flutter pub get
 ```
 
+该命令会生成分平台的插件注册文件（如 `linux/`、`macos/`、`windows/` 下的 `generated_plugin_registrant.*`）以及各端 `flutter/ephemeral/`（含 `.plugin_symlinks`）；这些路径已在 `.gitignore` 中排除，**不应**提交到 Git。
+
+Windows 下若曾在仓库根目录放置 `windows/mdk-sdk/*.7z` 等本机 SDK 压缩包，同样不要提交；`fvp` 会通过依赖拉取所需二进制，本地大文件仅作开发用途并由 `.gitignore` 忽略。
+
 ### 3) 运行项目
 
 ```bash

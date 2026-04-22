@@ -85,6 +85,8 @@ google-services.json
 **/macos/Flutter/ephemeral
 
 # Windows related
+**/windows/flutter/ephemeral/
+windows/mdk-sdk/*.7z
 **/windows/flutter/generated_plugin_registrant.cc
 **/windows/flutter/generated_plugin_registrant.h
 
@@ -93,7 +95,6 @@ google-services.json
 **/linux/flutter/generated_plugin_registrant.h
 
 # Web related
-**/web/favicon.png
 lib/generated_plugin_registrant.dart
 
 # Symbolication related
