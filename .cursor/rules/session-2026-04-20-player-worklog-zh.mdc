@@ -256,3 +256,17 @@ alwaysApply: false
   - 全仓库 `flutter analyze` 已不再出现 third_party 相关错误；
   - 当前剩余均为工程既有 `info` 级提示（默认 analyze 在本环境仍可能返回非 0）；
   - `flutter build windows --debug` 通过。
+
+## 追加记录（flutter_secure_storage_windows 示例依赖修复）
+- 问题现象：在 `third_party/flutter_secure_storage_windows/example` 执行 `flutter pub get` 失败，报 `flutter_secure_storage_platform_interface` 本地 path 不存在（`..\..\flutter_secure_storage_platform_interface`）。
+- 根因：`example/pubspec.yaml` 中存在 `dependency_overrides`，将 `flutter_secure_storage_platform_interface` 强制指向仓库内本地目录；但当前仓库未包含该目录。
+- 最小修复：
+  - 删除 `third_party/flutter_secure_storage_windows/example/pubspec.yaml` 中以下覆盖：
+    - `dependency_overrides.flutter_secure_storage_platform_interface -> path: ../../flutter_secure_storage_platform_interface`
+  - 保持其余依赖与版本约束不变，避免引入额外回归风险。
+- 验证结果：
+  - 在 `third_party/flutter_secure_storage_windows/example` 目录执行 `flutter pub get` 成功；
+  - 输出 `Got dependencies!`，未再出现 path 依赖缺失错误。
+- 经验：
+  - 对 third_party 示例工程，优先避免指向仓库外/不存在目录的 path override；
+  - 若确需本地 path 依赖，应先确认目标目录随仓库同步存在，并在文档中标注用途。
