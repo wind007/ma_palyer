@@ -34,6 +34,7 @@ class _VideoListPageState extends State<VideoListPage>
     'latest': [], // 最新添加
     'continue': [], // 继续观看
     'favorites': [], // 收藏
+    'genres': [], // 分类
     'views': [], // 媒体库视图
   };
   
@@ -50,6 +51,7 @@ class _VideoListPageState extends State<VideoListPage>
     'latest': true,
     'continue': true,
     'favorites': true,
+    'genres': true,
     'views': true,
   };
 
@@ -138,6 +140,7 @@ class _VideoListPageState extends State<VideoListPage>
         _loadLatestItems(),
         _loadContinueWatching(),
         _loadFavorites(),
+        _loadGenres(),
       ]);
 
       Logger.i("所有分区数据加载完成", _tag);
@@ -334,6 +337,31 @@ class _VideoListPageState extends State<VideoListPage>
         _videoSections['favorites'] = [];
         _hasMoreData['favorites'] = false;
         _sectionLoading['favorites'] = false;
+      });
+    }
+  }
+
+  Future<void> _loadGenres() async {
+    try {
+      Logger.d("加载分类项目", _tag);
+      final response = await _api.getGenres(limit: 40);
+      if (!mounted) return;
+
+      final items = (response['Items'] as List<dynamic>? ?? const <dynamic>[])
+          .where((genre) => genre is Map<String, dynamic> && (genre['Name']?.toString().isNotEmpty ?? false))
+          .toList();
+
+      setState(() {
+        _videoSections['genres'] = items;
+        _sectionLoading['genres'] = false;
+      });
+    } catch (e) {
+      Logger.e("加载分类项目失败", _tag, e);
+      if (!mounted) return;
+      setState(() {
+        _hadSectionLoadError = true;
+        _videoSections['genres'] = [];
+        _sectionLoading['genres'] = false;
       });
     }
   }
@@ -563,6 +591,12 @@ class _VideoListPageState extends State<VideoListPage>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 分类区域
+          if (_sectionLoading['genres'] == true)
+            _buildSkeletonSectionWidget('分类')
+          else if (_videoSections['genres']?.isNotEmpty ?? false)
+            _buildGenreSectionWidget(_videoSections['genres']!),
+
           // 继续观看区域
           if (_sectionLoading['continue'] == true)
             _buildSkeletonSectionWidget('继续观看')
@@ -667,6 +701,58 @@ class _VideoListPageState extends State<VideoListPage>
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildGenreSectionWidget(List<dynamic> genres) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+          child: Text(
+            '分类',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+          ),
+        ),
+        SizedBox(
+          height: 56,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemBuilder: (context, index) {
+              final genre = genres[index] as Map<String, dynamic>;
+              final genreName = genre['Name']?.toString() ?? '未知分类';
+              final genreId = genre['Id']?.toString();
+              return ActionChip(
+                label: Text(genreName),
+                onPressed: genreId == null || genreId.isEmpty
+                    ? null
+                    : () => _openGenrePage(genreId, genreName),
+              );
+            },
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemCount: genres.length,
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _openGenrePage(String genreId, String genreName) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => VideoListMorePage(
+          server: widget.server,
+          title: '分类: $genreName',
+          genreId: genreId,
+          isMovieView: false,
+        ),
+      ),
     );
   }
 

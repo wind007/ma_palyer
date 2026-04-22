@@ -485,6 +485,7 @@ class EmbyApiService {
     String? sortBy = 'SortName',
     String? sortOrder = 'Descending',
     String filters = '',
+    String? genreIds,
   }) async {
     final queryParams = {
       'Recursive': 'true',
@@ -509,6 +510,10 @@ class EmbyApiService {
       queryParams.addAll(Uri.splitQueryString(filters));
     }
 
+    if (genreIds != null && genreIds.isNotEmpty) {
+      queryParams['GenreIds'] = genreIds;
+    }
+
     final response = await _request(
       path: '/Users/$userId/Items',
       method: 'GET',
@@ -516,6 +521,37 @@ class EmbyApiService {
     );
 
     return response;
+  }
+
+  // 获取分类（Genres）
+  Future<Map<String, dynamic>> getGenres({
+    int startIndex = 0,
+    int limit = 30,
+    String includeItemTypes = 'Movie,Series',
+    String? parentId,
+  }) async {
+    final queryParams = {
+      'UserId': userId!,
+      'Recursive': 'true',
+      'IncludeItemTypes': includeItemTypes,
+      'SortBy': 'SortName',
+      'SortOrder': 'Ascending',
+      'EnableTotalRecordCount': 'true',
+      'StartIndex': startIndex.toString(),
+      'Limit': limit.toString(),
+      if (parentId != null) 'ParentId': parentId,
+    };
+
+    final response = await _request(
+      path: '/Genres',
+      method: 'GET',
+      queryParams: queryParams,
+    );
+
+    if (response == null) {
+      return {'Items': <dynamic>[], 'TotalRecordCount': 0};
+    }
+    return response as Map<String, dynamic>;
   }
 
   // 获取视频详情

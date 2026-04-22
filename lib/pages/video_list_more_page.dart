@@ -14,6 +14,7 @@ class VideoListMorePage extends StatefulWidget {
   final String title;
   final String? viewId;
   final String? parentId;
+  final String? genreId;
   final bool isMovieView;
 
   const VideoListMorePage({
@@ -22,6 +23,7 @@ class VideoListMorePage extends StatefulWidget {
     required this.title,
     this.viewId,
     this.parentId,
+    this.genreId,
     required this.isMovieView,
   });
 
@@ -95,8 +97,19 @@ class _VideoListMorePageState extends State<VideoListMorePage> {
     try {
       final Map<String, dynamic> response;
       
-      // 如果是视图或父级ID的请求
-      if (widget.parentId != null || widget.viewId != null) {
+      // 分类页请求
+      if (widget.genreId != null && widget.genreId!.isNotEmpty) {
+        response = await _api!.getVideos(
+          startIndex: _startIndex,
+          limit: _limit,
+          sortBy: 'SortName',
+          sortOrder: 'Ascending',
+          imageTypes: 'Primary',
+          includeItemTypes: 'Movie,Series',
+          genreIds: widget.genreId,
+        );
+      } else if (widget.parentId != null || widget.viewId != null) {
+        // 如果是视图或父级ID的请求
         final String filters;
         if (widget.parentId == null && widget.viewId != null) {
           filters = widget.isMovieView ? 'IncludeItemTypes=Movie' : 'IncludeItemTypes=Series';
