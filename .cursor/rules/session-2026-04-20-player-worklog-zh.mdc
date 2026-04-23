@@ -12,7 +12,7 @@ alwaysApply: false
 ## 今日已完成改动
 - 修复主题类型兼容：`CardTheme` -> `CardThemeData`（`lib/main.dart`）。
 - 依赖兼容回退：`video_player` 固定为 `2.9.5`，避免与当前 `fvp` 组合冲突（`pubspec.yaml`）。
-- 新增亮度控制：接入 `screen_brightness`，在播放页手势中调用真实亮度 API，不支持平台自动降级为 UI 模拟（`lib/pages/video_player_page.dart`）。
+- 新增亮度控制：播放页采用播放器亮度能力并补充画面叠层兜底，保证亮度手势在非 TV 平台有可见效果（`lib/pages/video_player_page.dart`）。
 - 桌面端转场优化：Windows/Linux/macOS 使用更轻的页面过渡动画（`lib/main.dart`）。
 - 播放器顶部版本信息：显示完整格式（如 `1080p · H264 · AAC 5.1`）。
 - 详情页大图版本信息：右上角显示“当前版本”标签，并与版本选择联动。
@@ -124,9 +124,9 @@ alwaysApply: false
     - `_isMobile`：Android/iOS 且非 TV。  
   - 目的：避免仅靠 `width < 600` 导致横屏手机被误判为非移动端。
 - 手势分层修复（桌面/移动）：
-  - 新增 `enableTouchGestures = _isMobile && !_isDesktop`。
-  - 将双击分区快进、水平拖动进度、垂直滑动亮度/音量限制为移动端启用；桌面端禁用这些触摸手势。
-  - 效果：减少桌面端键鼠/触控板误触，避免与键盘快捷键交互冲突。
+  - 当前策略已更新为 `enableTouchGestures = !_isTV`（非 TV 平台启用）。
+  - 双击分区快进、水平拖动进度、垂直滑动亮度/音量在 iPhone/iPad/Windows/macOS/Linux/Android 可用；TV 端保持禁用触摸手势。
+  - 主播放器手势层使用 `HitTestBehavior.opaque` 提升整屏命中稳定性，减少手势丢失。
 - TV 焦点链路修复：
   - 打开播放列表时，焦点索引改为安全初始化：当前集存在则用当前索引，不存在时回退到 `0`，空列表则置空。
   - TV 打开列表后通过 `requestFocus()` 显式聚焦 `_playlistFocusNode`；关闭列表时 `unfocus()`。
@@ -141,7 +141,7 @@ alwaysApply: false
 
 ## 追加验证建议（三端）
 - 桌面端（Windows/macOS/Linux）：
-  - 鼠标拖动/双击不应触发移动端手势（亮度/音量滑动与分区快进）；空格、方向键、Esc 交互保持可用。
+  - 鼠标/触控手势应可触发亮度/音量滑动与双击快进；空格、方向键、Esc 交互保持可用。
   - 播放列表通过顶部按钮开关，交互与键盘操作无冲突。
 - 移动端（Android/iOS）：
   - 横屏手机下仍识别为移动端；双击左右快进、滑动调音量/亮度可用。
@@ -270,3 +270,30 @@ alwaysApply: false
 - 经验：
   - 对 third_party 示例工程，优先避免指向仓库外/不存在目录的 path override；
   - 若确需本地 path 依赖，应先确认目标目录随仓库同步存在，并在文档中标注用途。
+
+## 追加记录（播放器亮度与手势跨平台修复，2026-04-23）
+- 目标：修复“亮度手势有反馈但画面不变”与“部分平台手势不可用”的问题，确保在非 TV 平台均有可见亮度变化（`lib/pages/video_player_page.dart`）。
+- 背景：
+  - 原实现仅依赖 `fvpController.setBrightness(...)`，在 iOS/iPadOS（及部分设备/渲染路径）可能不生效，导致亮度百分比变化但画面无变化。
+  - 历史逻辑将触摸手势限制为 `_isMobile && !_isDesktop`，导致 Windows 桌面端手势路径被关闭。
+- 本轮改动：
+  - 新增亮度视觉兜底：
+    - 增加 `_brightnessOverlayColor()`，按 `_brightness` 计算黑/白叠层透明度（中性点 0.5；变暗使用黑层，变亮使用白层）。
+    - 视频渲染节点改为 `Stack(VideoPlayer + ColoredBox)`，叠层使用 `IgnorePointer`，不拦截手势。
+  - 兜底启用策略收敛：
+    - `_needsBrightnessOverlayFallback` 调整为 `!_isTV`（非 TV 平台启用兜底），避免平台差异导致“有手势但无画面变化”。
+  - 手势可用性修复：
+    - `enableTouchGestures` 从 `_isMobile && !_isDesktop` 调整为 `!_isTV`，恢复 iPhone/iPad/Windows 的手势通路。
+    - 主播放器 `GestureDetector` 增加 `behavior: HitTestBehavior.opaque`，提升整屏命中稳定性，减少手势丢失。
+  - 控制器重建后亮度一致性：
+    - 在初始化与重建控制器路径后统一补调 `_applyPlayerBrightnessEffect(_brightness)`，避免切换版本/音轨/字幕后亮度状态丢失。
+- 变更结果：
+  - 手势调节（亮度/音量）在非 TV 平台恢复可触发；
+  - 亮度调节在底层 API 失效时仍有可见画面变化；
+  - 不改变 TV 端遥控器焦点交互路径。
+- 质量检查：
+  - `ReadLints`（`lib/pages/video_player_page.dart`）无新增 lint 错误。
+  - `flutter analyze` 仍存在工程既有 `info` 提示；本轮未引入新增 error。
+
+## 冲突声明（以最新为准）
+- 若本节与历史“亮度实现”记录存在冲突（如“仅调用系统/底层亮度 API 即可覆盖所有平台”等表述），一律以本次“非 TV 平台统一启用画面叠层兜底 + 控制器重建后重套亮度”的实现为准。

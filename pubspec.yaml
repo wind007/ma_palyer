@@ -36,14 +36,10 @@ dependencies:
   cupertino_icons: ^1.0.2
   http: ^1.1.0
   shared_preferences: ^2.2.0
-  carousel_slider: ^4.2.1
   video_player: 2.9.5
   fvp: ^0.30.0
-  collection: ^1.18.0
-  win32: ^5.2.0
   logging: any
   intl: any
-  screen_brightness: ^2.1.4
   flutter_secure_storage: ^10.0.0
 
 dev_dependencies:

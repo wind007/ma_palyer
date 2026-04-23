@@ -268,6 +268,27 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     _applyPlayerBrightnessEffect(newBrightness);
   }
 
+  bool get _needsBrightnessOverlayFallback {
+    // 跨平台兜底：当底层播放器亮度效果不生效时，仍保证可见亮度变化。
+    // TV 端默认走遥控器交互，不启用触控亮度手势，因此这里排除 TV。
+    return !_isTV;
+  }
+
+  Color? _brightnessOverlayColor() {
+    // iOS 上部分渲染路径对原生亮度效果不生效，这里用画面层叠加做兜底。
+    if (!_needsBrightnessOverlayFallback) return null;
+    const neutral = 0.5;
+    if (_brightness < neutral) {
+      final opacity = ((neutral - _brightness) / neutral * 0.75).clamp(0.0, 0.75);
+      return Colors.black.withValues(alpha: opacity);
+    }
+    if (_brightness > neutral) {
+      final opacity = ((_brightness - neutral) / neutral * 0.35).clamp(0.0, 0.35);
+      return Colors.white.withValues(alpha: opacity);
+    }
+    return null;
+  }
+
   void _applyPlayerBrightnessEffect(double brightness01) {
     final controller = _controller;
     if (controller == null || !controller.value.isInitialized) return;
@@ -353,6 +374,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
 
       await _controller?.initialize();
       Logger.d("播放器控制器初始化完成", _tag);
+      _applyPlayerBrightnessEffect(_brightness);
       
       if (!mounted) {
         Logger.w("页面已卸载，取消后续初始化", _tag);
@@ -1248,7 +1270,8 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       return _buildLoadingView();
     }
 
-    final enableTouchGestures = _isMobile && !_isDesktop;
+    // 手势调节能力：移动端与桌面端都允许，TV 端继续走遥控器焦点逻辑。
+    final enableTouchGestures = !_isTV;
     return KeyboardListener(
       focusNode: _keyboardFocusNode,
       autofocus: true,
@@ -1276,6 +1299,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         }
       },
       child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
         onTap: _toggleControls,
         onDoubleTapDown: enableTouchGestures
             ? (details) {
@@ -1361,13 +1385,31 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                         child: SizedBox(
                           width: _controller!.value.size.width,
                           height: _controller!.value.size.height,
-                          child: VideoPlayer(_controller!),
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              VideoPlayer(_controller!),
+                              if (_brightnessOverlayColor() != null)
+                                IgnorePointer(
+                                  child: ColoredBox(color: _brightnessOverlayColor()!),
+                                ),
+                            ],
+                          ),
                         ),
                       ),
                     )
                   : AspectRatio(
                       aspectRatio: _controller!.value.aspectRatio,
-                      child: VideoPlayer(_controller!),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          VideoPlayer(_controller!),
+                          if (_brightnessOverlayColor() != null)
+                            IgnorePointer(
+                              child: ColoredBox(color: _brightnessOverlayColor()!),
+                            ),
+                        ],
+                      ),
                     ),
             ),
             if (_showSeekIndicator)
@@ -2560,6 +2602,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
 
       await _controller?.setVolume(_currentVolume);
       await _controller?.setPlaybackSpeed(_playbackSpeed);
+      _applyPlayerBrightnessEffect(_brightness);
       if (currentPosition != null) {
         await _controller?.seekTo(currentPosition);
       }
@@ -2648,6 +2691,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       });
 
       await _controller?.setVolume(_currentVolume);
+      _applyPlayerBrightnessEffect(_brightness);
       if (currentPosition != null) {
         await _controller?.seekTo(currentPosition);
       }
@@ -2786,6 +2830,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
 
       await _controller?.setVolume(_currentVolume);
       await _controller?.setPlaybackSpeed(_playbackSpeed);
+      _applyPlayerBrightnessEffect(_brightness);
       if (currentPosition != null) {
         await _controller?.seekTo(currentPosition);
       }
