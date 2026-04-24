@@ -2,6 +2,7 @@
 
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fvp/fvp.dart';
@@ -100,13 +101,49 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     return size.width < 430 || size.height < 430 || size.shortestSide < 390;
   }
 
-  double get _uiScale => _isCompactIphoneUi ? 0.86 : 1.0;
+  bool get _isIosMobileUi {
+    final platform = Theme.of(context).platform;
+    return platform == TargetPlatform.iOS && _isMobile && !_isTV;
+  }
+
+  double get _uiScale {
+    if (!_isCompactIphoneUi) return 1.0;
+    final shortestSide = MediaQuery.of(context).size.shortestSide;
+    if (shortestSide < 360) return 0.84;
+    if (shortestSide < 390) return 0.90;
+    return 0.96;
+  }
+
   double get _controlIconSize => 16 * _uiScale;
   double get _seekButtonDisplaySize => _seekButtonSize * _uiScale;
   double get _overlayIconSize => 24 * _uiScale;
+  BoxConstraints get _adaptiveIconTapConstraints => BoxConstraints(
+        minWidth: _isCompactIphoneUi ? 44 : 24,
+        minHeight: _isCompactIphoneUi ? 44 : 24,
+      );
   EdgeInsets get _adaptiveTopBarPadding =>
       EdgeInsets.symmetric(horizontal: 8 * _uiScale, vertical: 4 * _uiScale);
-  EdgeInsets get _adaptiveBottomBarPadding => EdgeInsets.all(16 * _uiScale);
+  EdgeInsets get _adaptiveTopOverlayPadding {
+    final base = EdgeInsets.symmetric(horizontal: 8 * _uiScale, vertical: 4 * _uiScale);
+    if (!_isIosMobileUi) return base;
+    return EdgeInsets.fromLTRB(
+      base.left,
+      base.top + MediaQuery.of(context).padding.top,
+      base.right,
+      base.bottom,
+    );
+  }
+
+  EdgeInsets get _adaptiveBottomBarPadding {
+    final base = EdgeInsets.all(16 * _uiScale);
+    if (!_isIosMobileUi) return base;
+    return EdgeInsets.fromLTRB(
+      base.left,
+      base.top,
+      base.right,
+      base.bottom + MediaQuery.of(context).padding.bottom,
+    );
+  }
   EdgeInsets get _adaptiveButtonPadding => EdgeInsets.symmetric(
         horizontal: 8 * _uiScale,
         vertical: 4 * _uiScale,
@@ -1477,7 +1514,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       left: 0,
       right: 0,
       child: Container(
-        padding: _adaptiveTopBarPadding,
+        padding: _adaptiveTopOverlayPadding,
         decoration: BoxDecoration(
           gradient: chrome.topBarGradient,
         ),
@@ -1530,15 +1567,28 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                       borderRadius: BorderRadius.circular(chrome.chipRadius),
                       border: Border.all(color: chrome.chipBorder),
                     ),
-                    child: Text(
-                      '网速 $_estimatedNetworkSpeedText',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 12 * _uiScale,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.speed,
+                          color: Colors.white,
+                          size: 12 * _uiScale,
+                        ),
+                        SizedBox(width: 4 * _uiScale),
+                        Text(
+                          _isCompactIphoneUi
+                              ? _estimatedNetworkSpeedText
+                              : '网速 $_estimatedNetworkSpeedText',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 12 * _uiScale,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   if (_shouldShowPlaylist)
@@ -1560,8 +1610,11 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   }
 
   Widget _buildVolumeControl() {
+    if (_isCompactIphoneUi && !_showVolumeIndicator && !_isDraggingVolume) {
+      return const SizedBox.shrink();
+    }
     return Positioned(
-      right: 16,
+      right: _isIosMobileUi ? 12 + MediaQuery.of(context).padding.right : 16,
       top: 0,
       bottom: 0,
       child: Center(
@@ -1577,10 +1630,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
               IconButton(
                 iconSize: 20 * _uiScale,
                 padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(
-                  minWidth: 32,
-                  minHeight: 32,
-                ),
+                constraints: _adaptiveIconTapConstraints,
                 icon: Icon(
                   _currentVolume == 0
                       ? Icons.volume_off
@@ -1738,10 +1788,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                     decoration: _buttonDecoration(context),
                     child: IconButton(
                       padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(
-                        minWidth: 24,
-                        minHeight: 24,
-                      ),
+                      constraints: _adaptiveIconTapConstraints,
                       icon: Icon(
                         Icons.movie_filter,
                         color: Colors.white,
@@ -1758,10 +1805,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                     decoration: _buttonDecoration(context),
                     child: IconButton(
                       padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(
-                        minWidth: 24,
-                        minHeight: 24,
-                      ),
+                      constraints: _adaptiveIconTapConstraints,
                       icon: Icon(
                         Icons.audiotrack,
                         color: Colors.white,
@@ -1778,10 +1822,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                     decoration: _buttonDecoration(context),
                     child: IconButton(
                       padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(
-                        minWidth: 24,
-                        minHeight: 24,
-                      ),
+                      constraints: _adaptiveIconTapConstraints,
                       icon: Icon(
                         _currentSubtitleStreamIndex == -1 ? Icons.subtitles_off : Icons.subtitles,
                         color: Colors.white,
@@ -1797,10 +1838,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                   decoration: _buttonDecoration(context),
                   child: IconButton(
                     padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(
-                      minWidth: 24,
-                      minHeight: 24,
-                    ),
+                    constraints: _adaptiveIconTapConstraints,
                     onPressed: _showPlaybackSpeedDialog,
                     icon: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -1825,10 +1863,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                   decoration: _buttonDecoration(context),
                   child: IconButton(
                     padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(
-                      minWidth: 24,
-                      minHeight: 24,
-                    ),
+                    constraints: _adaptiveIconTapConstraints,
                     icon: Icon(
                       _isFullScreen ? Icons.fit_screen : Icons.fullscreen,
                       color: Colors.white,
@@ -1898,6 +1933,41 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     Logger.d("显示播放速度选择对话框", _tag);
     final isCompactDialog = _useBottomSheetForSpeedDialog(context);
     final speedOptions = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
+
+    if (_isIosMobileUi) {
+      showCupertinoModalPopup<void>(
+        context: context,
+        builder: (sheetContext) => CupertinoActionSheet(
+          title: const Text('播放速度'),
+          actions: [
+            for (final speed in speedOptions)
+              CupertinoActionSheetAction(
+                onPressed: () {
+                  _applyPlaybackSpeed(speed);
+                  Navigator.pop(sheetContext);
+                  _startHideControlsTimer();
+                },
+                child: Text(
+                  '${_formatPlaybackSpeed(speed)}x${_playbackSpeed == speed ? " ✓" : ""}',
+                ),
+              ),
+            CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.pop(sheetContext);
+                _showCustomPlaybackSpeedDialog();
+              },
+              child: const Text('自定义倍速'),
+            ),
+          ],
+          cancelButton: CupertinoActionSheetAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.pop(sheetContext),
+            child: const Text('取消'),
+          ),
+        ),
+      );
+      return;
+    }
 
     if (isCompactDialog) {
       showModalBottomSheet(
@@ -2075,6 +2145,51 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       _applyPlaybackSpeed(customSpeed);
       Navigator.pop(dialogContext);
       _startHideControlsTimer();
+    }
+
+    if (_isIosMobileUi) {
+      showCupertinoDialog<void>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (context, setDialogState) => CupertinoAlertDialog(
+            title: const Text('自定义倍速'),
+            content: Column(
+              children: [
+                const SizedBox(height: 12),
+                CupertinoTextField(
+                  controller: textController,
+                  autofocus: true,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+                  ],
+                  placeholder: '例如 1.15',
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  errorText ?? '支持范围 $minSpeed ~ $maxSpeed',
+                  style: TextStyle(
+                    color: errorText == null ? CupertinoColors.systemGrey : CupertinoColors.systemRed,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              CupertinoDialogAction(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('取消'),
+              ),
+              CupertinoDialogAction(
+                isDefaultAction: true,
+                onPressed: () => openAdaptiveInputSheet(dialogContext, setDialogState),
+                child: const Text('确定'),
+              ),
+            ],
+          ),
+        ),
+      ).whenComplete(textController.dispose);
+      return;
     }
 
     if (isCompactWidth) {
